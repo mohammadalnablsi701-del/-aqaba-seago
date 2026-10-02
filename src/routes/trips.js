@@ -5,6 +5,15 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
+function sanitizeImages(input){
+  if(!Array.isArray(input)) return [];
+  return input.slice(0,10).map(x=>{
+    if(typeof x==="string") return x.trim();
+    if(x && typeof x==="object" && x.url) return {url:String(x.url),publicId:x.publicId?String(x.publicId):undefined,source:x.source?String(x.source):"external"};
+    return null;
+  }).filter(Boolean);
+}
+
 function serverPricing(input = {}, existing = null) {
   const defaultCommission = Number(process.env.DEFAULT_COMMISSION_PERCENTAGE || 0);
   const existingValue = existing?.commissionType === "percentage"
@@ -43,7 +52,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       category: req.body.category,
       durationMinutes: req.body.durationMinutes,
       departureLocation: req.body.departureLocation,
-      images: Array.isArray(req.body.images) ? req.body.images.filter(Boolean).slice(0,10) : [],
+      images: sanitizeImages(req.body.images),
       active: req.body.active !== false,
       pricing: serverPricing(req.body.pricing),
       providerId: p._id
@@ -62,7 +71,7 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
     if (!trip) return res.status(404).json({ error: "Trip not found" });
 
     for (const key of ["titleAr","titleEn","category","durationMinutes","departureLocation","images","active"]) {
-      if (req.body[key] !== undefined) trip[key] = req.body[key];
+      if (req.body[key] !== undefined) trip[key] = key==="images" ? sanitizeImages(req.body[key]) : req.body[key];
     }
 
     if (req.body.pricing) {
