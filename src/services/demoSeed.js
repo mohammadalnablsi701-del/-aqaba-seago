@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import Provider from "../models/Provider.js";
 import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
 
 const DEMO_TRIPS = [
   {
@@ -40,15 +42,40 @@ function futureStart(dayOffset, hourUtc) {
 export async function seedDemoData() {
   if (process.env.SEED_DEMO_DATA !== "true") return;
 
+  const demoProviderEmail = String(process.env.DEMO_PROVIDER_EMAIL || "").trim().toLowerCase();
+  const demoProviderPassword = String(process.env.DEMO_PROVIDER_PASSWORD || "");
+  let demoUser = null;
+  if (demoProviderEmail && demoProviderPassword) {
+    demoUser = await User.findOne({ email: demoProviderEmail });
+    if (!demoUser) {
+      demoUser = await User.create({
+        name: "SeaGo Demo Provider",
+        email: demoProviderEmail,
+        phone: "+962790000000",
+        role: "provider",
+        passwordHash: await bcrypt.hash(demoProviderPassword, 12),
+        isActive: true
+      });
+    } else if (demoUser.role !== "provider") {
+      demoUser.role = "provider";
+      await demoUser.save();
+    }
+  }
+
   let provider = await Provider.findOne({ businessName: "Aqaba SeaGo Demo Partner" });
   if (!provider) {
     provider = await Provider.create({
-      ownerUserId: new mongoose.Types.ObjectId(),
+      ownerUserId: demoUser?._id || new mongoose.Types.ObjectId(),
       businessName: "Aqaba SeaGo Demo Partner",
       phone: "+962790000000",
       status: "approved",
       approvedAt: new Date()
     });
+  } else if (demoUser && provider.ownerUserId.toString() !== demoUser._id.toString()) {
+    provider.ownerUserId = demoUser._id;
+    provider.status = "approved";
+    provider.approvedAt ||= new Date();
+    await provider.save();
   }
 
   for (const spec of DEMO_TRIPS) {
