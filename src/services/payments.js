@@ -3,6 +3,7 @@ import Booking from "../models/Booking.js";
 import CheckoutHold from "../models/CheckoutHold.js";
 import Departure from "../models/Departure.js";
 import { getPaymentProvider } from "../payments/index.js";
+import { sendBookingConfirmation } from "./notifications.js";
 
 function sameMoney(a, b) {
   return Math.abs(Number(a) - Number(b)) < 0.001;
@@ -134,6 +135,7 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
       payment.bookingId = booking._id;
       payment.status = "paid";
       payment.paidAt = new Date();
+      sendBookingConfirmation(booking._id).catch(err=>console.error("Booking confirmation email failed",err));
     } else if (hold.status === "paid" && payment.bookingId) {
       payment.status = "paid";
       payment.paidAt ||= new Date();
