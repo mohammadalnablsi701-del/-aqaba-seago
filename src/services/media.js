@@ -15,7 +15,7 @@ function sign(params, secret) {
   return crypto.createHash("sha1").update(base).digest("hex");
 }
 
-export async function uploadTripImage(dataUrl) {
+export async function uploadTripImage(dataUrl, ownerId) {
   if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
     throw Object.assign(new Error("Invalid image payload"), { statusCode: 400 });
   }
@@ -29,7 +29,7 @@ export async function uploadTripImage(dataUrl) {
 
   const { cloudName, apiKey, apiSecret } = cloudinaryConfig();
   const timestamp = Math.floor(Date.now() / 1000);
-  const folder = "aqaba-seago/trips";
+  const folder = `aqaba-seago/trips/${String(ownerId)}`;
   const params = { folder, timestamp };
   const signature = sign(params, apiSecret);
 
