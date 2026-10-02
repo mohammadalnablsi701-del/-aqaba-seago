@@ -60,6 +60,42 @@ h1{margin:8px 0 20px}.row{padding:10px 0;border-top:1px solid #edf2f6;display:fl
   } catch (err) { next(err); }
 });
 
+router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req, res, next) => {
+  try {
+    const { booking } = await loadTicket(req.body.token);
+
+    if (req.user.role === "provider") {
+      const provider = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
+      if (!provider || provider._id.toString() !== booking.providerId._id.toString()) {
+        return res.status(403).json({ error: "This ticket belongs to another provider" });
+      }
+    }
+
+    await booking.populate({ path: "customerId", select: "name phone email" });
+    const trip = booking.tripId || {};
+    const provider = booking.providerId || {};
+    const departure = booking.departureId || {};
+    const customer = booking.customerId || {};
+
+    res.json({
+      valid: booking.status === "confirmed" && !booking.checkedInAt,
+      status: booking.status,
+      used: Boolean(booking.checkedInAt),
+      checkedInAt: booking.checkedInAt || null,
+      bookingReference: "SG-" + String(booking._id).slice(-8).toUpperCase(),
+      trip: trip.titleEn || trip.titleAr || "Aqaba Sea Experience",
+      provider: provider.businessName || null,
+      departureAt: departure.startsAt || null,
+      guests: booking.seats,
+      customer: {
+        name: customer.name || "Guest",
+        phone: customer.phone || null,
+        email: customer.email || null
+      }
+    });
+  } catch (err) { next(err); }
+});
+
 router.post("/check-in", requireAuth, requireRole("provider","admin"), async (req, res, next) => {
   try {
     const { booking } = await loadTicket(req.body.token);
