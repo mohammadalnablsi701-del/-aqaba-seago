@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
     const rows = await Booking.find({ customerId: req.user._id, status: "confirmed" })
-      .populate({ path: "tripId", select: "titleAr titleEn category durationMinutes" })
+      .populate({ path: "tripId", select: "titleAr titleEn category durationMinutes departureLocation" })
       .populate({ path: "providerId", select: "businessName" })
       .populate({ path: "departureId", select: "startsAt status" })
       .sort({ createdAt: -1 })
