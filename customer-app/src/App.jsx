@@ -45,6 +45,8 @@ function normalizeTrip(raw, index = 0) {
     buffetEnabled: Boolean(raw.pricing?.buffetEnabled),
     buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
+    buffetDescription: String(raw.pricing?.buffetDescription || ""),
+    images: Array.isArray(raw.images) ? raw.images.filter(Boolean) : [],
     rating: null,
     reviews: null,
     category,
@@ -175,10 +177,10 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
   return (
     <article className="trip-card" onClick={() => onSelectTrip(trip)}>
-      <div className={"trip-card__visual trip-card__visual--"+trip.accent}>
+      <div className={"trip-card__visual trip-card__visual--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(4,34,55,.08),rgba(4,34,55,.18)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
         <span className="trip-card__badge">{trip.category}</span>
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
-        <ShipWheel size={46} strokeWidth={1.5}/>
+        {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>}
       </div>
       <div className="trip-card__body">
         {trip.rating ? <div className="rating"><Star size={14} fill="currentColor"/> {trip.rating} <span>({trip.reviews})</span></div> : <div className="rating rating--partner"><CheckCircle2 size={14}/> SeaGo partner</div>}
@@ -217,24 +219,24 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
   if(!trip) return null;
   return (
     <div className="screen detail-screen">
-      <div className={"detail-hero detail-hero--"+trip.accent}>
+      <div className={"detail-hero detail-hero--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(3,31,51,.15),rgba(3,31,51,.28)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
         <button className="detail-back" onClick={onBack}><ChevronLeft/></button>
         <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)}><Heart fill={favourite?"currentColor":"none"}/></button>
         <BrandLogo compact/>
-        <ShipWheel size={88} strokeWidth={1.1}/>
+        {!trip.images?.[0]&&<ShipWheel size={88} strokeWidth={1.1}/>}
       </div>
       <div className="detail-body">
         <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
         <h1>{trip.title}</h1>
         {trip.rating ? <div className="detail-rating"><Star size={16} fill="currentColor"/> {trip.rating} <span>{trip.reviews} reviews</span></div> : <div className="detail-rating"><CheckCircle2 size={16}/> Approved SeaGo experience</div>}
-        <p className="detail-description">{trip.description}</p>
+        <p className="detail-description">{trip.description}</p>{trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
         <div className="feature-grid">
           <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
           <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
           <div><UsersRound/><span><small>Guests</small><b>Live availability</b></span></div>
           <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
         </div>
-        {trip.departureLocation?.name&&<section className="departure-location"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}</section>}<section className="included"><span>WHAT'S INCLUDED</span><h2>Everything for an easy day at sea</h2><p>Experience details are managed by the approved operator and shown through Aqaba SeaGo.</p></section>
+        {trip.buffetEnabled&&<section className="buffet-info"><span>OPEN BUFFET OPTION</span><h2>Available with this trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}{trip.departureLocation?.name&&<section className="departure-location"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}</section>}<section className="included"><span>WHAT'S INCLUDED</span><h2>Everything for an easy day at sea</h2><p>Experience details are managed by the approved operator and shown through Aqaba SeaGo.</p></section>
       </div>
       <div className="sticky-booking"><div><small>From</small><strong>{trip.price} JOD</strong><span>/ person</span></div><button className="primary-button" onClick={onBook}>Book now <ChevronRight size={18}/></button></div>
     </div>
@@ -409,13 +411,13 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           <div className="booking-form booking-form--guests">
             <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)}>+</button></div></label>
             <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)}>+</button></div></label>
-            {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>Buffet included</small></button></div>}
+            {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>{trip.buffetDescription||"Buffet included"}</small></button></div>}
             <label><span>Account</span><button><UserRound size={18}/>{auth?.user?.email || "Sign in during booking"}<ChevronRight size={17}/></button></label>
           </div>
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box">{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? 0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? 0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
+          <div className="price-box">{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? 0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? 0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
           <button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to payment <ChevronRight size={18}/></button>
           <p className="booking-note">No booking is created before payment. Successful payment creates the confirmed SeaGo booking and ticket.</p>
         </>
