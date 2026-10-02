@@ -5,6 +5,7 @@ import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { calculateTieredPricing } from "../services/pricing.js";
 import { releaseExpiredCheckoutHolds } from "../services/payments.js";
+import { cancelDepartureBookings } from "../services/cancellations.js";
 
 const router = express.Router();
 
@@ -80,7 +81,13 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       departure.capacity=capacity;
     }
     if(req.body.startsAt!==undefined)departure.startsAt=new Date(req.body.startsAt);
-    if(req.body.status!==undefined)departure.status=req.body.status;
+    if(req.body.status!==undefined){
+      const nextStatus=req.body.status;
+      if(nextStatus==="cancelled"&&departure.status!=="cancelled"){
+        await cancelDepartureBookings({departureId:departure._id,providerId:provider._id,reason:req.body.cancellationReason||"Departure cancelled by provider"});
+      }
+      departure.status=nextStatus;
+    }
     await departure.save();
     res.json(departure);
   }catch(e){next(e);}
