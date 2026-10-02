@@ -40,7 +40,11 @@ function normalizeTrip(raw, index = 0) {
     title: raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     duration: raw.durationMinutes ? `${raw.durationMinutes} min` : "Flexible",
-    price: Number(raw.pricing?.pricePerPerson || 0),
+    price: Number(raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
+    childPrice: Number(raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
+    buffetEnabled: Boolean(raw.pricing?.buffetEnabled),
+    buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
+    buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     rating: null,
     reviews: null,
     category,
@@ -291,7 +295,10 @@ function formatDeparture(value) {
 }
 
 function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria }) {
-  const [guests,setGuests]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
+  const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
+  const [children,setChildren]=useState(0);
+  const [mealPlan,setMealPlan]=useState("without_buffet");
+  const guests=adults+children;
   const [departures,setDepartures]=useState([]);
   const [selected,setSelected]=useState(null);
   const [quote,setQuote]=useState(null);
@@ -324,11 +331,11 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   useEffect(()=>{
     let ignore=false;
     if(!live || !selected) { setQuote(null); return; }
-    getQuote(selected.id,guests)
+    getQuote(selected.id,adults,children,mealPlan)
       .then(q=>{if(!ignore){setQuote(q);setError("");}})
       .catch(err=>{if(!ignore){setQuote(null);setError(err.message);}});
     return()=>{ignore=true;};
-  },[selected,guests,live]);
+  },[selected,adults,children,mealPlan,live]);
 
   async function confirm() {
     setError("");
@@ -337,10 +344,11 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
       return;
     }
     if(!selected) return setError("No available departure selected.");
+    if(guests<1) return setError("Add at least one adult or child.");
     if(!auth?.token) return setError("AUTH_REQUIRED");
 
     try {
-      const payment=await createPaymentCheckout({departureId:selected.id,seats:guests,token:auth.token});
+      const payment=await createPaymentCheckout({departureId:selected.id,adults,children,mealPlan,token:auth.token});
       setSuccess({
         expiresAt:payment.expiresAt,
         paymentId:payment.paymentId,
@@ -398,14 +406,16 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
             )) : live ? <div className="no-departures">No future departures are available yet.</div> : <div className="preview-departure"><CalendarDays size={18}/> Preview date · live dates appear after API deployment</div>}
           </div>
 
-          <div className="booking-form">
-            <label><span>Guests</span><div className="stepper"><button onClick={()=>setGuests(Math.max(1,guests-1))}>−</button><b>{guests}</b><button onClick={()=>setGuests(guests+1)}>+</button></div></label>
+          <div className="booking-form booking-form--guests">
+            <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)}>+</button></div></label>
+            <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)}>+</button></div></label>
+            {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>Buffet included</small></button></div>}
             <label><span>Account</span><button><UserRound size={18}/>{auth?.user?.email || "Sign in during booking"}<ChevronRight size={17}/></button></label>
           </div>
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box"><div><span>Trip subtotal</span><b>{total} JOD</b></div><div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{total} JOD</strong></div></div>
+          <div className="price-box">{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? 0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? 0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
           <button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to payment <ChevronRight size={18}/></button>
           <p className="booking-note">No booking is created before payment. Successful payment creates the confirmed SeaGo booking and ticket.</p>
         </>
