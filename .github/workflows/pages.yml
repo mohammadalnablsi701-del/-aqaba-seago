@@ -35,6 +35,8 @@ jobs:
 
       - name: Build preview
         working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
         run: npm run build
 
       - name: Setup Pages
