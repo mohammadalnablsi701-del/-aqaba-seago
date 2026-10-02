@@ -1,6 +1,7 @@
 import Booking from "../models/Booking.js";
 import Payment from "../models/Payment.js";
 import Departure from "../models/Departure.js";
+import { sendCancellationNotice } from "./notifications.js";
 
 export function cancellationPolicyFor(startsAt, now = new Date()) {
   const hours = (new Date(startsAt).getTime() - now.getTime()) / 3600000;
@@ -71,6 +72,7 @@ export async function cancelBooking({ bookingId, source, reason = "", customerId
     refundStatus: refund.status
   };
   await booking.save();
+  sendCancellationNotice(booking._id).catch(err=>console.error("Cancellation email failed",err));
 
   await Departure.updateOne(
     { _id: booking.departureId?._id || booking.departureId, reservedSeats: { $gte: booking.seats } },
