@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  backend-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -17,7 +17,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: npm install
-      - name: Run tests
+      - name: Run backend tests
         run: npm test
+
+  customer-app-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install customer app dependencies
+        working-directory: customer-app
+        run: npm install
+      - name: Build customer app
+        working-directory: customer-app
+        run: npm run build
