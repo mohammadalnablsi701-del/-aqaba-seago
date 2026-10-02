@@ -71,3 +71,15 @@ export async function createBooking({ departureId, seats, token }) {
 export async function listBookings(token) {
   return request("/api/bookings", { token });
 }
+
+export async function createPaymentCheckout({ bookingId, token }) {
+  return request("/api/payments/checkout", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ bookingId })
+  });
+}
+
+export async function getPayment(paymentId, token) {
+  return request(`/api/payments/${paymentId}`, { token });
+}
