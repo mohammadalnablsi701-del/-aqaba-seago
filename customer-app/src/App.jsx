@@ -7,7 +7,7 @@ import BrandLogo from "./BrandLogo.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
-  createBooking, getQuote, hasApi, listBookings, listDepartures, listTrips,
+  createBooking, createPaymentCheckout, getQuote, hasApi, listBookings, listDepartures, listTrips,
   loginCustomer, registerCustomer
 } from "./api.js";
 
@@ -298,7 +298,15 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack }) {
 
     try {
       const booking=await createBooking({departureId:selected.id,seats:guests,token:auth.token});
-      setSuccess({id:booking._id, holdExpiresAt:booking.holdExpiresAt, pricing:booking.pricing});
+      const payment=await createPaymentCheckout({bookingId:booking._id,token:auth.token});
+      setSuccess({
+        id:booking._id,
+        holdExpiresAt:booking.holdExpiresAt,
+        pricing:booking.pricing,
+        paymentId:payment.paymentId,
+        paymentProvider:payment.provider,
+        checkoutUrl:payment.checkoutUrl
+      });
     } catch(err) {
       setError(err.message);
     }
@@ -311,9 +319,10 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack }) {
         <CheckCircle2 size={70}/>
         <span>BOOKING CREATED</span>
         <h1>Your seats are on hold</h1>
-        <p>{success.demo ? "Preview flow completed. Live booking will use the same screen when the API is deployed." : "Your booking was created successfully. Payment connection is intentionally deferred for now."}</p>
+        <p>{success.demo ? "Preview flow completed. Live booking will use the same screen when the API is deployed." : "Your booking was created successfully. Complete payment before the hold expires to confirm your ticket."}</p>
         {!success.demo && success.holdExpiresAt && <div className="hold-box">Hold expires: <b>{formatDeparture(success.holdExpiresAt)}</b></div>}
-        <button className="primary-button" onClick={onBack}>Back to trip</button>
+        {!success.demo && success.checkoutUrl && <button className="primary-button" onClick={()=>{window.location.href=success.checkoutUrl;}}>Continue to payment <ChevronRight size={18}/></button>}
+        <button className="secondary-button" onClick={onBack}>Back to trip</button>
       </div>
     );
   }
@@ -356,8 +365,8 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack }) {
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
           <div className="price-box"><div><span>Trip subtotal</span><b>{total} JOD</b></div><div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{total} JOD</strong></div></div>
-          <button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Create booking <ChevronRight size={18}/></button>
-          <p className="booking-note">Payment gateway remains deferred. Live mode creates a real pending booking and reserves capacity on the backend.</p>
+          <button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Reserve & continue to payment <ChevronRight size={18}/></button>
+          <p className="booking-note">Seats are held temporarily while payment is completed. Confirmed payment creates your SeaGo ticket automatically.</p>
         </>
       )}
     </div>
