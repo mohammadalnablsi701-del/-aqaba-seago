@@ -1,0 +1,2 @@
+import express from "express";import Provider from "../models/Provider.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();
+router.post("/",requireAuth,requireRole("provider"),async(req,res,next)=>{try{const p=await Provider.create({ownerUserId:req.user._id,businessName:req.body.businessName,phone:req.body.phone});res.status(201).json(p);}catch(e){if(e?.code===11000)return res.status(409).json({error:"Provider profile already exists"});next(e);}});export default router;
