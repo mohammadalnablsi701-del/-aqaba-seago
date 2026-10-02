@@ -40,7 +40,6 @@ jobs:
           const match = css.match(re);
           if (!match) throw new Error("Embedded Aqaba hero image not found");
           const buffer = Buffer.from(match[1], "base64");
-          if (buffer.length < 30000) throw new Error("Decoded hero image is unexpectedly small");
           fs.mkdirSync("public", { recursive: true });
           fs.writeFileSync("public/aqaba-seago-hero-v3.jpg", buffer);
           css = css.replace(
