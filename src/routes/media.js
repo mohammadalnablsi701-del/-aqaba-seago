@@ -6,14 +6,17 @@ const router = express.Router();
 
 router.post("/trip-image", requireAuth, requireRole("provider"), async (req,res,next)=>{
   try {
-    const result = await uploadTripImage(req.body.dataUrl);
+    const result = await uploadTripImage(req.body.dataUrl, req.user._id);
     res.status(201).json(result);
   } catch (e) { next(e); }
 });
 
 router.delete("/trip-image", requireAuth, requireRole("provider"), async (req,res,next)=>{
   try {
-    const result = await deleteTripImage(String(req.body.publicId || ""));
+    const publicId = String(req.body.publicId || "");
+    const prefix = `aqaba-seago/trips/${String(req.user._id)}/`;
+    if (!publicId.startsWith(prefix)) return res.status(403).json({ error: "Forbidden media resource" });
+    const result = await deleteTripImage(publicId);
     res.json(result);
   } catch (e) { next(e); }
 });
