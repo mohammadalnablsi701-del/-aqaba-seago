@@ -42,6 +42,24 @@ function futureStart(dayOffset, hourUtc) {
 export async function seedDemoData() {
   if (process.env.SEED_DEMO_DATA !== "true") return;
 
+  const demoAdminEmail = String(process.env.DEMO_ADMIN_EMAIL || "").trim().toLowerCase();
+  const demoAdminPassword = String(process.env.DEMO_ADMIN_PASSWORD || "");
+  if (demoAdminEmail && demoAdminPassword) {
+    let admin = await User.findOne({ email: demoAdminEmail });
+    if (!admin) {
+      admin = await User.create({
+        name: "SeaGo Admin",
+        email: demoAdminEmail,
+        role: "admin",
+        passwordHash: await bcrypt.hash(demoAdminPassword, 12),
+        isActive: true
+      });
+    } else if (admin.role !== "admin") {
+      admin.role = "admin";
+      await admin.save();
+    }
+  }
+
   const demoProviderEmail = String(process.env.DEMO_PROVIDER_EMAIL || "").trim().toLowerCase();
   const demoProviderPassword = String(process.env.DEMO_PROVIDER_PASSWORD || "");
   let demoUser = null;
