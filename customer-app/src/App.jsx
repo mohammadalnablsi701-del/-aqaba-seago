@@ -457,7 +457,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
     const departureMapsUrl=departureLocation.googleMapsUrl || (departureLocation.address||departureLocation.name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(departureLocation.address||departureLocation.name)}` : "");
     const ref=String(b._id||"").slice(-8).toUpperCase();
     const status=String(b.status||"").replace("_"," ");
-    const qrValue=`AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`;
+    const qrValue=b.ticketValidationUrl || `AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`;
     return <article className={`ticket-card ticket-card--${b.status}`} key={b._id}>
       <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider">Provided by <strong>{provider.businessName}</strong></p>}</div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
       <div className="ticket-card__details">
@@ -466,7 +466,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
         <div><small>Guests</small><strong>{b.seats||1}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
-      <div className="ticket-card__location">{departureLocation.name&&<><small>Departure point</small><strong>{departureLocation.name}</strong>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
+      <div className="ticket-card__location">{departureLocation.name&&<><small>Departure point</small><strong>{departureLocation.name}</strong>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/><small>Scan to verify</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
     </article>;
   })}</div>:<div className="empty-state"><Ticket size={48}/><h2>No tickets yet</h2><p>Your confirmed SeaGo bookings will appear here.</p></div>}</div>;
 }
