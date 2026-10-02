@@ -46,7 +46,7 @@ function normalizeTrip(raw, index = 0) {
     buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetDescription: String(raw.pricing?.buffetDescription || ""),
-    images: Array.isArray(raw.images) ? raw.images.filter(Boolean) : [],
+    images: Array.isArray(raw.images) ? raw.images.map(x=>typeof x==="string"?x:x?.url).filter(Boolean) : [],
     rating: null,
     reviews: null,
     category,
