@@ -6,6 +6,7 @@ on:
     paths:
       - "customer-app/**"
       - "provider-app/**"
+      - "admin-app/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -54,6 +55,21 @@ jobs:
         run: |
           mkdir -p customer-app/dist/provider
           cp -R provider-app/dist/* customer-app/dist/provider/
+
+      - name: Install admin dependencies
+        working-directory: admin-app
+        run: npm install
+
+      - name: Build admin app
+        working-directory: admin-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: npm run build
+
+      - name: Merge admin app into customer site
+        run: |
+          mkdir -p customer-app/dist/admin
+          cp -R admin-app/dist/* customer-app/dist/admin/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
