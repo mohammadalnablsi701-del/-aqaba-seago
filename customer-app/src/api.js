@@ -67,3 +67,7 @@ export async function createBooking({ departureId, seats, token }) {
     body: JSON.stringify({ departureId, seats })
   });
 }
+
+export async function listBookings(token) {
+  return request("/api/bookings", { token });
+}
