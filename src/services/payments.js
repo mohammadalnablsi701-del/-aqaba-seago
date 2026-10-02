@@ -9,10 +9,49 @@ function sameMoney(a, b) {
 }
 
 async function releaseHold(hold, status = "released") {
-  if (!hold || hold.status !== "active") return;
-  hold.status = status;
-  await hold.save();
-  await Departure.updateOne({ _id: hold.departureId }, { $inc: { reservedSeats: -hold.seats } });
+  if (!hold || hold.status !== "active") return false;
+  const claimed = await CheckoutHold.findOneAndUpdate(
+    { _id: hold._id, status: "active" },
+    { $set: { status } },
+    { new: true }
+  );
+  if (!claimed) return false;
+  await Departure.updateOne(
+    { _id: claimed.departureId },
+    { $inc: { reservedSeats: -Number(claimed.seats || 0) } }
+  );
+  return true;
+}
+
+export async function releaseExpiredCheckoutHolds({ limit = 200 } = {}) {
+  const now = new Date();
+  const expired = await CheckoutHold.find({
+    status: "active",
+    expiresAt: { $lte: now }
+  }).select("_id departureId seats").sort({ expiresAt: 1 }).limit(limit);
+
+  let released = 0;
+  for (const hold of expired) {
+    const claimed = await CheckoutHold.findOneAndUpdate(
+      { _id: hold._id, status: "active", expiresAt: { $lte: now } },
+      { $set: { status: "expired" } },
+      { new: true }
+    );
+    if (!claimed) continue;
+
+    await Departure.updateOne(
+      { _id: claimed.departureId },
+      { $inc: { reservedSeats: -Number(claimed.seats || 0) } }
+    );
+
+    await Payment.updateMany(
+      { holdId: claimed._id, status: "pending" },
+      { $set: { status: "expired", failedAt: now } }
+    );
+
+    released += 1;
+  }
+  return released;
 }
 
 export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
