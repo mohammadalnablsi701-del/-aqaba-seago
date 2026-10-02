@@ -96,7 +96,18 @@ function ApiNotice({ usingFallback }) {
   );
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch }) {
+  const [tripType,setTripType]=useState("All Trips");
+  const [date,setDate]=useState("");
+  const [guests,setGuests]=useState(2);
+  const [searching,setSearching]=useState(false);
+
+  async function submitSearch(){
+    setSearching(true);
+    try { await onSearch({tripType,date,guests}); }
+    finally { setSearching(false); }
+  }
+
   return (
     <div className="screen screen--home">
       <section className="hero">
@@ -111,10 +122,34 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           <p>Discover the Red Sea your way.</p>
         </div>
         <div className="search-card">
-          <button className="search-row"><span className="search-row__icon"><Anchor size={18}/></span><span><small>Trip Type</small><strong>All Trips</strong></span><ChevronRight size={18}/></button>
-          <button className="search-row"><span className="search-row__icon"><CalendarDays size={18}/></span><span><small>Date</small><strong>Select Date</strong></span><ChevronRight size={18}/></button>
-          <button className="search-row"><span className="search-row__icon"><UsersRound size={18}/></span><span><small>Guests</small><strong>2 Guests</strong></span><ChevronRight size={18}/></button>
-          <button className="primary-button"><Search size={18}/> Search Trips <ChevronRight size={18}/></button>
+          <label className="search-row search-row--control">
+            <span className="search-row__icon"><Anchor size={18}/></span>
+            <span><small>Trip Type</small>
+              <select value={tripType} onChange={e=>setTripType(e.target.value)}>
+                {categories.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </span>
+            <ChevronRight size={18}/>
+          </label>
+          <label className="search-row search-row--control">
+            <span className="search-row__icon"><CalendarDays size={18}/></span>
+            <span><small>Date</small>
+              <input type="date" value={date} min={new Date().toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)}/>
+            </span>
+            <ChevronRight size={18}/>
+          </label>
+          <div className="search-row search-row--control">
+            <span className="search-row__icon"><UsersRound size={18}/></span>
+            <span><small>Guests</small><strong>{guests} {guests===1?"Guest":"Guests"}</strong></span>
+            <div className="guest-stepper">
+              <button type="button" onClick={()=>setGuests(Math.max(1,guests-1))}>−</button>
+              <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
+            </div>
+          </div>
+          <button className="primary-button" onClick={submitSearch} disabled={searching}>
+            {searching?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>}
+            {searching?"Searching...":"Search Trips"} <ChevronRight size={18}/>
+          </button>
         </div>
       </section>
 
@@ -150,7 +185,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
   );
 }
 
-function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading }) {
+function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading, searchSummary }) {
   const [filter,setFilter]=useState("All Trips");
   const shown=useMemo(()=>{
     if(filter==="All Trips") return tripList;
@@ -163,7 +198,7 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
 
   return (
     <div className="screen standard-screen">
-      <header className="standard-header"><BrandLogo compact/><div><span>DISCOVER AQABA</span><h1>Sea Experiences</h1></div></header>
+      <header className="standard-header"><BrandLogo compact/><div><span>{searchSummary||"DISCOVER AQABA"}</span><h1>Sea Experiences</h1></div></header>
       <div className="category-row">{categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{c}</button>)}</div>
       {loading ? <LoadingState label="Loading sea experiences"/> :
         <div className="trip-grid">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>}
@@ -453,6 +488,8 @@ export default function App(){
   const [tripList,setTripList]=useState(fallbackTrips);
   const [loadingTrips,setLoadingTrips]=useState(hasApi());
   const [usingFallback,setUsingFallback]=useState(!hasApi());
+  const [searchResults,setSearchResults]=useState(null);
+  const [searchSummary,setSearchSummary]=useState("");
   const [favourites,setFavourites]=useState(["snorkel-coral"]);
   const [auth,setAuth]=useState(readStoredAuth());
 
@@ -473,6 +510,37 @@ export default function App(){
     return()=>{ignore=true;};
   },[]);
 
+  async function runHomeSearch({tripType,date,guests}) {
+    let candidates = tripList;
+    if (tripType !== "All Trips") {
+      const token = tripType.replace(/s$/,"").toLowerCase();
+      candidates = candidates.filter(t =>
+        String(t.category||"").toLowerCase().includes(token) ||
+        String(t.title||"").toLowerCase().includes(token)
+      );
+    }
+
+    if (hasApi() && date) {
+      const checks = await Promise.all(candidates.map(async trip => {
+        if (!trip.apiId) return null;
+        try {
+          const deps = await listDepartures(trip.apiId);
+          const ok = deps.some(d => {
+            const depDate = new Date(d.startsAt).toISOString().slice(0,10);
+            return depDate === date && Number(d.availableSeats||0) >= Number(guests||1);
+          });
+          return ok ? trip : null;
+        } catch { return null; }
+      }));
+      candidates = checks.filter(Boolean);
+    }
+
+    setSearchResults(candidates);
+    const parts=[tripType!=="All Trips"?tripType:null,date?new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" guests":null].filter(Boolean);
+    setSearchSummary(parts.length?parts.join(" · "):"DISCOVER AQABA");
+    setActive("trips");
+  }
+
   function saveAuth(data) {
     setAuth(data);
     localStorage.setItem("seago_auth",JSON.stringify(data));
@@ -491,8 +559,8 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback}/>}
-      {active==="trips"&&<TripsScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips}/>}
+      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch}/>}
+      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
     </main>
