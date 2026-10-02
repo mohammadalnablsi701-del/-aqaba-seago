@@ -16,6 +16,7 @@ function serverPricing(input = {}, existing = null) {
   const buffetEnabled = input.buffetEnabled !== undefined ? Boolean(input.buffetEnabled) : Boolean(existing?.buffetEnabled);
   const buffetAdultPrice = Number(input.buffetAdultPrice ?? existing?.buffetAdultPrice ?? adultPrice);
   const buffetChildPrice = Number(input.buffetChildPrice ?? existing?.buffetChildPrice ?? childPrice);
+  const buffetDescription = String(input.buffetDescription ?? existing?.buffetDescription ?? "").trim();
 
   return {
     currency: input.currency || existing?.currency || "JOD",
@@ -25,6 +26,7 @@ function serverPricing(input = {}, existing = null) {
     buffetEnabled,
     buffetAdultPrice,
     buffetChildPrice,
+    buffetDescription,
     commissionType: "percentage",
     commissionValue: existingValue
   };
@@ -41,6 +43,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       category: req.body.category,
       durationMinutes: req.body.durationMinutes,
       departureLocation: req.body.departureLocation,
+      images: Array.isArray(req.body.images) ? req.body.images.filter(Boolean).slice(0,10) : [],
       active: req.body.active !== false,
       pricing: serverPricing(req.body.pricing),
       providerId: p._id
@@ -58,7 +61,7 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
     const trip = await Trip.findOne({ _id: req.params.tripId, providerId: p._id });
     if (!trip) return res.status(404).json({ error: "Trip not found" });
 
-    for (const key of ["titleAr","titleEn","category","durationMinutes","departureLocation","active"]) {
+    for (const key of ["titleAr","titleEn","category","durationMinutes","departureLocation","images","active"]) {
       if (req.body[key] !== undefined) trip[key] = req.body[key];
     }
 
