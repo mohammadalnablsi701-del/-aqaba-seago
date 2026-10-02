@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Anchor, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Heart, Home,
-  LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
+  Bell, LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking
+  loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead
 } from "./api.js";
 
 const CATEGORY_LABELS = {
@@ -551,8 +551,18 @@ function LoadingState({ label }) {
   return <div className="loading-state"><LoaderCircle className="spin"/><span>{label}</span></div>;
 }
 
+function NotificationsScreen({auth}){
+  const[data,setData]=useState({unread:0,items:[]});const[loading,setLoading]=useState(Boolean(auth?.token));const[error,setError]=useState("");
+  async function load(){if(!auth?.token){setLoading(false);return;}setLoading(true);try{setData(await listNotifications(auth.token));setError("");}catch(e){setError(e.message)}finally{setLoading(false)}}
+  useEffect(()=>{load()},[auth?.token]);
+  async function open(n){if(!n.readAt){try{await markNotificationRead(n._id,auth.token);setData(d=>({...d,unread:Math.max(0,d.unread-1),items:d.items.map(x=>x._id===n._id?{...x,readAt:new Date().toISOString()}:x)}))}catch{}}}
+  async function readAll(){await markAllNotificationsRead(auth.token);setData(d=>({unread:0,items:d.items.map(x=>({...x,readAt:x.readAt||new Date().toISOString()}))}))}
+  if(!auth?.token)return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div></header><div className="empty-state"><Bell size={46}/><h2>Sign in to see notifications</h2></div></div>;
+  return <div className="screen standard-screen notification-screen"><header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div>{data.unread>0&&<button className="mark-all" onClick={readAll}>Mark all read</button>}</header>{loading?<LoadingState label="Loading notifications..."/>:error?<div className="booking-error">{error}</div>:data.items.length?<div className="notification-list">{data.items.map(n=><button key={n._id} className={"notification-card "+(!n.readAt?"unread":"")} onClick={()=>open(n)}><div className="notification-icon"><Bell size={17}/></div><div><b>{n.title}</b><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString()}</small></div>{!n.readAt&&<span className="unread-dot"/>}</button>)}</div>:<div className="empty-state"><Bell size={46}/><h2>No notifications yet</h2><p>Booking confirmations, cancellations and trip reminders will appear here.</p></div>}</div>
+}
+
 function BottomNav({ active, setActive }) {
-  const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["profile",UserRound,"Profile"]];
+  const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["notifications",Bell,"Alerts"],["profile",UserRound,"Profile"]];
   return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><Icon size={20}/><span>{label}</span></button>)}</nav>;
 }
 
@@ -660,7 +670,7 @@ export default function App(){
       {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
-      {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
+      {active==="notifications"&&<NotificationsScreen auth={auth}/>}\n      {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
     </main>
     <BottomNav active={active} setActive={setActive}/>
   </div>;
