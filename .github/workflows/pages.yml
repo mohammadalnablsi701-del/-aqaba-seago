@@ -27,28 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Convert embedded hero to real JPG
-        working-directory: customer-app
-        run: |
-          node - <<'NODE'
-          const fs = require("fs");
-          const path = "src/styles.css";
-          let css = fs.readFileSync(path, "utf8");
-          const re = /background-image:url\("data:image\/jpeg;base64,([^"]+)"\)/;
-          const match = css.match(re);
-          if (!match) throw new Error("Embedded Aqaba hero image not found");
-          const buffer = Buffer.from(match[1], "base64");
-          fs.mkdirSync("public", { recursive: true });
-          fs.writeFileSync("public/aqaba-seago-hero-v3.jpg", buffer);
-          css = css.replace(
-            re,
-            'background-image:url("/-aqaba-seago/aqaba-seago-hero-v3.jpg")'
-          );
-          fs.writeFileSync(path, css);
-          console.log("Hero JPG bytes:", buffer.length);
-          NODE
+          node-version: 24
 
       - name: Install dependencies
         working-directory: customer-app
