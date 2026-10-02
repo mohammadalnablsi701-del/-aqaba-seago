@@ -96,3 +96,7 @@ export async function cancelBooking(bookingId, reason, token) {
     body: JSON.stringify({ reason })
   });
 }
+
+export const listNotifications=token=>request("/api/notifications",{token});
+export const markNotificationRead=(id,token)=>request("/api/notifications/"+id+"/read",{method:"PATCH",token});
+export const markAllNotificationsRead=token=>request("/api/notifications/read-all",{method:"POST",token});
