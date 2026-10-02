@@ -58,3 +58,15 @@
   background:
     linear-gradient(180deg,rgba(3,32,71,.05) 0%,rgba(3,32,71,.03) 38%,rgba(0,28,58,.42) 72%,rgba(0,28,58,.58) 100%);
 }
+
+
+/* Safe mobile hero refinement — positioning only */
+@media (max-width: 480px){
+  .hero-scene{background-position:center 36%}
+  .hero__copy{padding-top:196px}
+  .hero__copy h1{margin-bottom:8px}
+}
+@media (max-width: 390px){
+  .hero-scene{background-position:center 35%}
+  .hero__copy{padding-top:190px}
+}
