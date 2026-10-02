@@ -124,9 +124,9 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           <button className="icon-button" aria-label="Menu"><span className="hamburger">☰</span></button>
         </div>
         <div className="hero__copy">
-          <p className="eyebrow">EXPLORE · SWIM · DISCOVER</p>
-          <h1>Boat Trips<br/>in Aqaba</h1>
-          <p>Discover the Red Sea your way.</p>
+          <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
+          <h1>Make Aqaba<br/>Unforgettable</h1>
+          <p>Your next Red Sea memory starts here.</p>
         </div>
         <div className="search-card">
           <label className="search-row search-row--control">
