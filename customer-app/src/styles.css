@@ -27,3 +27,20 @@
 .booking-success>svg{color:var(--lagoon);margin:28px 0 15px}.booking-success>span{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--aqua)}
 .booking-success h1{font-family:Poppins;font-size:27px;margin:7px 0}.booking-success p{font-size:13px;line-height:1.6;color:var(--muted);max-width:340px}
 .booking-success>.primary-button{width:100%;margin-top:18px}.hold-box{width:100%;background:var(--soft);border-radius:14px;padding:13px;font-size:11px;color:#6e7f91;margin-top:8px}
+
+/* Mobile polish based on live iPhone preview */
+@media (max-width: 480px){
+  .hero{min-height:720px}
+  .hero-scene{height:440px}
+  .hero:after{height:440px}
+  .hero__copy{padding:214px 24px 0}
+  .hero__copy h1{font-size:36px;line-height:1.03;margin:7px 0 4px}
+  .search-card{top:405px}
+  .content-section{padding-top:10px}
+}
+@media (max-width: 390px){
+  .hero{min-height:735px}
+  .hero__copy{padding-top:205px}
+  .hero__copy h1{font-size:34px}
+  .search-card{top:400px;left:16px;right:16px}
+}
