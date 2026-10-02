@@ -15,3 +15,5 @@ export const createDeparture=(token,data)=>req("/api/departures",{token,method:"
 export const updateDeparture=(token,id,data)=>req("/api/departures/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
 
 export const bookingDetail=(token,id)=>req("/api/providers/me/bookings/"+id,{token});
+
+export const providerStats=(token,date)=>req("/api/providers/me/stats?date="+encodeURIComponent(date),{token});
