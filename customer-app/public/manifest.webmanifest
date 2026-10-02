@@ -1,0 +1,10 @@
+{
+  "name": "Aqaba SeaGo",
+  "short_name": "SeaGo",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0B3D91",
+  "description": "Book marine trips and sea experiences in Aqaba."
+}
