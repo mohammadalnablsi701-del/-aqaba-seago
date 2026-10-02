@@ -406,13 +406,14 @@ function TicketsScreen({ auth, onAuthenticated }) {
   return <div className="screen standard-screen tickets-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header>{tickets.length?<div className="ticket-list">{tickets.map(b=>{
     const trip=b.tripId||{};
     const departure=b.departureId||{};
+    const provider=b.providerId||{};
     const starts=departure.startsAt?new Date(departure.startsAt):null;
     const title=trip.titleEn||trip.titleAr||"Aqaba Sea Experience";
     const ref=String(b._id||"").slice(-8).toUpperCase();
     const status=String(b.status||"").replace("_"," ");
     const qrValue=`AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`;
     return <article className={`ticket-card ticket-card--${b.status}`} key={b._id}>
-      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p></div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
+      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider">Provided by <strong>{provider.businessName}</strong></p>}</div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
       <div className="ticket-card__details">
         <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
         <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
