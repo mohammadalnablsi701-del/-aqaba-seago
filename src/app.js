@@ -35,7 +35,7 @@ export function createApp() {
   app.use("/api/payments/webhooks", paymentWebhookRoutes);
 
   app.use(cors(buildCorsOptions()));
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "4mb" }));
 
   app.get("/health", (_req, res) =>
     res.json({ ok: true, service: "aqaba-seago-api", version: "0.3.1" })
