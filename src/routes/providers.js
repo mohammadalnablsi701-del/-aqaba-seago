@@ -99,6 +99,9 @@ router.get("/me/departures/:departureId/manifest",requireAuth,requireRole("provi
       bookingReference:"SG-"+String(b._id).slice(-8).toUpperCase(),
       customer:{name:b.customerId?.name||"Guest",phone:b.customerId?.phone||null,email:b.customerId?.email||null},
       seats:b.seats,
+      adults:b.adults,
+      children:b.children,
+      mealPlan:b.mealPlan,
       checkedInAt:b.checkedInAt||null
     }));
 
