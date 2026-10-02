@@ -38,8 +38,9 @@ export async function listDepartures(tripId) {
   return request(`/api/departures?${qs}`);
 }
 
-export async function getQuote(departureId, seats) {
-  return request(`/api/departures/${departureId}/quote?seats=${seats}`);
+export async function getQuote(departureId, adults, children = 0, mealPlan = "without_buffet") {
+  const qs = new URLSearchParams({ adults: String(adults), children: String(children), mealPlan });
+  return request(`/api/departures/${departureId}/quote?${qs}`);
 }
 
 export async function registerCustomer({ name, email, phone, password }) {
@@ -72,12 +73,12 @@ export async function listBookings(token) {
   return request("/api/bookings", { token });
 }
 
-export async function createPaymentCheckout({ departureId, seats, token }) {
+export async function createPaymentCheckout({ departureId, adults, children = 0, mealPlan = "without_buffet", token }) {
   return request("/api/payments/checkout", {
     method: "POST",
     token,
     headers: { "Idempotency-Key": crypto.randomUUID() },
-    body: JSON.stringify({ departureId, seats })
+    body: JSON.stringify({ departureId, adults, children, mealPlan })
   });
 }
 
