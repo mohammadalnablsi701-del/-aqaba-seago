@@ -3,6 +3,7 @@ import Provider from "../models/Provider.js";
 import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
+import Payment from "../models/Payment.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router=express.Router();
@@ -73,6 +74,25 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
       return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Amman",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(s))===req.query.date;
     }):rows;
     res.json(filtered);
+  }catch(e){next(e);}
+});
+
+
+router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
+    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id})
+      .populate("tripId","titleEn titleAr category durationMinutes departureLocation")
+      .populate("departureId","startsAt status capacity reservedSeats")
+      .populate("customerId","name phone email");
+    if(!booking)return res.status(404).json({error:"Booking not found"});
+    const payment=await Payment.findOne({bookingId:booking._id}).select("status amount currency paidAt provider");
+    res.json({
+      ...booking.toObject(),
+      bookingReference:"SG-"+String(booking._id).slice(-8).toUpperCase(),
+      payment:payment||null
+    });
   }catch(e){next(e);}
 });
 
