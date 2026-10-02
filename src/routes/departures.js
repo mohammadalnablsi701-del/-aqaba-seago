@@ -3,7 +3,7 @@ import Departure from "../models/Departure.js";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { calculatePricing } from "../services/pricing.js";
+import { calculateTieredPricing } from "../services/pricing.js";
 
 const router = express.Router();
 
@@ -86,7 +86,10 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
 
 router.get("/:departureId/quote", async (req, res, next) => {
   try {
-    const seats = Number(req.query.seats);
+    const adults = Number(req.query.adults ?? req.query.seats ?? 0);
+    const children = Number(req.query.children ?? 0);
+    const mealPlan = req.query.mealPlan === "with_buffet" ? "with_buffet" : "without_buffet";
+    const seats = adults + children;
     const departure = await Departure.findById(req.params.departureId);
 
     if (!departure || departure.status !== "scheduled") {
@@ -102,16 +105,14 @@ router.get("/:departureId/quote", async (req, res, next) => {
     }
 
     const trip = await Trip.findById(departure.tripId);
-    const pricing = calculatePricing({
-      pricePerPerson: trip.pricing.pricePerPerson,
-      seats,
-      commissionType: trip.pricing.commissionType,
-      commissionValue: trip.pricing.commissionValue
-    });
+    const pricing = calculateTieredPricing({ pricing: trip.pricing, adults, children, mealPlan });
 
     res.json({
       departureId: departure._id,
       seats,
+      adults,
+      children,
+      mealPlan,
       availableSeats: departure.capacity - departure.reservedSeats,
       pricing
     });
