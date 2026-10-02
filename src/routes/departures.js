@@ -64,6 +64,26 @@ router.get("/", async (req, res, next) => {
   }
 });
 
+router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
+    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const departure=await Departure.findById(req.params.departureId);
+    if(!departure)return res.status(404).json({error:"Departure not found"});
+    const trip=await Trip.findOne({_id:departure.tripId,providerId:provider._id});
+    if(!trip)return res.status(403).json({error:"Forbidden"});
+    if(req.body.capacity!==undefined){
+      const capacity=Number(req.body.capacity);
+      if(!Number.isInteger(capacity)||capacity<departure.reservedSeats)return res.status(400).json({error:"Capacity cannot be below reserved seats"});
+      departure.capacity=capacity;
+    }
+    if(req.body.startsAt!==undefined)departure.startsAt=new Date(req.body.startsAt);
+    if(req.body.status!==undefined)departure.status=req.body.status;
+    await departure.save();
+    res.json(departure);
+  }catch(e){next(e);}
+});
+
 router.get("/:departureId/quote", async (req, res, next) => {
   try {
     const seats = Number(req.query.seats);
