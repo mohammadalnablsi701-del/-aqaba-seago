@@ -1,0 +1,10 @@
+{
+  "name": "Aqaba SeaGo Provider",
+  "short_name": "SeaGo Provider",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f8fb",
+  "theme_color": "#082f49",
+  "description": "Aqaba SeaGo provider dashboard."
+}
