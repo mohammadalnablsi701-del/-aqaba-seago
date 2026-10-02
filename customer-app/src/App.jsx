@@ -99,7 +99,7 @@ function ApiNotice({ usingFallback }) {
 
 function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch }) {
   const [tripType,setTripType]=useState("All Trips");
-  const [date,setDate]=useState("");
+  const [date,setDate]=useState(()=>new Date().toISOString().slice(0,10));
   const [guests,setGuests]=useState(2);
   const [searching,setSearching]=useState(false);
 
