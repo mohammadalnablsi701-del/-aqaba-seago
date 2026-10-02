@@ -1,35 +1,56 @@
 import express from "express";
-import Booking from "../models/Booking.js";
+import CheckoutHold from "../models/CheckoutHold.js";
+import Departure from "../models/Departure.js";
+import Trip from "../models/Trip.js";
 import Payment from "../models/Payment.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { createCheckoutForBooking } from "../services/payments.js";
+import { calculatePricing } from "../services/pricing.js";
+import { createCheckoutForHold } from "../services/payments.js";
 
 const router = express.Router();
 
 router.post("/checkout", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
-    const booking = await Booking.findById(req.body.bookingId);
-    if (!booking) return res.status(404).json({ error: "Booking not found" });
+    const key = String(req.headers["idempotency-key"] || "").trim();
+    if (!key) return res.status(400).json({ error: "Idempotency-Key header required" });
+    const seats = Number(req.body.seats);
+    if (!Number.isInteger(seats) || seats < 1) return res.status(400).json({ error: "Invalid seats" });
+
+    let hold = await CheckoutHold.findOne({ customerId: req.user._id, idempotencyKey: key });
+    if (!hold) {
+      const departure = await Departure.findOneAndUpdate(
+        { _id: req.body.departureId, status: "scheduled", startsAt: { $gte: new Date() },
+          $expr: { $lte: [{ $add: ["$reservedSeats", seats] }, "$capacity"] } },
+        { $inc: { reservedSeats: seats } }, { new: true }
+      );
+      if (!departure) return res.status(409).json({ error: "Departure unavailable or not enough seats" });
+      try {
+        const trip = await Trip.findById(departure.tripId);
+        if (!trip || !trip.active) throw new Error("Trip unavailable");
+        const pricing = calculatePricing({
+          pricePerPerson: trip.pricing.pricePerPerson, seats,
+          commissionType: trip.pricing.commissionType, commissionValue: trip.pricing.commissionValue
+        });
+        const minutes = Number(process.env.BOOKING_HOLD_MINUTES || 10);
+        hold = await CheckoutHold.create({
+          customerId: req.user._id, providerId: trip.providerId, tripId: trip._id,
+          departureId: departure._id, seats, pricing, idempotencyKey: key,
+          expiresAt: new Date(Date.now() + minutes * 60000)
+        });
+      } catch (e) {
+        await Departure.updateOne({ _id: departure._id }, { $inc: { reservedSeats: -seats } });
+        throw e;
+      }
+    }
 
     const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
-    const payment = await createCheckoutForBooking({
-      booking,
-      customerId: req.user._id,
-      baseUrl
-    });
-
+    const payment = await createCheckoutForHold({ hold, customerId: req.user._id, baseUrl });
     res.status(201).json({
-      paymentId: payment._id,
-      bookingId: payment.bookingId,
-      provider: payment.provider,
-      status: payment.status,
-      amount: payment.amount,
-      currency: payment.currency,
-      checkoutUrl: payment.checkoutUrl
+      paymentId: payment._id, provider: payment.provider, status: payment.status,
+      amount: payment.amount, currency: payment.currency, checkoutUrl: payment.checkoutUrl,
+      expiresAt: hold.expiresAt
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 router.get("/:paymentId", requireAuth, requireRole("customer"), async (req, res, next) => {
