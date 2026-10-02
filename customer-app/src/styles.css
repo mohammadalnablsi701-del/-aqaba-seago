@@ -96,3 +96,11 @@
 .tickets-auth-copy{padding:0 22px 14px;color:var(--navy)}
 .tickets-auth-copy h2{font-family:Poppins;margin:10px 0 4px;font-size:20px}
 .tickets-auth-copy p{margin:0;color:#7c8b9b;font-size:12px}
+
+.search-row--control{cursor:pointer}
+.search-row--control select,.search-row--control input{border:0;background:transparent;color:var(--ink);font:600 13px Inter,sans-serif;outline:0;padding:0;width:100%}
+.search-row--control input[type="date"]{min-height:22px}
+.search-row--control select{appearance:none}
+.guest-stepper{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.guest-stepper button{width:30px;height:30px;border:0;border-radius:9px;background:#eef7fc;color:var(--navy);font-size:20px;font-weight:700;line-height:1}
+.search-card>.primary-button:disabled{opacity:.7}
