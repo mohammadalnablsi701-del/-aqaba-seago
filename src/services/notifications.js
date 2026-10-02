@@ -144,3 +144,19 @@ export async function processUpcomingReminders(){
   }
   return sent;
 }
+
+export async function sendTestEmail(to){
+  const recipient=String(to||"").trim();
+  if(!recipient) return null;
+  const log=await sendEmail({
+    key:`email-test:${recipient}`,
+    bookingId:null,
+    type:"email_test",
+    to:recipient,
+    subject:"Aqaba SeaGo — Email test successful",
+    html:shell("Email test successful",`<p>Your Aqaba SeaGo email delivery is configured correctly.</p><p>If you received this message, Resend and the SeaGo backend are connected successfully.</p>`)
+  });
+  if(log?.status==="sent") console.log("SeaGo test email sent", recipient, log.externalId||"");
+  else console.log("SeaGo test email status", recipient, log?.status||"unknown", log?.error||"");
+  return log;
+}
