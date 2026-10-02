@@ -4,9 +4,10 @@ import {
   LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
+import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
-  createBooking, getQuote, hasApi, listDepartures, listTrips,
+  createBooking, getQuote, hasApi, listBookings, listDepartures, listTrips,
   loginCustomer, registerCustomer
 } from "./api.js";
 
@@ -368,8 +369,53 @@ function FavouritesScreen({ favourites, tripList, onSelectTrip, toggleFavourite 
   return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>SAVED FOR LATER</span><h1>Favourites</h1></div></header>{list.length?<div className="trip-grid">{list.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite toggleFavourite={toggleFavourite}/>)}</div>:<div className="empty-state"><Heart size={48}/><h2>No favourites yet</h2><p>Tap the heart on any experience to save it here.</p></div>}</div>;
 }
 
-function TicketsScreen() {
-  return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="empty-state"><Ticket size={48}/><h2>No tickets yet</h2><p>Your confirmed SeaGo bookings will appear here.</p></div></div>;
+function TicketsScreen({ auth, onAuthenticated }) {
+  const [tickets,setTickets]=useState([]);
+  const [loading,setLoading]=useState(Boolean(auth?.token&&hasApi()));
+  const [error,setError]=useState("");
+
+  useEffect(()=>{
+    let ignore=false;
+    if(!hasApi()||!auth?.token){setLoading(false);setTickets([]);return;}
+    setLoading(true);setError("");
+    listBookings(auth.token)
+      .then(rows=>{if(!ignore)setTickets(Array.isArray(rows)?rows:[]);})
+      .catch(e=>{if(!ignore)setError(e.message||"Could not load tickets");})
+      .finally(()=>{if(!ignore)setLoading(false);});
+    return()=>{ignore=true;};
+  },[auth?.token]);
+
+  if(hasApi()&&!auth?.token){
+    return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="tickets-auth-copy"><Ticket size={38}/><h2>Sign in to view your tickets</h2><p>Your SeaGo bookings stay linked to your account.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
+  }
+
+  if(!hasApi()){
+    return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="empty-state"><Ticket size={48}/><h2>Tickets are ready</h2><p>Once the live API is connected, confirmed bookings will appear here automatically with their QR ticket.</p></div></div>;
+  }
+
+  if(loading) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><LoadingState label="Loading tickets..."/></div>;
+
+  if(error) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="booking-error">{error}</div></div>;
+
+  return <div className="screen standard-screen tickets-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header>{tickets.length?<div className="ticket-list">{tickets.map(b=>{
+    const trip=b.tripId||{};
+    const departure=b.departureId||{};
+    const starts=departure.startsAt?new Date(departure.startsAt):null;
+    const title=trip.titleEn||trip.titleAr||"Aqaba Sea Experience";
+    const ref=String(b._id||"").slice(-8).toUpperCase();
+    const status=String(b.status||"").replace("_"," ");
+    const qrValue=`AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`;
+    return <article className={`ticket-card ticket-card--${b.status}`} key={b._id}>
+      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p></div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
+      <div className="ticket-card__details">
+        <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
+        <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
+        <div><small>Guests</small><strong>{b.seats||1}</strong></div>
+        <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
+      </div>
+      <div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
+    </article>;
+  })}</div>:<div className="empty-state"><Ticket size={48}/><h2>No tickets yet</h2><p>Your confirmed SeaGo bookings will appear here.</p></div>}</div>;
 }
 
 function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
@@ -440,7 +486,7 @@ export default function App(){
     <main>
       {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback}/>}
       {active==="trips"&&<TripsScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips}/>}
-      {active==="tickets"&&<TicketsScreen/>}
+      {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
     </main>
     <BottomNav active={active} setActive={setActive}/>
