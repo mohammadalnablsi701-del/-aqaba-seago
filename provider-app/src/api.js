@@ -13,3 +13,5 @@ export const createTrip=(token,data)=>req("/api/trips",{token,method:"POST",body
 export const updateTrip=(token,id,data)=>req("/api/trips/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
 export const createDeparture=(token,data)=>req("/api/departures",{token,method:"POST",body:JSON.stringify(data)});
 export const updateDeparture=(token,id,data)=>req("/api/departures/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
+
+export const bookingDetail=(token,id)=>req("/api/providers/me/bookings/"+id,{token});
