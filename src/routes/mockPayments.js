@@ -17,6 +17,7 @@ router.get("/:paymentId", async (req, res, next) => {
     }
 
     const amount = Number(payment.amount || 0).toFixed(2);
+    const frontendBaseUrl = String(process.env.FRONTEND_BASE_URL || "https://mohammadalnablsi701-del.github.io/-aqaba-seago/").replace(/\/$/, "");
     res.type("html").send(`<!doctype html>
 <html lang="en">
 <head>
@@ -49,7 +50,9 @@ async function complete(status){
   const r=await fetch(location.pathname+'/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
   const j=await r.json();
   if(r.ok && status==='paid'){
-    msg.textContent='Payment confirmed. Your booking is now confirmed. You can return to SeaGo and open Tickets.';
+    msg.textContent='Payment confirmed. Returning to Aqaba SeaGo...';
+    const target='${frontendBaseUrl}/?payment=success&paymentId='+encodeURIComponent(j.bookingId || '');
+    setTimeout(()=>{ window.location.href=target; },700);
   } else {
     msg.textContent=j.error || 'Payment was not completed.';
   }
