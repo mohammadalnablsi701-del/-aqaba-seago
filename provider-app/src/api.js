@@ -17,3 +17,5 @@ export const updateDeparture=(token,id,data)=>req("/api/departures/"+id,{token,m
 export const bookingDetail=(token,id)=>req("/api/providers/me/bookings/"+id,{token});
 
 export const providerStats=(token,date)=>req("/api/providers/me/stats?date="+encodeURIComponent(date),{token});
+
+export const departureManifest=(token,id)=>req("/api/providers/me/departures/"+id+"/manifest",{token});
