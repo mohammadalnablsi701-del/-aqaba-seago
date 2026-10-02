@@ -9,6 +9,7 @@ import bookingRoutes from "./routes/bookings.js";
 import paymentRoutes from "./routes/payments.js";
 import paymentWebhookRoutes from "./routes/paymentWebhooks.js";
 import mockPaymentRoutes from "./routes/mockPayments.js";
+import ticketRoutes from "./routes/tickets.js";
 
 function buildCorsOptions() {
   const allowed = String(process.env.ALLOWED_ORIGINS || "")
@@ -48,6 +49,7 @@ export function createApp() {
   app.use("/api/bookings", bookingRoutes);
   app.use("/api/payments", paymentRoutes);
   app.use("/api/mock-payments", mockPaymentRoutes);
+  app.use("/api/tickets", ticketRoutes);
 
   app.use((err, _req, res, _next) => {
     console.error(err);
