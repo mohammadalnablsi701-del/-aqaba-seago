@@ -4,6 +4,7 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { calculateTieredPricing } from "../services/pricing.js";
+import { releaseExpiredCheckoutHolds } from "../services/payments.js";
 
 const router = express.Router();
 
@@ -37,6 +38,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
 
 router.get("/", async (req, res, next) => {
   try {
+    await releaseExpiredCheckoutHolds({ limit: 200 });
     const query = {
       status: "scheduled",
       startsAt: { $gte: new Date() }
@@ -86,6 +88,7 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
 
 router.get("/:departureId/quote", async (req, res, next) => {
   try {
+    await releaseExpiredCheckoutHolds({ limit: 200 });
     const adults = Number(req.query.adults ?? req.query.seats ?? 0);
     const children = Number(req.query.children ?? 0);
     const mealPlan = req.query.mealPlan === "with_buffet" ? "with_buffet" : "without_buffet";
