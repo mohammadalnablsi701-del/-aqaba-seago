@@ -122,3 +122,5 @@
 .booking-location-card strong{color:var(--navy);font-size:14px}
 .booking-location-card em{font-style:normal;color:#8190a4;font-size:12px}
 .booking-location-card a,.ticket-card__location a{display:inline-flex;align-items:center;gap:4px;color:var(--blue);font-weight:700;text-decoration:none;white-space:nowrap}
+
+.ticket-map-button{margin-top:8px;width:max-content;max-width:100%;padding:9px 12px;border-radius:11px;background:#eef7fc;color:var(--navy)!important;font-size:12px;font-weight:700}
