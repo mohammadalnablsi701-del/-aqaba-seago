@@ -19,3 +19,6 @@ export const bookingDetail=(token,id)=>req("/api/providers/me/bookings/"+id,{tok
 export const providerStats=(token,date)=>req("/api/providers/me/stats?date="+encodeURIComponent(date),{token});
 
 export const departureManifest=(token,id)=>req("/api/providers/me/departures/"+id+"/manifest",{token});
+
+export const uploadTripImage=(token,dataUrl)=>req("/api/media/trip-image",{token,method:"POST",body:JSON.stringify({dataUrl})});
+export const deleteTripImage=(token,publicId)=>req("/api/media/trip-image",{token,method:"DELETE",body:JSON.stringify({publicId})});
