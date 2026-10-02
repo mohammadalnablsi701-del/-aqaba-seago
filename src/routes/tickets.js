@@ -87,6 +87,9 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
       provider: provider.businessName || null,
       departureAt: departure.startsAt || null,
       guests: booking.seats,
+      adults: booking.adults,
+      children: booking.children,
+      mealPlan: booking.mealPlan,
       customer: {
         name: customer.name || "Guest",
         phone: customer.phone || null,
