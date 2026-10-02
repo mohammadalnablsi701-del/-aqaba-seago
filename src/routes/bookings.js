@@ -1,6 +1,7 @@
 import express from "express";
 import Booking from "../models/Booking.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { signTicketToken } from "../services/tickets.js";
 
 const router = express.Router();
 
@@ -12,7 +13,16 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
       .populate({ path: "departureId", select: "startsAt status" })
       .sort({ createdAt: -1 })
       .limit(100);
-    res.json(rows);
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    res.json(rows.map(row => {
+      const obj = row.toObject();
+      const ticketToken = signTicketToken(row);
+      return {
+        ...obj,
+        ticketToken,
+        ticketValidationUrl: `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(ticketToken)}`
+      };
+    }));
   } catch (err) {
     next(err);
   }
