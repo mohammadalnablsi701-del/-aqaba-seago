@@ -6,6 +6,9 @@ const schema = new mongoose.Schema({
   tripId: { type: mongoose.Schema.Types.ObjectId, ref: "Trip", required: true },
   departureId: { type: mongoose.Schema.Types.ObjectId, ref: "Departure", required: true, index: true },
   seats: { type: Number, min: 1, required: true },
+  adults: { type: Number, min: 0, default: 0 },
+  children: { type: Number, min: 0, default: 0 },
+  mealPlan: { type: String, enum: ["without_buffet","with_buffet"], default: "without_buffet" },
   pricing: {
     currency: { type: String, default: "JOD" },
     unitPrice: Number,
