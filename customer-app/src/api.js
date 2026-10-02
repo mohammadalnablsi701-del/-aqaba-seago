@@ -72,11 +72,12 @@ export async function listBookings(token) {
   return request("/api/bookings", { token });
 }
 
-export async function createPaymentCheckout({ bookingId, token }) {
+export async function createPaymentCheckout({ departureId, seats, token }) {
   return request("/api/payments/checkout", {
     method: "POST",
     token,
-    body: JSON.stringify({ bookingId })
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ departureId, seats })
   });
 }
 
