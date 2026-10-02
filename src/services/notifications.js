@@ -2,6 +2,7 @@ import Booking from "../models/Booking.js";
 import Provider from "../models/Provider.js";
 import User from "../models/User.js";
 import NotificationLog from "../models/NotificationLog.js";
+import InAppNotification from "../models/InAppNotification.js";
 
 const APP_URL = String(process.env.FRONTEND_BASE_URL || "https://mohammadalnablsi701-del.github.io/-aqaba-seago").replace(/\/$/,"");
 const FROM = process.env.EMAIL_FROM || "Aqaba SeaGo <onboarding@resend.dev>";
@@ -15,6 +16,11 @@ function fmtDate(value){
 }
 
 function money(v,c="JOD"){return `${Number(v||0).toFixed(2)} ${c}`}
+
+async function createInApp({userId,type,title,body,bookingId=null,data={}}){
+  if(!userId)return null;
+  return InAppNotification.create({userId,type,title,body,bookingId,data});
+}
 
 async function loadBooking(bookingId){
   return Booking.findById(bookingId)
@@ -84,6 +90,7 @@ function bookingTable(b){
 export async function sendBookingConfirmation(bookingId){
   const b=await loadBooking(bookingId); if(!b) return;
   const ref=String(b._id).slice(-8).toUpperCase();
+  await createInApp({userId:b.customerId?._id,type:"booking_confirmed",title:"Booking confirmed",body:`Your ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} booking SG-${ref} is confirmed.`,bookingId:b._id,data:{screen:"tickets"}});
   await sendEmail({
     key:`booking-confirmed:customer:${b._id}`,
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
@@ -93,6 +100,7 @@ export async function sendBookingConfirmation(bookingId){
 
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
+  if(owner?._id){await createInApp({userId:owner._id,type:"new_booking",title:"New booking",body:`New confirmed booking SG-${ref} for ${b.tripId?.titleEn||b.tripId?.titleAr||"your trip"}.`,bookingId:b._id,data:{screen:"bookings"}});}
   if(owner?.email){
     await sendEmail({
       key:`booking-confirmed:provider:${b._id}`,
@@ -106,6 +114,7 @@ export async function sendBookingConfirmation(bookingId){
 export async function sendCancellationNotice(bookingId){
   const b=await loadBooking(bookingId); if(!b) return;
   const c=b.cancellation||{}; const ref=String(b._id).slice(-8).toUpperCase();
+  await createInApp({userId:b.customerId?._id,type:"booking_cancelled",title:"Booking cancelled",body:`Booking SG-${ref} was cancelled. Refund: ${c.refundPercentage||0}% (${money(c.refundAmount,b.pricing?.currency)}).`,bookingId:b._id,data:{screen:"tickets"}});
   await sendEmail({
     key:`booking-cancelled:customer:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,
     bookingId:b._id,type:"booking_cancelled_customer",to:b.customerId?.email,
@@ -115,6 +124,7 @@ export async function sendCancellationNotice(bookingId){
 
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
+  if(owner?._id){await createInApp({userId:owner._id,type:"booking_cancelled",title:"Booking cancelled",body:`Booking SG-${ref} was cancelled.`,bookingId:b._id,data:{screen:"bookings"}});}
   if(owner?.email){
     await sendEmail({
       key:`booking-cancelled:provider:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,
@@ -134,6 +144,7 @@ export async function processUpcomingReminders(){
   let sent=0;
   for(const row of due){
     const b=await loadBooking(row._id); if(!b) continue;
+    await createInApp({userId:b.customerId?._id,type:"departure_reminder_24h",title:"Your trip is tomorrow",body:`Reminder: ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} departs ${fmtDate(b.departureId?.startsAt)}.`,bookingId:b._id,data:{screen:"tickets"}});
     const log=await sendEmail({
       key:`departure-reminder-24h:customer:${b._id}`,
       bookingId:b._id,type:"departure_reminder_24h",to:b.customerId?.email,
