@@ -8,7 +8,7 @@ const paymentSchema = new mongoose.Schema({
   externalPaymentId: { type: String, index: true },
   status: {
     type: String,
-    enum: ["created", "pending", "paid", "failed", "cancelled", "expired", "needs_review", "refunded"],
+    enum: ["created", "pending", "paid", "failed", "cancelled", "expired", "needs_review", "partially_refunded", "refunded"],
     default: "created",
     index: true
   },
@@ -17,6 +17,9 @@ const paymentSchema = new mongoose.Schema({
   checkoutUrl: String,
   paidAt: Date,
   failedAt: Date,
+  refundedAmount: { type: Number, min: 0, default: 0 },
+  refundedAt: Date,
+  refundReference: String,
   lastEventId: String,
   rawLastEvent: mongoose.Schema.Types.Mixed
 }, { timestamps: true });
