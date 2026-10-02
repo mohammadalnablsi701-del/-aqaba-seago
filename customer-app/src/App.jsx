@@ -202,7 +202,9 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
       <header className="standard-header"><BrandLogo compact/><div><span>{searchSummary||"DISCOVER AQABA"}</span><h1>Sea Experiences</h1></div></header>
       <div className="category-row">{categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{c}</button>)}</div>
       {loading ? <LoadingState label="Loading sea experiences"/> :
-        <div className="trip-grid">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>}
+        shown.length
+          ? <div className="trip-grid">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
+          : <div className="empty-state"><Search size={44}/><h2>No matching trips</h2><p>There are no trips with enough available seats for the selected date and filters. Try another date, trip type, or guest count.</p></div>}
     </div>
   );
 }
@@ -522,14 +524,17 @@ export default function App(){
       );
     }
 
-    if (hasApi() && date) {
+    if (hasApi()) {
       const checks = await Promise.all(candidates.map(async trip => {
         if (!trip.apiId) return null;
         try {
           const deps = await listDepartures(trip.apiId);
           const ok = deps.some(d => {
+            const enoughSeats = Number(d.availableSeats||0) >= Number(guests||1);
+            if (!enoughSeats) return false;
+            if (!date) return true;
             const depDate = new Date(d.startsAt).toISOString().slice(0,10);
-            return depDate === date && Number(d.availableSeats||0) >= Number(guests||1);
+            return depDate === date;
           });
           return ok ? trip : null;
         } catch { return null; }
