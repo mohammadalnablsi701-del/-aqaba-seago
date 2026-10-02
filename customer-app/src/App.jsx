@@ -290,8 +290,8 @@ function formatDeparture(value) {
   }).format(date);
 }
 
-function BookingScreen({ trip, auth, onAuthenticated, onBack }) {
-  const [guests,setGuests]=useState(2);
+function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria }) {
+  const [guests,setGuests]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
   const [departures,setDepartures]=useState([]);
   const [selected,setSelected]=useState(null);
   const [quote,setQuote]=useState(null);
@@ -308,13 +308,18 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack }) {
       .then(rows=>{
         if(ignore) return;
         setDepartures(rows);
-        const first=rows.find(x=>x.availableSeats>0);
+        const wantedDate=initialCriteria?.date || "";
+        const matching=rows.find(x=>{
+          const depDate=new Date(x.startsAt).toISOString().slice(0,10);
+          return Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1) && (!wantedDate || depDate===wantedDate);
+        });
+        const first=matching || rows.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
         setSelected(first || null);
       })
       .catch(err=>{ if(!ignore) setError(err.message); })
       .finally(()=>{ if(!ignore) setLoading(false); });
     return()=>{ignore=true;};
-  },[trip.apiId,live]);
+  },[trip.apiId,live,initialCriteria?.date,initialCriteria?.guests]);
 
   useEffect(()=>{
     let ignore=false;
@@ -376,7 +381,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack }) {
   return (
     <div className="screen standard-screen booking-screen">
       <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><span/></div>
-      <div className="booking-title"><span>SECURE YOUR TRIP</span><h1>Complete booking</h1></div>
+      <div className="booking-title"><span>SECURE YOUR TRIP</span><h1>Complete booking</h1>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"guest":"guests"}</p>}</div>
       <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><p>{trip.duration} · Aqaba</p></div></div>
       {trip.departureLocation?.name&&<div className="booking-location-card"><div><MapPin size={20}/><span><small>Departure point</small><strong>{trip.departureLocation.name}</strong>{trip.departureLocation.address&&<em>{trip.departureLocation.address}</em>}</span></div>{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Google Maps <ChevronRight size={16}/></a>}</div>}
 
@@ -473,6 +478,19 @@ function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
   return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1></div></header><div className="profile-card"><div className="profile-avatar">{auth?.user?.name?.[0]?.toUpperCase() || "M"}</div><div><h2>{auth?.user?.name || "Welcome aboard"}</h2><p>{auth?.user?.email || "Preview profile. Connect the API to sign in and manage bookings."}</p></div></div><div className="profile-menu"><button><span><Sparkles/> My bookings</span><ChevronRight/></button><button><span><Heart/> Favourites</span><ChevronRight/></button><button><span><UserRound/> Personal details</span><ChevronRight/></button>{auth?.token&&<button onClick={onSignOut}><span><UserRound/> Sign out</span><ChevronRight/></button>}</div></div>;
 }
 
+function PaymentReturnScreen({ onViewTicket }) {
+  return (
+    <div className="screen standard-screen booking-success">
+      <BrandLogo />
+      <CheckCircle2 size={76}/>
+      <span>PAYMENT SUCCESSFUL</span>
+      <h1>Booking confirmed</h1>
+      <p>Your payment was completed successfully and your SeaGo ticket is ready.</p>
+      <button className="primary-button" onClick={onViewTicket}>View ticket <Ticket size={18}/></button>
+    </div>
+  );
+}
+
 function LoadingState({ label }) {
   return <div className="loading-state"><LoaderCircle className="spin"/><span>{label}</span></div>;
 }
@@ -496,6 +514,8 @@ export default function App(){
   const [usingFallback,setUsingFallback]=useState(!hasApi());
   const [searchResults,setSearchResults]=useState(null);
   const [searchSummary,setSearchSummary]=useState("");
+  const [searchCriteria,setSearchCriteria]=useState(null);
+  const [paymentReturn,setPaymentReturn]=useState(()=>new URLSearchParams(window.location.search).get("payment")==="success");
   const [favourites,setFavourites]=useState(["snorkel-coral"]);
   const [auth,setAuth]=useState(readStoredAuth());
 
@@ -517,6 +537,7 @@ export default function App(){
   },[]);
 
   async function runHomeSearch({tripType,date,guests}) {
+    setSearchCriteria({tripType,date,guests});
     let candidates = tripList;
     if (tripType !== "All Trips") {
       const token = tripType.replace(/s$/,"").toLowerCase();
@@ -550,6 +571,17 @@ export default function App(){
     setActive("trips");
   }
 
+  function viewPaidTicket() {
+    setPaymentReturn(false);
+    setDetail(null);
+    setBooking(false);
+    setActive("tickets");
+    const url=new URL(window.location.href);
+    url.searchParams.delete("payment");
+    url.searchParams.delete("paymentId");
+    window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+  }
+
   function saveAuth(data) {
     setAuth(data);
     localStorage.setItem("seago_auth",JSON.stringify(data));
@@ -563,7 +595,8 @@ export default function App(){
   const toggleFavourite=id=>setFavourites(x=>x.includes(id)?x.filter(v=>v!==id):[...x,id]);
   const openTrip=trip=>{setDetail(trip);setBooking(false);};
 
-  if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)}/>;
+  if(paymentReturn) return <PaymentReturnScreen onViewTicket={viewPaidTicket}/>;
+  if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
   if(detail) return <DetailScreen trip={detail} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={()=>setBooking(true)}/>;
 
   return <div className="app-shell">
