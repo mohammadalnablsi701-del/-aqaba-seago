@@ -78,6 +78,41 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
 });
 
 
+router.get("/me/stats",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
+    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+
+    const trips=await Trip.find({providerId:provider._id}).select("_id");
+    const tripIds=trips.map(t=>t._id);
+    const date=req.query.date;
+    let departureIds=null;
+
+    if(date){
+      const start=new Date(date+"T00:00:00+03:00");
+      const end=new Date(date+"T23:59:59.999+03:00");
+      const deps=await Departure.find({tripId:{$in:tripIds},startsAt:{$gte:start,$lte:end}}).select("_id");
+      departureIds=deps.map(d=>d._id);
+    }
+
+    const query={providerId:provider._id,status:"confirmed"};
+    if(departureIds)query.departureId={$in:departureIds};
+
+    const rows=await Booking.find(query).select("seats pricing checkedInAt");
+    const totals=rows.reduce((a,b)=>{
+      a.bookings+=1;
+      a.guests+=Number(b.seats||0);
+      a.gross+=Number(b.pricing?.grossAmount||0);
+      a.commission+=Number(b.pricing?.commissionAmount||0);
+      a.providerNet+=Number(b.pricing?.providerNetAmount||0);
+      if(b.checkedInAt)a.checkedIn+=1;
+      return a;
+    },{bookings:0,guests:0,gross:0,commission:0,providerNet:0,checkedIn:0});
+
+    res.json({...totals,currency:"JOD"});
+  }catch(e){next(e);}
+});
+
 router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
     const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
