@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer
+  loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking
 } from "./api.js";
 
 const CATEGORY_LABELS = {
@@ -431,10 +431,54 @@ function FavouritesScreen({ favourites, tripList, onSelectTrip, toggleFavourite 
   return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>SAVED FOR LATER</span><h1>Favourites</h1></div></header>{list.length?<div className="trip-grid">{list.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite toggleFavourite={toggleFavourite}/>)}</div>:<div className="empty-state"><Heart size={48}/><h2>No favourites yet</h2><p>Tap the heart on any experience to save it here.</p></div>}</div>;
 }
 
+function CancelBookingControl({ booking, token, onCancelled }) {
+  const [open,setOpen]=useState(false);
+  const [policy,setPolicy]=useState(null);
+  const [reason,setReason]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+
+  async function showPolicy(){
+    setError("");
+    setOpen(true);
+    setBusy(true);
+    try{setPolicy(await getCancellationPolicy(booking._id,token));}
+    catch(e){setError(e.message);}
+    finally{setBusy(false);}
+  }
+
+  async function confirmCancel(){
+    if(!policy)return;
+    setBusy(true);setError("");
+    try{
+      const r=await cancelBooking(booking._id,reason,token);
+      onCancelled?.(r);
+    }catch(e){setError(e.message);}
+    finally{setBusy(false);}
+  }
+
+  if(booking.status!=="confirmed")return null;
+
+  return <div className="cancel-booking-control">
+    {!open?<button type="button" className="cancel-booking-button" onClick={showPolicy}>Cancel booking</button>:
+      <div className="cancel-sheet">
+        <b>Cancellation policy</b>
+        {busy&&!policy?<small>Checking refund...</small>:policy&&<>
+          <p>You will receive <strong>{policy.refundPercentage}% refund</strong> ({Number(policy.refundAmount||0).toFixed(2)} {policy.currency}).</p>
+          <ul>{policy.rules.map(r=><li key={r.label}>{r.label}: {r.refundPercentage}% refund</li>)}</ul>
+          <textarea rows="2" placeholder="Reason for cancellation (optional)" value={reason} onChange={e=>setReason(e.target.value)}/>
+          <div className="cancel-actions"><button type="button" onClick={()=>{setOpen(false);setPolicy(null)}}>Keep booking</button><button type="button" className="danger" disabled={busy} onClick={confirmCancel}>{busy?"Cancelling...":"Confirm cancellation"}</button></div>
+        </>}
+        {error&&<div className="booking-error">{error}</div>}
+      </div>}
+  </div>;
+}
+
 function TicketsScreen({ auth, onAuthenticated }) {
   const [tickets,setTickets]=useState([]);
   const [loading,setLoading]=useState(Boolean(auth?.token&&hasApi()));
   const [error,setError]=useState("");
+  const [revision,setRevision]=useState(0);
 
   useEffect(()=>{
     let ignore=false;
@@ -445,7 +489,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
       .catch(e=>{if(!ignore)setError(e.message||"Could not load tickets");})
       .finally(()=>{if(!ignore)setLoading(false);});
     return()=>{ignore=true;};
-  },[auth?.token]);
+  },[auth?.token,revision]);
 
   if(hasApi()&&!auth?.token){
     return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="tickets-auth-copy"><Ticket size={38}/><h2>Sign in to view your tickets</h2><p>Your SeaGo bookings stay linked to your account.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
@@ -479,7 +523,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
       <div className="ticket-card__location">{departureLocation.name&&<><small>Departure point</small><strong>{departureLocation.name}</strong>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/><small>Scan to verify</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
-    </article>;
+    <CancelBookingControl booking={b} token={auth.token} onCancelled={()=>setRevision(x=>x+1)}/>{b.cancellation?.cancelledAt&&<div className="ticket-cancellation"><b>Cancelled</b><span>{b.cancellation.refundPercentage||0}% refund · {Number(b.cancellation.refundAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"} · {b.cancellation.refundStatus||"none"}</span></div>}</article>;
   })}</div>:<div className="empty-state"><Ticket size={48}/><h2>No tickets yet</h2><p>Your confirmed SeaGo bookings will appear here.</p></div>}</div>;
 }
 
