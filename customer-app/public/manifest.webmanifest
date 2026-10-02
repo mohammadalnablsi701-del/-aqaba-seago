@@ -6,5 +6,13 @@
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0B3D91",
-  "description": "Book marine trips and sea experiences in Aqaba."
+  "description": "Book marine trips and sea experiences in Aqaba.",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
