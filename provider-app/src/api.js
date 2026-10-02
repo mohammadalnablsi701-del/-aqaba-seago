@@ -22,3 +22,7 @@ export const departureManifest=(token,id)=>req("/api/providers/me/departures/"+i
 
 export const uploadTripImage=(token,dataUrl)=>req("/api/media/trip-image",{token,method:"POST",body:JSON.stringify({dataUrl})});
 export const deleteTripImage=(token,publicId)=>req("/api/media/trip-image",{token,method:"DELETE",body:JSON.stringify({publicId})});
+
+export const listNotifications=token=>req("/api/notifications",{token});
+export const markNotificationRead=(token,id)=>req("/api/notifications/"+id+"/read",{token,method:"PATCH"});
+export const markAllNotificationsRead=token=>req("/api/notifications/read-all",{token,method:"POST"});
