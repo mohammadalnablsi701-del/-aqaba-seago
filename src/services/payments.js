@@ -1,45 +1,46 @@
 import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
+import CheckoutHold from "../models/CheckoutHold.js";
+import Departure from "../models/Departure.js";
 import { getPaymentProvider } from "../payments/index.js";
 
 function sameMoney(a, b) {
   return Math.abs(Number(a) - Number(b)) < 0.001;
 }
 
-export async function createCheckoutForBooking({ booking, customerId, baseUrl }) {
-  if (booking.customerId.toString() !== customerId.toString()) {
+async function releaseHold(hold, status = "released") {
+  if (!hold || hold.status !== "active") return;
+  hold.status = status;
+  await hold.save();
+  await Departure.updateOne({ _id: hold.departureId }, { $inc: { reservedSeats: -hold.seats } });
+}
+
+export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
+  if (hold.customerId.toString() !== customerId.toString()) {
     throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
   }
-
-  if (booking.status !== "pending_payment") {
-    throw Object.assign(new Error("Booking is not payable"), { statusCode: 409 });
+  if (hold.status !== "active" || hold.expiresAt <= new Date()) {
+    if (hold.status === "active") await releaseHold(hold, "expired");
+    throw Object.assign(new Error("Checkout expired"), { statusCode: 409 });
   }
 
-  if (booking.holdExpiresAt <= new Date()) {
-    throw Object.assign(new Error("Booking hold expired"), { statusCode: 409 });
-  }
-
-  let payment = await Payment.findOne({ bookingId: booking._id });
-  if (payment?.status === "paid") return payment;
-
+  let payment = await Payment.findOne({ holdId: hold._id });
   if (!payment) {
     payment = await Payment.create({
-      bookingId: booking._id,
+      holdId: hold._id,
       customerId,
       provider: process.env.PAYMENT_PROVIDER || "mock",
-      amount: booking.pricing.grossAmount,
-      currency: booking.pricing.currency || "JOD"
+      amount: hold.pricing.grossAmount,
+      currency: hold.pricing.currency || "JOD"
     });
   }
 
   const provider = getPaymentProvider(payment.provider);
-  const checkout = await provider.createCheckout({ payment, booking, baseUrl });
-
+  const checkout = await provider.createCheckout({ payment, baseUrl });
   payment.externalPaymentId = checkout.externalPaymentId;
   payment.checkoutUrl = checkout.checkoutUrl;
-  payment.status = "pending";
+  payment.status = payment.status === "paid" ? "paid" : "pending";
   await payment.save();
-
   return payment;
 }
 
@@ -56,17 +57,11 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
     provider: providerName,
     externalPaymentId: event.externalPaymentId
   });
+  if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
+  if (payment.lastEventId === event.eventId) return { duplicate: true, payment };
 
-  if (!payment) {
-    throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
-  }
-
-  if (payment.lastEventId === event.eventId) {
-    return { duplicate: true, payment };
-  }
-
-  const booking = await Booking.findById(payment.bookingId);
-  if (!booking) {
+  const hold = await CheckoutHold.findById(payment.holdId);
+  if (!hold) {
     payment.status = "needs_review";
     payment.lastEventId = event.eventId;
     payment.rawLastEvent = event.raw;
@@ -80,18 +75,32 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   if (!amountMatches || !currencyMatches) {
     payment.status = "needs_review";
   } else if (event.status === "paid") {
-    if (booking.status === "pending_payment" && booking.holdExpiresAt > new Date()) {
-      booking.status = "confirmed";
-      await booking.save();
+    if (hold.status === "active" && hold.expiresAt > new Date()) {
+      const booking = await Booking.create({
+        customerId: hold.customerId,
+        providerId: hold.providerId,
+        tripId: hold.tripId,
+        departureId: hold.departureId,
+        seats: hold.seats,
+        status: "confirmed",
+        holdExpiresAt: hold.expiresAt,
+        pricing: hold.pricing,
+        idempotencyKey: `payment:${payment._id}`
+      });
+      hold.status = "paid";
+      await hold.save();
+      payment.bookingId = booking._id;
       payment.status = "paid";
       payment.paidAt = new Date();
-    } else if (booking.status === "confirmed") {
+    } else if (hold.status === "paid" && payment.bookingId) {
       payment.status = "paid";
       payment.paidAt ||= new Date();
     } else {
+      if (hold.status === "active") await releaseHold(hold, "expired");
       payment.status = "needs_review";
     }
   } else if (["failed", "cancelled", "expired"].includes(event.status)) {
+    await releaseHold(hold, event.status === "expired" ? "expired" : "released");
     payment.status = event.status;
     payment.failedAt = new Date();
   } else {
@@ -101,6 +110,5 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   payment.lastEventId = event.eventId;
   payment.rawLastEvent = event.raw;
   await payment.save();
-
   return { duplicate: false, payment };
 }
