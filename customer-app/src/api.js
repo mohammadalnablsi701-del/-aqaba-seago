@@ -85,3 +85,14 @@ export async function createPaymentCheckout({ departureId, adults, children = 0,
 export async function getPayment(paymentId, token) {
   return request(`/api/payments/${paymentId}`, { token });
 }
+
+export async function getCancellationPolicy(bookingId, token) {
+  return request(`/api/bookings/${bookingId}/cancellation-policy`, { token });
+}
+export async function cancelBooking(bookingId, reason, token) {
+  return request(`/api/bookings/${bookingId}/cancel`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ reason })
+  });
+}
