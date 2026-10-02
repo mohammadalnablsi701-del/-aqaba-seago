@@ -1,6 +1,6 @@
 {
   "name": "Aqaba SeaGo",
-  "short_name": "SeaGo",
+  "short_name": "Aqaba SeaGo",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
