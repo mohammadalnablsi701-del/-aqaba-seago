@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get("/:paymentId", async (req, res, next) => {
   try {
-    if (process.env.NODE_ENV === "production") {
+    if (process.env.ENABLE_MOCK_CHECKOUT !== "true") {
       return res.status(404).send("Not found");
     }
 
@@ -64,7 +64,7 @@ async function complete(status){
 
 router.post("/:paymentId/complete", async (req, res, next) => {
   try {
-    if (process.env.NODE_ENV === "production") {
+    if (process.env.ENABLE_MOCK_CHECKOUT !== "true") {
       return res.status(404).json({ error: "Not found" });
     }
 
