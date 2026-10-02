@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Anchor, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Heart, Home,
-  LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, UserRound, UsersRound
+  LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
 import { categories, trips as fallbackTrips } from "./data.js";
@@ -368,6 +368,10 @@ function FavouritesScreen({ favourites, tripList, onSelectTrip, toggleFavourite 
   return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>SAVED FOR LATER</span><h1>Favourites</h1></div></header>{list.length?<div className="trip-grid">{list.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite toggleFavourite={toggleFavourite}/>)}</div>:<div className="empty-state"><Heart size={48}/><h2>No favourites yet</h2><p>Tap the heart on any experience to save it here.</p></div>}</div>;
 }
 
+function TicketsScreen() {
+  return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="empty-state"><Ticket size={48}/><h2>No tickets yet</h2><p>Your confirmed SeaGo bookings will appear here.</p></div></div>;
+}
+
 function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
   if(!auth?.token && hasApi()) {
     return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1></div></header><AuthForm onAuthenticated={onAuthenticated}/></div>;
@@ -380,7 +384,7 @@ function LoadingState({ label }) {
 }
 
 function BottomNav({ active, setActive }) {
-  const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["favourites",Heart,"Favourites"],["profile",UserRound,"Profile"]];
+  const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["profile",UserRound,"Profile"]];
   return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><Icon size={20}/><span>{label}</span></button>)}</nav>;
 }
 
@@ -436,7 +440,7 @@ export default function App(){
     <main>
       {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback}/>}
       {active==="trips"&&<TripsScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips}/>}
-      {active==="favourites"&&<FavouritesScreen tripList={tripList} favourites={favourites} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
+      {active==="tickets"&&<TicketsScreen/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
     </main>
     <BottomNav active={active} setActive={setActive}/>
