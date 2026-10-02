@@ -46,6 +46,7 @@ function normalizeTrip(raw, index = 0) {
     category,
     accent,
     description: `Discover Aqaba's Red Sea with an approved SeaGo partner. This ${category.toLowerCase()} experience is managed through the Aqaba SeaGo booking platform.`,
+    departureLocation: raw.departureLocation || null,
     source: "api",
     raw,
     index
@@ -225,9 +226,9 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
           <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
           <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
           <div><UsersRound/><span><small>Guests</small><b>Live availability</b></span></div>
-          <div><MapPin/><span><small>Departure</small><b>Aqaba</b></span></div>
+          <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
         </div>
-        <section className="included"><span>WHAT'S INCLUDED</span><h2>Everything for an easy day at sea</h2><p>Experience details are managed by the approved operator and shown through Aqaba SeaGo.</p></section>
+        {trip.departureLocation?.name&&<section className="departure-location"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}</section>}<section className="included"><span>WHAT'S INCLUDED</span><h2>Everything for an easy day at sea</h2><p>Experience details are managed by the approved operator and shown through Aqaba SeaGo.</p></section>
       </div>
       <div className="sticky-booking"><div><small>From</small><strong>{trip.price} JOD</strong><span>/ person</span></div><button className="primary-button" onClick={onBook}>Book now <ChevronRight size={18}/></button></div>
     </div>
@@ -444,6 +445,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
     const provider=b.providerId||{};
     const starts=departure.startsAt?new Date(departure.startsAt):null;
     const title=trip.titleEn||trip.titleAr||"Aqaba Sea Experience";
+    const departureLocation=trip.departureLocation||{};
     const ref=String(b._id||"").slice(-8).toUpperCase();
     const status=String(b.status||"").replace("_"," ");
     const qrValue=`AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`;
@@ -455,7 +457,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
         <div><small>Guests</small><strong>{b.seats||1}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
-      <div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
+      <div className="ticket-card__location">{departureLocation.name&&<><small>Departure point</small><strong>{departureLocation.name}</strong>{departureLocation.address&&<span>{departureLocation.address}</span>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
     </article>;
   })}</div>:<div className="empty-state"><Ticket size={48}/><h2>No tickets yet</h2><p>Your confirmed SeaGo bookings will appear here.</p></div>}</div>;
 }
