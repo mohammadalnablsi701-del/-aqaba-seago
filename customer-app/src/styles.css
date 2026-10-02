@@ -104,3 +104,13 @@
 .guest-stepper{display:flex;gap:6px;align-items:center;justify-content:flex-end}
 .guest-stepper button{width:30px;height:30px;border:0;border-radius:9px;background:#eef7fc;color:var(--navy);font-size:20px;font-weight:700;line-height:1}
 .search-card>.primary-button:disabled{opacity:.7}
+
+.departure-location{margin:20px 0;padding:18px;border:1px solid #e4edf3;border-radius:18px;background:#f8fcfe}
+.departure-location>span{font-size:11px;font-weight:700;letter-spacing:.16em;color:var(--aqua)}
+.departure-location h2{font-family:Poppins;margin:6px 0 4px;font-size:20px}
+.departure-location p{margin:0 0 10px;color:#7d8da0}
+.departure-location a{display:inline-flex;align-items:center;gap:6px;color:var(--blue);font-weight:700;text-decoration:none}
+.ticket-card__location{padding:14px 0 2px;display:flex;flex-direction:column;gap:3px;border-top:1px dashed var(--line)}
+.ticket-card__location small{color:#94a0b1;text-transform:uppercase;letter-spacing:.08em}
+.ticket-card__location strong{color:var(--navy);font-size:14px}
+.ticket-card__location span{color:#8190a4;font-size:12px}
