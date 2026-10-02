@@ -11,7 +11,8 @@ const DEMO_TRIPS = [
     titleEn: "Glass Bottom Boat",
     category: "glass_bottom",
     durationMinutes: 90,
-    pricing: { currency: "JOD", pricePerPerson: 15, adultPrice: 15, childPrice: 10, buffetEnabled: true, buffetAdultPrice: 20, buffetChildPrice: 14, commissionType: "percentage", commissionValue: 0 },
+    pricing: { currency: "JOD", pricePerPerson: 15, adultPrice: 15, childPrice: 10, buffetEnabled: true, buffetAdultPrice: 20, buffetChildPrice: 14, buffetDescription: "Mixed grills, fish, rice, salads, hummus and soft drinks", commissionType: "percentage", commissionValue: 0 },
+    images: ["https://images.unsplash.com/photo-1530789253388-582c481c54b0?auto=format&fit=crop&w=1200&q=82","https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=82"],
     departureLocation: { name: "Aqaba Marina", address: "Aqaba, Jordan", googleMapsUrl: "https://maps.google.com/?q=Aqaba+Marina" }
   },
   {
@@ -19,7 +20,8 @@ const DEMO_TRIPS = [
     titleEn: "Red Sea Snorkeling",
     category: "snorkeling",
     durationMinutes: 180,
-    pricing: { currency: "JOD", pricePerPerson: 20, adultPrice: 20, childPrice: 14, buffetEnabled: true, buffetAdultPrice: 25, buffetChildPrice: 18, commissionType: "percentage", commissionValue: 0 },
+    pricing: { currency: "JOD", pricePerPerson: 20, adultPrice: 20, childPrice: 14, buffetEnabled: true, buffetAdultPrice: 25, buffetChildPrice: 18, buffetDescription: "Grilled fish, chicken, rice, pasta, salads, hummus, bread and soft drinks", commissionType: "percentage", commissionValue: 0 },
+    images: ["https://images.unsplash.com/photo-1530053969600-caed2596d242?auto=format&fit=crop&w=1200&q=82","https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=82"],
     departureLocation: { name: "Aqaba Marina", address: "Aqaba, Jordan", googleMapsUrl: "https://maps.google.com/?q=Aqaba+Marina" }
   },
   {
@@ -27,7 +29,8 @@ const DEMO_TRIPS = [
     titleEn: "Sunset Yacht Cruise",
     category: "sunset",
     durationMinutes: 120,
-    pricing: { currency: "JOD", pricePerPerson: 25, adultPrice: 25, childPrice: 18, buffetEnabled: true, buffetAdultPrice: 30, buffetChildPrice: 22, commissionType: "percentage", commissionValue: 0 },
+    pricing: { currency: "JOD", pricePerPerson: 25, adultPrice: 25, childPrice: 18, buffetEnabled: true, buffetAdultPrice: 30, buffetChildPrice: 22, buffetDescription: "Seafood, mixed grills, rice, salads, appetizers, desserts and soft drinks", commissionType: "percentage", commissionValue: 0 },
+    images: ["https://images.unsplash.com/photo-1566847438217-76e82d383f84?auto=format&fit=crop&w=1200&q=82","https://images.unsplash.com/photo-1499403474843-04e72c14df8a?auto=format&fit=crop&w=1200&q=82"],
     departureLocation: { name: "Aqaba Marina", address: "Aqaba, Jordan", googleMapsUrl: "https://maps.google.com/?q=Aqaba+Marina" }
   }
 ];
@@ -126,6 +129,14 @@ export async function seedDemoData() {
       }
       if (trip.pricing?.buffetChildPrice == null) {
         trip.pricing.buffetChildPrice = spec.pricing.buffetChildPrice;
+        changed = true;
+      }
+      if (!trip.pricing?.buffetDescription && spec.pricing.buffetDescription) {
+        trip.pricing.buffetDescription = spec.pricing.buffetDescription;
+        changed = true;
+      }
+      if ((!Array.isArray(trip.images) || trip.images.length === 0) && Array.isArray(spec.images)) {
+        trip.images = spec.images;
         changed = true;
       }
       if (trip.pricing?.commissionType !== "percentage") {
