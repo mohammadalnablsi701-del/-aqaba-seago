@@ -473,7 +473,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
       <div className="ticket-card__details">
         <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
         <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
-        <div><small>Guests</small><strong>{b.seats||1}</strong></div>
+        <div><small>Guests</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
       <div className="ticket-card__location">{departureLocation.name&&<><small>Departure point</small><strong>{departureLocation.name}</strong>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong></div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={78} level="M" includeMargin={false}/><small>Scan to verify</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
