@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead
+  loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush
 } from "./api.js";
 
 const CATEGORY_LABELS = {
@@ -553,12 +553,29 @@ function LoadingState({ label }) {
 
 function NotificationsScreen({auth}){
   const[data,setData]=useState({unread:0,items:[]});const[loading,setLoading]=useState(Boolean(auth?.token));const[error,setError]=useState("");
+  const[push,setPush]=useState({supported:true,permission:"default",subscribed:false});const[pushBusy,setPushBusy]=useState(false);const[pushMsg,setPushMsg]=useState("");
+  const standalone=window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
+  const isiPhone=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   async function load(){if(!auth?.token){setLoading(false);return;}setLoading(true);try{setData(await listNotifications(auth.token));setError("");}catch(e){setError(e.message)}finally{setLoading(false)}}
-  useEffect(()=>{load()},[auth?.token]);
+  useEffect(()=>{load();pushNotificationStatus().then(setPush).catch(()=>{})},[auth?.token]);
   async function open(n){if(!n.readAt){try{await markNotificationRead(n._id,auth.token);setData(d=>({...d,unread:Math.max(0,d.unread-1),items:d.items.map(x=>x._id===n._id?{...x,readAt:new Date().toISOString()}:x)}))}catch{}}}
   async function readAll(){await markAllNotificationsRead(auth.token);setData(d=>({unread:0,items:d.items.map(x=>({...x,readAt:x.readAt||new Date().toISOString()}))}))}
+  async function enablePush(){setPushBusy(true);setPushMsg("");try{await enablePushNotifications(auth.token);setPush(await pushNotificationStatus());setPushMsg("Push notifications enabled.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
+  async function testPush(){setPushBusy(true);setPushMsg("");try{const r=await sendTestPush(auth.token);setPushMsg(r.sent>0?"Test push sent.":"No active push subscription found.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
+
   if(!auth?.token)return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div></header><div className="empty-state"><Bell size={46}/><h2>Sign in to see notifications</h2></div></div>;
-  return <div className="screen standard-screen notification-screen"><header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div>{data.unread>0&&<button className="mark-all" onClick={readAll}>Mark all read</button>}</header>{loading?<LoadingState label="Loading notifications..."/>:error?<div className="booking-error">{error}</div>:data.items.length?<div className="notification-list">{data.items.map(n=><button key={n._id} className={"notification-card "+(!n.readAt?"unread":"")} onClick={()=>open(n)}><div className="notification-icon"><Bell size={17}/></div><div><b>{n.title}</b><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString()}</small></div>{!n.readAt&&<span className="unread-dot"/>}</button>)}</div>:<div className="empty-state"><Bell size={46}/><h2>No notifications yet</h2><p>Booking confirmations, cancellations and trip reminders will appear here.</p></div>}</div>
+  return <div className="screen standard-screen notification-screen">
+    <header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div>{data.unread>0&&<button className="mark-all" onClick={readAll}>Mark all read</button>}</header>
+    <div className="push-card"><div><b>Push notifications</b><span>{push.subscribed?"Enabled on this device":push.supported?"Get booking alerts even when SeaGo is closed":"Not supported on this browser"}</span></div>
+      {!push.subscribed&&push.supported&&<button disabled={pushBusy||(isiPhone&&!standalone)} onClick={enablePush}>{pushBusy?"Enabling...":"Enable"}</button>}
+      {push.subscribed&&<button disabled={pushBusy} onClick={testPush}>Test</button>}
+      {isiPhone&&!standalone&&<small>On iPhone: open Share → Add to Home Screen, then open SeaGo from the Home Screen to enable push notifications.</small>}
+      {push.permission==="denied"&&<small>Notifications are blocked in iPhone settings for this web app.</small>}
+      {pushMsg&&<small>{pushMsg}</small>}
+    </div>
+    {loading?<LoadingState label="Loading notifications..."/>:error?<div className="booking-error">{error}</div>:data.items.length?<div className="notification-list">{data.items.map(n=><button key={n._id} className={"notification-card "+(!n.readAt?"unread":"")} onClick={()=>open(n)}><div className="notification-icon"><Bell size={17}/></div><div><b>{n.title}</b><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString()}</small></div>{!n.readAt&&<span className="unread-dot"/>}</button>)}</div>:<div className="empty-state"><Bell size={46}/><h2>No notifications yet</h2><p>Booking confirmations, cancellations and trip reminders will appear here.</p></div>}
+  </div>
 }
 
 function BottomNav({ active, setActive }) {
@@ -572,7 +589,7 @@ function readStoredAuth() {
 }
 
 export default function App(){
-  const [active,setActive]=useState("home");
+  const [active,setActive]=useState(()=>new URLSearchParams(window.location.search).get("open")==="notifications"?"notifications":"home");
   const [detail,setDetail]=useState(null);
   const [booking,setBooking]=useState(false);
   const [tripList,setTripList]=useState(fallbackTrips);
