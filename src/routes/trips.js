@@ -10,9 +10,21 @@ function serverPricing(input = {}, existing = null) {
   const existingValue = existing?.commissionType === "percentage"
     ? Number(existing?.commissionValue ?? defaultCommission)
     : defaultCommission;
+
+  const adultPrice = Number(input.adultPrice ?? input.pricePerPerson ?? existing?.adultPrice ?? existing?.pricePerPerson ?? 0);
+  const childPrice = Number(input.childPrice ?? existing?.childPrice ?? adultPrice);
+  const buffetEnabled = input.buffetEnabled !== undefined ? Boolean(input.buffetEnabled) : Boolean(existing?.buffetEnabled);
+  const buffetAdultPrice = Number(input.buffetAdultPrice ?? existing?.buffetAdultPrice ?? adultPrice);
+  const buffetChildPrice = Number(input.buffetChildPrice ?? existing?.buffetChildPrice ?? childPrice);
+
   return {
     currency: input.currency || existing?.currency || "JOD",
-    pricePerPerson: Number(input.pricePerPerson ?? existing?.pricePerPerson ?? 0),
+    pricePerPerson: adultPrice,
+    adultPrice,
+    childPrice,
+    buffetEnabled,
+    buffetAdultPrice,
+    buffetChildPrice,
     commissionType: "percentage",
     commissionValue: existingValue
   };
