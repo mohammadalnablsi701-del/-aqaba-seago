@@ -78,6 +78,47 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
 });
 
 
+router.get("/me/departures/:departureId/manifest",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
+    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+
+    const departure=await Departure.findById(req.params.departureId)
+      .populate("tripId","titleEn titleAr category durationMinutes departureLocation");
+    if(!departure)return res.status(404).json({error:"Departure not found"});
+
+    const ownsTrip=await Trip.exists({_id:departure.tripId._id,providerId:provider._id});
+    if(!ownsTrip)return res.status(403).json({error:"Forbidden"});
+
+    const rows=await Booking.find({providerId:provider._id,departureId:departure._id,status:"confirmed"})
+      .populate("customerId","name phone email")
+      .sort({createdAt:1});
+
+    const manifest=rows.map(b=>({
+      id:b._id,
+      bookingReference:"SG-"+String(b._id).slice(-8).toUpperCase(),
+      customer:{name:b.customerId?.name||"Guest",phone:b.customerId?.phone||null,email:b.customerId?.email||null},
+      seats:b.seats,
+      checkedInAt:b.checkedInAt||null
+    }));
+
+    res.json({
+      departure:{
+        id:departure._id,startsAt:departure.startsAt,status:departure.status,
+        capacity:departure.capacity,reservedSeats:departure.reservedSeats,trip:departure.tripId
+      },
+      summary:{
+        bookings:manifest.length,
+        guests:manifest.reduce((s,b)=>s+Number(b.seats||0),0),
+        checkedInBookings:manifest.filter(b=>b.checkedInAt).length,
+        checkedInGuests:manifest.filter(b=>b.checkedInAt).reduce((s,b)=>s+Number(b.seats||0),0),
+        remainingGuests:manifest.filter(b=>!b.checkedInAt).reduce((s,b)=>s+Number(b.seats||0),0)
+      },
+      bookings:manifest
+    });
+  }catch(e){next(e);}
+});
+
 router.get("/me/stats",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
     const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
