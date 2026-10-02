@@ -6,12 +6,15 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 const router = express.Router();
 
 function serverPricing(input = {}, existing = null) {
-  const defaultCommission = Number(process.env.DEFAULT_COMMISSION_PER_PERSON || 4);
+  const defaultCommission = Number(process.env.DEFAULT_COMMISSION_PERCENTAGE || 0);
+  const existingValue = existing?.commissionType === "percentage"
+    ? Number(existing?.commissionValue ?? defaultCommission)
+    : defaultCommission;
   return {
     currency: input.currency || existing?.currency || "JOD",
     pricePerPerson: Number(input.pricePerPerson ?? existing?.pricePerPerson ?? 0),
-    commissionType: existing?.commissionType || "fixed_per_person",
-    commissionValue: Number(existing?.commissionValue ?? defaultCommission)
+    commissionType: "percentage",
+    commissionValue: existingValue
   };
 }
 
