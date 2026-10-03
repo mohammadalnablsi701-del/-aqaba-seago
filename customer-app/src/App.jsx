@@ -661,17 +661,38 @@ function NotificationsScreen({auth}){
   async function enablePush(){setPushBusy(true);setPushMsg("");try{await enablePushNotifications(auth.token);setPush(await pushNotificationStatus());setPushMsg("Push notifications enabled.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
   async function testPush(){setPushBusy(true);setPushMsg("");try{const r=await sendTestPush(auth.token);setPushMsg(r.sent>0?"Test push sent.":"No active push subscription found.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
 
-  if(!auth?.token)return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div></header><div className="empty-state"><Bell size={46}/><h2>Sign in to see notifications</h2></div></div>;
+  if(!auth?.token)return <div className="screen standard-screen notification-screen"><header className="standard-header notifications-header"><BrandLogo compact/><div><span>TRIP UPDATES</span><h1>Alerts</h1><p>Booking confirmations, reminders and important changes.</p></div></header><div className="alerts-signin"><div className="alerts-signin__icon"><Bell size={28}/></div><h2>Stay in the loop</h2><p>Sign in to receive booking updates, departure reminders and important SeaGo alerts.</p></div></div>;
+
   return <div className="screen standard-screen notification-screen">
-    <header className="standard-header"><BrandLogo compact/><div><span>UPDATES</span><h1>Notifications</h1></div>{data.unread>0&&<button className="mark-all" onClick={readAll}>Mark all read</button>}</header>
-    <div className="push-card"><div><b>Push notifications</b><span>{push.subscribed?"Enabled on this device":push.supported?"Get booking alerts even when SeaGo is closed":"Not supported on this browser"}</span></div>
+    <header className="standard-header notifications-header"><BrandLogo compact/><div><span>TRIP UPDATES</span><h1>Alerts</h1><p>Everything important about your SeaGo trips.</p></div>{data.unread>0&&<button className="mark-all" onClick={readAll}>Read all</button>}</header>
+
+    <section className={"push-card push-card--premium "+(push.subscribed?"is-enabled":"")}>
+      <div className="push-card__icon"><Bell size={20}/></div>
+      <div className="push-card__copy"><b>{push.subscribed?"Push alerts are on":"Never miss a trip update"}</b><span>{push.subscribed?"You’ll get important SeaGo alerts on this device.":"Enable push for booking confirmations, reminders and last-minute changes."}</span></div>
       {!push.subscribed&&push.supported&&<button disabled={pushBusy||(isiPhone&&!standalone)} onClick={enablePush}>{pushBusy?"Enabling...":"Enable"}</button>}
       {push.subscribed&&<button disabled={pushBusy} onClick={testPush}>Test</button>}
-      {isiPhone&&!standalone&&<small>On iPhone: open Share → Add to Home Screen, then open SeaGo from the Home Screen to enable push notifications.</small>}
-      {push.permission==="denied"&&<small>Notifications are blocked in iPhone settings for this web app.</small>}
+      {isiPhone&&!standalone&&<small>Add SeaGo to your Home Screen first, then open it there to enable push notifications.</small>}
+      {push.permission==="denied"&&<small>Notifications are blocked in your iPhone settings for SeaGo.</small>}
       {pushMsg&&<small>{pushMsg}</small>}
+    </section>
+
+    <div className="alerts-summary">
+      <div><b>{data.unread}</b><span>Unread</span></div>
+      <div><b>{data.items.length}</b><span>Total alerts</span></div>
+      <div><b>{push.subscribed?"On":"Off"}</b><span>Push</span></div>
     </div>
-    {loading?<LoadingState label="Loading notifications..."/>:error?<div className="booking-error">{error}</div>:data.items.length?<div className="notification-list">{data.items.map(n=><button key={n._id} className={"notification-card "+(!n.readAt?"unread":"")} onClick={()=>open(n)}><div className="notification-icon"><Bell size={17}/></div><div><b>{n.title}</b><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString()}</small></div>{!n.readAt&&<span className="unread-dot"/>}</button>)}</div>:<div className="empty-state"><Bell size={46}/><h2>No notifications yet</h2><p>Booking confirmations, cancellations and trip reminders will appear here.</p></div>}
+
+    {loading?<LoadingState label="Loading alerts..."/>:error?<div className="booking-error">{error}</div>:data.items.length?
+      <div className="notification-list notification-list--premium">{data.items.map(n=>{
+        const t=String(n.title||"").toLowerCase();
+        const Icon=t.includes("cancel")?CalendarDays:t.includes("booking")||t.includes("confirm")?Ticket:t.includes("remind")?Bell:CheckCircle2;
+        return <button key={n._id} className={"notification-card "+(!n.readAt?"unread":"")} onClick={()=>open(n)}>
+          <div className="notification-icon"><Icon size={18}/></div>
+          <div className="notification-card__copy"><div className="notification-card__top"><b>{n.title}</b>{!n.readAt&&<span className="notification-new">NEW</span>}</div><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"})}</small></div>
+          <ChevronRight size={17} className="notification-chevron"/>
+        </button>
+      })}</div>
+      :<div className="empty-state alerts-empty"><div className="alerts-empty__icon"><Bell size={28}/></div><h2>You’re all caught up</h2><p>Booking confirmations, reminders and important trip changes will appear here.</p></div>}
   </div>
 }
 
