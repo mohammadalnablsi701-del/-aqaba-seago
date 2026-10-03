@@ -9,13 +9,21 @@ router.post("/bookings/release-expired",async(_req,res,next)=>{try{const release
 router.get("/readiness",async(_req,res,next)=>{
   try{
     const now=new Date();
-    const [providersApproved,providersPending,activeTrips,upcomingDepartures,confirmedBookings]=await Promise.all([
-      Provider.countDocuments({status:"approved"}),
+    const [approvedProviders,providersPending,confirmedBookings]=await Promise.all([
+      Provider.find({status:"approved"}).select("_id"),
       Provider.countDocuments({status:"pending"}),
-      Trip.countDocuments({active:true}),
-      Departure.countDocuments({status:"scheduled",startsAt:{$gte:now}}),
       Booking.countDocuments({status:"confirmed"})
     ]);
+    const approvedProviderIds=approvedProviders.map(p=>p._id);
+    const activeTripRows=approvedProviderIds.length
+      ?await Trip.find({active:true,providerId:{$in:approvedProviderIds}}).select("_id")
+      :[];
+    const activeTripIds=activeTripRows.map(t=>t._id);
+    const upcomingDepartures=activeTripIds.length
+      ?await Departure.countDocuments({tripId:{$in:activeTripIds},status:"scheduled",startsAt:{$gte:now}})
+      :0;
+    const providersApproved=approvedProviders.length;
+    const activeTrips=activeTripIds.length;
 
     const demoProvider=await Provider.findOne({businessName:"Aqaba SeaGo Demo Partner"}).select("_id");
     const demoTripCount=demoProvider?await Trip.countDocuments({providerId:demoProvider._id}):0;
