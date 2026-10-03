@@ -12,6 +12,10 @@ const schema = new mongoose.Schema({
   pricing: {
     currency: { type: String, default: "JOD" },
     unitPrice: Number,
+    adultUnitPrice: Number,
+    childUnitPrice: Number,
+    adultSubtotal: Number,
+    childSubtotal: Number,
     grossAmount: Number,
     commissionAmount: Number,
     providerNetAmount: Number
