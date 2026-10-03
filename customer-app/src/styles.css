@@ -500,3 +500,12 @@
 .country-code-options button{width:100%;border:0;background:#fff;color:#183a50;padding:10px 9px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left}
 .country-code-options button.selected{background:#edf8fb}.country-code-options button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.country-code-options button b{color:#0b6f9f}
 .country-code-empty{padding:16px;text-align:center;color:#7b8c99;font-size:12px}
+
+.google-auth-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;margin:4px 0 10px;width:100%}
+.google-auth-host{width:100%;min-height:44px;display:flex;justify-content:center;overflow:hidden}
+.google-auth-disabled{width:100%;height:46px;border:1px solid #d8e1e7;border-radius:12px;background:#fff;color:#7c8b96;font-weight:800;display:flex;align-items:center;justify-content:center;gap:10px;opacity:.72}
+.google-g{font-size:18px;font-weight:900;color:#4285f4}
+.google-auth-error{color:#b42318;font-size:11px;text-align:center}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:8px 0 12px;color:#8a9aa6;font-size:11px}
+.auth-divider:before,.auth-divider:after{content:"";height:1px;background:#e2e9ee;flex:1}
+.auth-divider span{white-space:nowrap}
