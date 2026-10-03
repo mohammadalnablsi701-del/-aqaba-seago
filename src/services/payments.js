@@ -2,11 +2,20 @@ import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import CheckoutHold from "../models/CheckoutHold.js";
 import Departure from "../models/Departure.js";
+import Trip from "../models/Trip.js";
+import Provider from "../models/Provider.js";
 import { getPaymentProvider } from "../payments/index.js";
 import { sendBookingConfirmation } from "./notifications.js";
 
 function sameMoney(a, b) {
   return Math.abs(Number(a) - Number(b)) < 0.001;
+}
+
+async function holdInventoryIsSellable(hold) {
+  const trip = await Trip.findOne({ _id: hold.tripId, active: true }).select("_id providerId");
+  if (!trip) return false;
+  const provider = await Provider.findOne({ _id: trip.providerId, status: "approved" }).select("_id");
+  return Boolean(provider);
 }
 
 async function releaseHold(hold, status = "released") {
@@ -82,12 +91,15 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
     throw Object.assign(new Error("Checkout expired"), { statusCode: 409 });
   }
 
-  const departure = await Departure.findOne({
-    _id: hold.departureId,
-    status: "scheduled",
-    startsAt: { $gt: new Date() }
-  }).select("_id");
-  if (!departure) {
+  const [departure, inventorySellable] = await Promise.all([
+    Departure.findOne({
+      _id: hold.departureId,
+      status: "scheduled",
+      startsAt: { $gt: new Date() }
+    }).select("_id"),
+    holdInventoryIsSellable(hold)
+  ]);
+  if (!departure || !inventorySellable) {
     await releaseHold(hold, "released");
     await Payment.updateMany(
       { holdId: hold._id, status: { $in: ["created", "pending"] } },
@@ -147,12 +159,15 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   if (!amountMatches || !currencyMatches) {
     payment.status = "needs_review";
   } else if (event.status === "paid") {
-    const departure = await Departure.findOne({
-      _id: hold.departureId,
-      status: "scheduled",
-      startsAt: { $gt: new Date() }
-    }).select("_id");
-    if (!departure) {
+    const [departure, inventorySellable] = await Promise.all([
+      Departure.findOne({
+        _id: hold.departureId,
+        status: "scheduled",
+        startsAt: { $gt: new Date() }
+      }).select("_id"),
+      holdInventoryIsSellable(hold)
+    ]);
+    if (!departure || !inventorySellable) {
       if (hold.status === "active") await releaseHold(hold, "released");
       payment.status = "needs_review";
     } else if (hold.status === "active" && hold.expiresAt > new Date()) {
