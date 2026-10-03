@@ -12,6 +12,11 @@ function Login({onDone}){
 
 export default function App(){
   const[auth,setAuth]=useState(stored());const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[tab,setTab]=useState("commissions");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  useEffect(()=>{
+    const expired=()=>{setAuth(null);setRows([]);setRefundRows([]);setNotificationRows([]);setError("Your session expired. Please sign in again.");};
+    window.addEventListener("seago:session-expired",expired);
+    return()=>window.removeEventListener("seago:session-expired",expired);
+  },[]);
   async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[t,r,n]=await Promise.all([trips(auth.token),refunds(auth.token),notifications(auth.token)]);setRows(t);setRefundRows(r);setNotificationRows(n)}catch(e){setError(e.message)}finally{setLoading(false)}}
   useEffect(()=>{load()},[auth?.token]);
   if(!auth)return <Login onDone={setAuth}/>;
