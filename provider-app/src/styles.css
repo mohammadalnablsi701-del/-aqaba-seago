@@ -145,3 +145,13 @@
 .provider-notification.actionable{cursor:pointer}
 .provider-notification.actionable:hover{background:#eef9fd}
 .notification-action-label{margin-top:3px;font-size:10px;color:#0875a8}
+
+.booking-detail-hero{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#f7fafc;border:1px solid #e4edf2;border-radius:16px;padding:14px;margin-bottom:12px}
+.booking-detail-hero span{font-size:10px;color:#7b8e9a}.booking-detail-hero h3{margin:2px 0 2px;color:#16394e}.booking-detail-hero p{margin:0;font-size:11px;color:#6d8190}
+.booking-detail-hero em{font-style:normal;font-size:9px;font-weight:900;letter-spacing:.06em;padding:6px 8px;border-radius:999px}
+.booking-detail-hero em.valid{background:#fff7e8;color:#9a5b00}.booking-detail-hero em.used{background:#e9fbf2;color:#087443}
+.detail-actions-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.detail-actions-grid a,.detail-actions-grid button{border:0;border-radius:10px;background:#eef6fb;color:#0a5f91;text-decoration:none;padding:10px;text-align:center;font-size:10px;font-weight:900}
+.booking-checkin-cta{width:100%;border:0;border-radius:12px;background:#079455;color:#fff;padding:12px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:12px}
+.booking-detail-grid{margin-top:0}.compact-location{margin-top:12px}
+@media(max-width:560px){.detail-actions-grid{grid-template-columns:1fr 1fr}}
