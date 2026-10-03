@@ -19,8 +19,8 @@ router.delete("/trip-image", requireAuth, requireRole("provider"), async (req,re
     const access=await requireProviderCapability(req.user,"manage_trips");
     if(!access)return res.status(403).json({error:"Trip management permission required"});
     const publicId = String(req.body.publicId || "");
-    const prefix = `aqaba-seago/trips/${String(access.provider._id)}/`;
-    if (!publicId.startsWith(prefix)) return res.status(403).json({ error: "Forbidden media resource" });
+    const prefixes=[`aqaba-seago/trips/${String(access.provider._id)}/`,`aqaba-seago/trips/${String(access.provider.ownerUserId)}/`];
+    if(!prefixes.some(prefix=>publicId.startsWith(prefix)))return res.status(403).json({error:"Forbidden media resource"});
     const result = await deleteTripImage(publicId);
     res.json(result);
   } catch (e) { next(e); }
