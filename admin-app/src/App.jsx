@@ -11,7 +11,7 @@ function Login({onDone}){
 }
 
 export default function App(){
-  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   useEffect(()=>{
     const expired=()=>{setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setError("Your session expired. Please sign in again.");};
     window.addEventListener("seago:session-expired",expired);
@@ -32,6 +32,10 @@ export default function App(){
     finally{setCleanupBusy(false);}
   }
   if(!auth)return <Login onDone={setAuth}/>;
+  const emailTypes=[...new Set(notificationRows.map(n=>n.type).filter(Boolean))].sort();
+  const emailCounts=notificationRows.reduce((a,n)=>{a.total++;a[n.status]=(a[n.status]||0)+1;return a},{total:0,sent:0,failed:0,skipped:0});
+  const emailFiltered=notificationRows.filter(n=>(emailStatus==="all"||n.status===emailStatus)&&(emailType==="all"||n.type===emailType));
+  const emailFailureSamples=notificationRows.filter(n=>n.status==="failed"&&n.error).slice(0,3);
   function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);}
   return <div className="app"><header><div><b>Aqaba SeaGo</b><span>Admin Dashboard</span></div><div className="admin-head-actions"><button onClick={load}><RefreshCw size={16}/> Refresh</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
     <div className="admin-tabs"><button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}>Pilot readiness</button><button className={tab==="providers"?"active":""} onClick={()=>setTab("providers")}>Providers{providerRows.filter(p=>p.status==="pending").length?` (${providerRows.filter(p=>p.status==="pending").length})`:""}</button><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
@@ -59,7 +63,10 @@ export default function App(){
       <div className="refund-list">{refundRows.length?refundRows.map(r=><RefundRow key={r._id} r={r}/>):<p>No cancellations yet.</p>}</div>
     </>:<>
       <div className="title"><Bell/><div><small>EMAIL</small><h1>Email notifications</h1><p>Delivery history for confirmations, cancellations and trip reminders.</p></div></div>
-      <div className="notification-list">{notificationRows.length?notificationRows.map(n=><NotificationRow key={n._id} n={n}/>):<p>No email events yet.</p>}</div>
+      <div className="email-summary-grid"><div><small>Total</small><b>{emailCounts.total}</b></div><div className="ok"><small>Sent</small><b>{emailCounts.sent}</b></div><div className="bad"><small>Failed</small><b>{emailCounts.failed}</b></div><div className="warn"><small>Skipped</small><b>{emailCounts.skipped}</b></div></div>
+      {emailCounts.failed>0&&<div className="email-alert"><b>Email delivery needs attention</b><span>{emailCounts.failed} failed event{emailCounts.failed===1?"":"s"} detected.</span>{emailFailureSamples.map((n,i)=><small key={n._id||i}>{n.error}</small>)}</div>}
+      <div className="email-filters"><select value={emailStatus} onChange={e=>setEmailStatus(e.target.value)}><option value="all">All statuses</option><option value="sent">Sent</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select><select value={emailType} onChange={e=>setEmailType(e.target.value)}><option value="all">All types</option>{emailTypes.map(t=><option key={t} value={t}>{t}</option>)}</select><span>{emailFiltered.length} shown</span></div>
+      <div className="notification-list">{emailFiltered.length?emailFiltered.map(n=><NotificationRow key={n._id} n={n}/>):<p>No email events match these filters.</p>}</div>
     </>}
   </main></div>
 }
