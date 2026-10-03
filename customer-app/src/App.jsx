@@ -864,7 +864,7 @@ export default function App(){
   const [searchSummary,setSearchSummary]=useState("");
   const [searchCriteria,setSearchCriteria]=useState(null);
   const [paymentReturn,setPaymentReturn]=useState(()=>new URLSearchParams(window.location.search).get("payment")==="success");
-  const [favourites,setFavourites]=useState(["snorkel-coral"]);
+  const [favourites,setFavourites]=useState(()=>{try{return JSON.parse(localStorage.getItem("seago_favourites")||"[\"snorkel-coral\"]")}catch{return ["snorkel-coral"]}});
   const [auth,setAuth]=useState(readStoredAuth());
   const [menuOpen,setMenuOpen]=useState(false);
   const [alertsUnread,setAlertsUnread]=useState(0);
@@ -949,7 +949,7 @@ export default function App(){
     localStorage.removeItem("seago_auth");
   }
 
-  const toggleFavourite=id=>setFavourites(x=>x.includes(id)?x.filter(v=>v!==id):[...x,id]);
+  const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=trip=>{setDetail(trip);setBooking(false);};
 
   if(paymentReturn) return <PaymentReturnScreen onViewTicket={viewPaidTicket}/>;
@@ -958,10 +958,11 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)}/>}
+      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
-      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}\n      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread}/>}
+      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
+      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
       {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onBack={()=>setActive("profile")}/>}
       {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
