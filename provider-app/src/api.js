@@ -49,3 +49,8 @@ function urlBase64ToUint8Array(base64String){const padding="=".repeat((4-base64S
 export async function enablePushNotifications(token){if(!("serviceWorker"in navigator)||!("PushManager"in window)||!("Notification"in window))throw new Error("Push notifications are not supported on this device/browser");const permission=await Notification.requestPermission();if(permission!=="granted")throw new Error("Notification permission was not granted");const registration=await navigator.serviceWorker.ready;let subscription=await registration.pushManager.getSubscription();if(!subscription){const{publicKey}=await req("/api/push/public-key");subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)})}await req("/api/push/subscribe",{token,method:"POST",body:JSON.stringify({subscription:subscription.toJSON()})});return{permission,subscribed:true}}
 export async function pushNotificationStatus(){if(!("serviceWorker"in navigator)||!("PushManager"in window)||!("Notification"in window))return{supported:false,permission:"unsupported",subscribed:false};const registration=await navigator.serviceWorker.ready;const subscription=await registration.pushManager.getSubscription();return{supported:true,permission:Notification.permission,subscribed:Boolean(subscription)}}
 export const sendTestPush=token=>req("/api/push/test",{token,method:"POST"});
+
+
+export const providerTeam=token=>req("/api/providers/me/team",{token});
+export const createProviderTeamMember=(token,data)=>req("/api/providers/me/team",{token,method:"POST",body:JSON.stringify(data)});
+export const updateProviderTeamMember=(token,id,data)=>req("/api/providers/me/team/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
