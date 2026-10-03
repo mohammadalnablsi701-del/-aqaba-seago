@@ -607,21 +607,96 @@ function ProfileScreen({ auth, onAuthenticated, onSignOut, navigate }) {
     <section className="profile-section">
       <div className="profile-section__title"><span>ACCOUNT</span><small>Manage your SeaGo details</small></div>
       <div className="profile-list">
-        <button><span className="profile-list__icon"><UserRound size={18}/></span><span><b>Personal details</b><small>Name, email and phone</small></span><ChevronRight size={17}/></button>
-        <button><span className="profile-list__icon"><MapPin size={18}/></span><span><b>Trip preferences</b><small>Saved experiences and interests</small></span><ChevronRight size={17}/></button>
+        <button onClick={()=>navigate("personal-details")}><span className="profile-list__icon"><UserRound size={18}/></span><span><b>Personal details</b><small>Name, email and phone</small></span><ChevronRight size={17}/></button>
+        <button onClick={()=>navigate("trip-preferences")}><span className="profile-list__icon"><MapPin size={18}/></span><span><b>Trip preferences</b><small>Saved experiences and interests</small></span><ChevronRight size={17}/></button>
       </div>
     </section>
 
     <section className="profile-section">
       <div className="profile-section__title"><span>HELP & INFO</span><small>Everything you may need</small></div>
       <div className="profile-list">
-        <button><span className="profile-list__icon"><Sparkles size={18}/></span><span><b>Help & support</b><small>Get help with a booking</small></span><ChevronRight size={17}/></button>
-        <button><span className="profile-list__icon"><CheckCircle2 size={18}/></span><span><b>Policies</b><small>Cancellation, refunds and privacy</small></span><ChevronRight size={17}/></button>
+        <button onClick={()=>navigate("support")}><span className="profile-list__icon"><Sparkles size={18}/></span><span><b>Help & support</b><small>Get help with a booking</small></span><ChevronRight size={17}/></button>
+        <button onClick={()=>navigate("policies")}><span className="profile-list__icon"><CheckCircle2 size={18}/></span><span><b>Policies</b><small>Cancellation, refunds and privacy</small></span><ChevronRight size={17}/></button>
       </div>
     </section>
 
     {auth?.token&&<button className="profile-signout" onClick={onSignOut}>Sign out</button>}
     <div className="profile-footer-copy">Aqaba SeaGo · Red Sea experiences</div>
+  </div>;
+}
+
+function ProfileSubHeader({ eyebrow, title, subtitle, onBack }) {
+  return <header className="profile-sub-header">
+    <button className="plain-back" onClick={onBack}><ChevronLeft/></button>
+    <div><span>{eyebrow}</span><h1>{title}</h1><p>{subtitle}</p></div>
+  </header>;
+}
+
+function PersonalDetailsScreen({ auth, onBack }) {
+  const user=auth?.user||{};
+  return <div className="screen standard-screen profile-sub-screen">
+    <ProfileSubHeader eyebrow="ACCOUNT" title="Personal details" subtitle="Your SeaGo account information." onBack={onBack}/>
+    <section className="profile-detail-card">
+      <div><span className="profile-detail-icon"><UserRound size={18}/></span><span><small>Full name</small><b>{user.name||"Not provided"}</b></span></div>
+      <div><span className="profile-detail-icon"><Sparkles size={18}/></span><span><small>Email</small><b>{user.email||"Not provided"}</b></span></div>
+      <div><span className="profile-detail-icon"><UserRound size={18}/></span><span><small>Phone</small><b>{user.phone||"Not provided"}</b></span></div>
+    </section>
+    <div className="profile-sub-note"><CheckCircle2 size={16}/><span>Your booking confirmations and tickets stay linked to this account.</span></div>
+  </div>;
+}
+
+function TripPreferencesScreen({ favourites, navigate, onBack }) {
+  return <div className="screen standard-screen profile-sub-screen">
+    <ProfileSubHeader eyebrow="YOUR SEAGO" title="Trip preferences" subtitle="Keep the experiences you love close." onBack={onBack}/>
+    <section className="preference-hero">
+      <Heart size={24}/>
+      <div><h2>{favourites.length} saved trip{favourites.length===1?"":"s"}</h2><p>Your favourites help you return quickly to the experiences you liked.</p></div>
+    </section>
+    <div className="profile-action-list">
+      <button onClick={()=>navigate("favourites")}><Heart size={19}/><span><b>Open saved trips</b><small>Review your favourites</small></span><ChevronRight size={17}/></button>
+      <button onClick={()=>navigate("trips")}><ShipWheel size={19}/><span><b>Explore more experiences</b><small>Find something new in Aqaba</small></span><ChevronRight size={17}/></button>
+    </div>
+  </div>;
+}
+
+function SupportScreen({ navigate, onBack }) {
+  return <div className="screen standard-screen profile-sub-screen">
+    <ProfileSubHeader eyebrow="HELP & SUPPORT" title="How can we help?" subtitle="Quick answers for your SeaGo trip." onBack={onBack}/>
+    <section className="support-highlight">
+      <Ticket size={24}/><div><h2>Need help with a booking?</h2><p>Open My Tickets first — your booking reference, operator and departure point are all there.</p></div>
+      <button onClick={()=>navigate("tickets")}>My tickets <ChevronRight size={16}/></button>
+    </section>
+    <div className="support-faq">
+      <details><summary>Where is my departure point?</summary><p>Open your ticket to see the departure location and the Google Maps shortcut when provided by the operator.</p></details>
+      <details><summary>When do I receive my QR ticket?</summary><p>Your QR ticket becomes available after successful payment and confirmed booking creation.</p></details>
+      <details><summary>What if I need to cancel?</summary><p>Open your ticket and use the cancellation option. The refund amount is shown before you confirm.</p></details>
+    </div>
+  </div>;
+}
+
+function PoliciesScreen({ onBack }) {
+  return <div className="screen standard-screen profile-sub-screen">
+    <ProfileSubHeader eyebrow="HELP & INFO" title="Policies" subtitle="Clear rules before and after you book." onBack={onBack}/>
+    <section className="policy-page-card">
+      <span>CANCELLATION & REFUNDS</span>
+      <h2>Know your refund before cancelling</h2>
+      <div className="policy-grid">
+        <div><b>24+ hrs</b><small>100% refund</small></div>
+        <div><b>12–24 hrs</b><small>50% refund</small></div>
+        <div><b>&lt;12 hrs</b><small>No refund</small></div>
+      </div>
+      <p>If an operator cancels a departure, confirmed bookings are eligible for a full refund under the current SeaGo policy.</p>
+    </section>
+    <section className="policy-page-card">
+      <span>BOOKING & PAYMENT</span>
+      <h2>Confirmation happens after payment</h2>
+      <p>Your booking and QR ticket are created only after successful payment. Seats may be temporarily held during checkout.</p>
+    </section>
+    <section className="policy-page-card">
+      <span>PRIVACY</span>
+      <h2>Your account stays connected to your trips</h2>
+      <p>SeaGo uses your account details to manage bookings, tickets and trip notifications. A full production privacy policy will be published before public launch.</p>
+    </section>
   </div>;
 }
 
@@ -829,6 +904,10 @@ export default function App(){
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}\n      {active==="notifications"&&<NotificationsScreen auth={auth}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
+      {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onBack={()=>setActive("profile")}/>}
+      {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
+      {active==="support"&&<SupportScreen navigate={setActive} onBack={()=>setActive("profile")}/>}
+      {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")}/>}
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
     <BottomNav active={active} setActive={setActive}/>
