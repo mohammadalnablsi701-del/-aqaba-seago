@@ -42,6 +42,7 @@ router.patch("/me/settings",requireAuth,requireRole("provider"),async(req,res,ne
     if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(defaultDepartureTime))return res.status(400).json({error:"Default departure time must be HH:MM"});
     provider.phone=phone||undefined;
     provider.settings={
+      configured:true,
       defaultCapacity,
       defaultDepartureTime,
       departureLocation:{
