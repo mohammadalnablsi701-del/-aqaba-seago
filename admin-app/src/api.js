@@ -15,3 +15,5 @@ const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");async 
 export const readiness=token=>req("/api/admin/readiness",{token});
 export const demoCleanupPreview=token=>req("/api/admin/demo-cleanup-preview",{token});
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
+
+export const setProviderStatus=(token,id,status)=>req("/api/admin/providers/"+id+"/status",{token,method:"PATCH",body:JSON.stringify({status})});
