@@ -436,14 +436,14 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   return (
     <div className="screen standard-screen booking-screen">
       <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><span/></div>
-      <div className="booking-title"><span>SECURE YOUR TRIP</span><h1>Complete booking</h1>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"guest":"guests"}</p>}</div>
-      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><p>{trip.duration} · Aqaba</p></div></div>
+      <div className="booking-title"><span>BOOKING · STEP 1 OF 2</span><h1>Choose your trip details</h1><p className="booking-subtitle">Review the departure, guests and package before payment.</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"guest":"guests"}</p>}<div className="booking-progress"><i/><i/></div></div>
+      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><p>{trip.duration} · Aqaba</p><div className="booking-verified"><CheckCircle2 size={14}/> Verified operator</div></div></div>
       {trip.departureLocation?.name&&<div className="booking-location-card"><div><MapPin size={20}/><span><small>Departure point</small><strong>{trip.departureLocation.name}</strong>{trip.departureLocation.address&&<em>{trip.departureLocation.address}</em>}</span></div>{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Google Maps <ChevronRight size={16}/></a>}</div>}
 
       {loading ? <LoadingState label="Checking live departures"/> : (
         <>
           <div className="departure-block">
-            <span>AVAILABLE DEPARTURES</span>
+            <span>1 · CHOOSE DEPARTURE</span>
             {live && departures.length ? departures.slice(0,4).map(d=>(
               <button key={d.id} className={selected?.id===d.id?"departure-option active":"departure-option"} onClick={()=>setSelected(d)} disabled={d.availableSeats<1}>
                 <CalendarDays size={17}/>
@@ -453,7 +453,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
             )) : live ? <div className="no-departures">No future departures are available yet.</div> : <div className="preview-departure"><CalendarDays size={18}/> Preview date · live dates appear after API deployment</div>}
           </div>
 
-          <div className="booking-form booking-form--guests">
+          <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · GUESTS & PACKAGE</div>
             <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)}>+</button></div></label>
             <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)}>+</button></div></label>
             {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>{trip.buffetDescription||"Buffet included"}</small></button></div>}
@@ -462,9 +462,9 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box">{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? 0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? 0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
-          <button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to payment <ChevronRight size={18}/></button>
-          <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">No booking is created before payment. Successful payment creates the confirmed SeaGo booking and ticket.</p>
+          <div className="price-box"><div className="price-box__heading"><span>PRICE SUMMARY</span><small>No hidden fees</small></div>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? 0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? 0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
+          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to secure payment <ChevronRight size={18}/></button>
+          <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
       )}
     </div>
