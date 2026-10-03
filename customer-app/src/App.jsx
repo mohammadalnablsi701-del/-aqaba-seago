@@ -103,7 +103,7 @@ function ApiNotice({ usingFallback }) {
   );
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch, onOpenMenu }) {
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>new Date().toISOString().slice(0,10));
   const [guests,setGuests]=useState(2);
@@ -121,7 +121,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
         <HeroScene />
         <div className="hero__top">
           <BrandLogo />
-          <button className="icon-button" aria-label="Menu"><span className="hamburger">☰</span></button>
+          <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
         </div>
         <div className="hero__copy">
           <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
@@ -578,6 +578,27 @@ function NotificationsScreen({auth}){
   </div>
 }
 
+function SideMenu({ open, onClose, active, setActive }) {
+  const items=[
+    ["home",Home,"Home"],
+    ["trips",ShipWheel,"Sea Experiences"],
+    ["tickets",Ticket,"My Tickets"],
+    ["favourites",Heart,"Favourites"],
+    ["notifications",Bell,"Alerts"],
+    ["profile",UserRound,"Profile"]
+  ];
+  if(!open) return null;
+  return <div className="side-menu-layer">
+    <button className="side-menu-backdrop" aria-label="Close menu" onClick={onClose}/>
+    <aside className="side-menu" aria-label="Main menu">
+      <div className="side-menu__head"><BrandLogo/><button className="side-menu__close" onClick={onClose} aria-label="Close menu">×</button></div>
+      <div className="side-menu__eyebrow">EXPLORE AQABA</div>
+      <nav>{items.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>{setActive(id);onClose();}}><Icon size={20}/><span>{label}</span><ChevronRight size={17}/></button>)}</nav>
+      <div className="side-menu__footer">Aqaba SeaGo · Red Sea experiences</div>
+    </aside>
+  </div>;
+}
+
 function BottomNav({ active, setActive }) {
   const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["notifications",Bell,"Alerts"],["profile",UserRound,"Profile"]];
   return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><Icon size={20}/><span>{label}</span></button>)}</nav>;
@@ -601,6 +622,7 @@ export default function App(){
   const [paymentReturn,setPaymentReturn]=useState(()=>new URLSearchParams(window.location.search).get("payment")==="success");
   const [favourites,setFavourites]=useState(["snorkel-coral"]);
   const [auth,setAuth]=useState(readStoredAuth());
+  const [menuOpen,setMenuOpen]=useState(false);
 
   useEffect(()=>{
     let ignore=false;
@@ -684,12 +706,13 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch}/>}
+      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
-      {active==="notifications"&&<NotificationsScreen auth={auth}/>}
+      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}\n      {active==="notifications"&&<NotificationsScreen auth={auth}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
     </main>
+    <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
     <BottomNav active={active} setActive={setActive}/>
   </div>;
 }
