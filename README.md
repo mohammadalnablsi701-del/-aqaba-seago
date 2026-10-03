@@ -89,5 +89,7 @@ Deferred for now:
 
 Next production-cleanup work:
 - Expand automated integration coverage for booking, checkout-hold and admin cleanup flows.
-- Add deployment/operations documentation and environment checklist.
 - Final pilot QA with real provider/trip/departure data after demo cleanup.
+
+Pilot operations:
+- Follow `docs/PILOT_LAUNCH_CHECKLIST.md` for the controlled first-provider / first-booking run.
