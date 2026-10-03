@@ -404,6 +404,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const [loading,setLoading]=useState(Boolean(trip.apiId && hasApi()));
   const [error,setError]=useState("");
   const [success,setSuccess]=useState(null);
+  const [holdNow,setHoldNow]=useState(Date.now());
   const live = Boolean(trip.apiId && hasApi());
 
   useEffect(()=>{
@@ -446,6 +447,13 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     return()=>{ignore=true;};
   },[selected,adults,children,mealPlan,live]);
 
+  useEffect(()=>{
+    if(!success?.expiresAt) return;
+    setHoldNow(Date.now());
+    const timer=setInterval(()=>setHoldNow(Date.now()),1000);
+    return()=>clearInterval(timer);
+  },[success?.expiresAt]);
+
   async function confirm() {
     setError("");
     if(!live) {
@@ -465,10 +473,16 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         checkoutUrl:payment.checkoutUrl
       });
     } catch(err) {
-      setError(err.message);
+      if(err.status===409) setError("This departure is no longer available for the selected guests. Please choose another departure or reduce the guest count.");
+      else if(err.status===401||err.status===403) setError("AUTH_REQUIRED");
+      else setError(err.message || "We couldn’t start secure payment. Please try again.");
     }
   }
 
+  const holdRemaining=success?.expiresAt ? Math.max(0,new Date(success.expiresAt).getTime()-holdNow) : null;
+  const holdExpired=holdRemaining===0;
+  const holdMinutes=holdRemaining!=null?Math.floor(holdRemaining/60000):0;
+  const holdSeconds=holdRemaining!=null?Math.floor((holdRemaining%60000)/1000):0;
   const total=quote?.pricing?.grossAmount ?? trip.price*guests;
 
   if(success) {
@@ -484,10 +498,10 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           <div><span>Guests</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
           <div><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div>
         </div>
-        {!success.demo && success.expiresAt && <div className="hold-box hold-box--secure"><CheckCircle2 size={16}/><span>Seats held until <b>{formatDeparture(success.expiresAt)}</b></span></div>}
+        {!success.demo && success.expiresAt && <div className={"hold-box hold-box--secure "+(holdExpired?"is-expired":"")}><CheckCircle2 size={16}/><span>{holdExpired?<><b>Seat hold expired</b><small>Return to trip details to check availability again.</small></>:<>Seats reserved for <b>{String(holdMinutes).padStart(2,"0")}:{String(holdSeconds).padStart(2,"0")}</b><small>Complete payment before the timer ends.</small></>}</span></div>}
         <div className="payment-safety"><span><CheckCircle2 size={15}/> Booking created only after successful payment</span><span><CheckCircle2 size={15}/> QR ticket available immediately after confirmation</span></div>
-        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" onClick={()=>{window.location.href=success.checkoutUrl;}}>Pay securely · {Number(total).toFixed(2)} JOD <ChevronRight size={18}/></button>}
-        <button className="secondary-button payment-back" onClick={onBack}>Back to trip details</button>
+        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?"Hold expired":"Pay securely · "+Number(total).toFixed(2)+" JOD"} {!holdExpired&&<ChevronRight size={18}/>}</button>}
+        <button className="secondary-button payment-back" onClick={onBack}>{holdExpired?"Check availability again":"Back to trip details"}</button>
       </div>
     );
   }
