@@ -103,3 +103,8 @@
 .refund-financial-grid>div{background:#f8fafb;border:1px solid #e8eef2;border-radius:12px;padding:9px 10px}
 .refund-financial-grid span{display:block;font-size:9px;color:#7a8b98;margin-bottom:4px}.refund-financial-grid b{font-size:12px;color:#16394e}
 @media(max-width:760px){.refund-financial-grid{grid-template-columns:repeat(2,1fr)}.refund-financial-grid>div:last-child{grid-column:1/-1}}
+
+.email-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.email-summary-grid>div{background:#fff;border:1px solid #e6edf2;border-radius:14px;padding:12px}.email-summary-grid small{display:block;font-size:9px;color:#7b8c99;margin-bottom:4px}.email-summary-grid b{font-size:18px}.email-summary-grid .ok{background:#f1fbf7}.email-summary-grid .ok b{color:#087443}.email-summary-grid .bad{background:#fff4f1}.email-summary-grid .bad b{color:#b42318}.email-summary-grid .warn{background:#fff8e8}.email-summary-grid .warn b{color:#946400}
+.email-alert{display:grid;gap:5px;background:#fff4f1;border:1px solid #f2d3cc;border-radius:14px;padding:12px;margin-bottom:12px}.email-alert b{font-size:12px;color:#a84439}.email-alert span,.email-alert small{font-size:10px;color:#7c6a67;line-height:1.4;word-break:break-word}
+.email-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.email-filters select{border:1px solid #dbe5eb;background:#fff;border-radius:10px;padding:9px 10px;color:#526b7c;font-size:11px}.email-filters span{font-size:10px;color:#7a8b98;margin-left:auto}
+@media(max-width:650px){.email-summary-grid{grid-template-columns:repeat(2,1fr)}.email-filters span{width:100%;margin-left:0}}
