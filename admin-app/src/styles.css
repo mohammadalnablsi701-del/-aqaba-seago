@@ -98,3 +98,8 @@
 .trip-financial-grid small{display:block;font-size:9px;color:#7a8b98;margin-bottom:4px}
 .trip-financial-grid b{font-size:13px;color:#16394e}
 @media(max-width:760px){.trip-financial{flex-direction:column}.trip-financial-grid{grid-template-columns:repeat(2,1fr)}.trip-financial-grid>div:last-child{grid-column:1/-1}.trip-financial .commission{width:100%}}
+
+.refund-main{flex:1;min-width:0}.refund-financial-grid{display:grid;grid-template-columns:repeat(5,minmax(92px,1fr));gap:8px;margin-top:12px}
+.refund-financial-grid>div{background:#f8fafb;border:1px solid #e8eef2;border-radius:12px;padding:9px 10px}
+.refund-financial-grid span{display:block;font-size:9px;color:#7a8b98;margin-bottom:4px}.refund-financial-grid b{font-size:12px;color:#16394e}
+@media(max-width:760px){.refund-financial-grid{grid-template-columns:repeat(2,1fr)}.refund-financial-grid>div:last-child{grid-column:1/-1}}
