@@ -9,6 +9,7 @@ import ProviderMember from "../models/ProviderMember.js";
 import bcrypt from "bcryptjs";
 import { resolveProviderAccess, requireProviderCapability } from "../services/providerAccess.js";
 import ProviderAuditLog from "../models/ProviderAuditLog.js";
+import { auditProviderAction } from "../services/providerAudit.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router=express.Router();
@@ -58,6 +59,7 @@ router.patch("/me/settings",requireAuth,requireRole("provider"),async(req,res,ne
       }
     };
     await provider.save();
+    await auditProviderAction({access,user:req.user,action:"settings.update",targetType:"provider",targetId:provider._id,summary:"Updated provider settings"});
     res.json(provider);
   }catch(e){next(e);}
 });
