@@ -579,7 +579,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
   })}</div>:<div className="empty-state ticket-empty"><Ticket size={48}/><h2>No trips booked yet</h2><p>Once you book a SeaGo experience, your QR ticket and departure details will appear here.</p></div>}</div>;
 }
 
-function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
+function ProfileScreen({ auth, onAuthenticated, onSignOut, navigate }) {
   if(!auth?.token && hasApi()) {
     return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1><p className="profile-header-copy">Sign in to manage bookings, tickets and saved trips.</p></div></header><AuthForm onAuthenticated={onAuthenticated}/></div>;
   }
@@ -599,9 +599,9 @@ function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
     </section>
 
     <section className="profile-quick-grid">
-      <button><Ticket size={20}/><span><b>My tickets</b><small>View confirmed bookings</small></span><ChevronRight size={17}/></button>
-      <button><Heart size={20}/><span><b>Saved trips</b><small>Your favourites</small></span><ChevronRight size={17}/></button>
-      <button><Bell size={20}/><span><b>Notifications</b><small>Trip updates & reminders</small></span><ChevronRight size={17}/></button>
+      <button onClick={()=>navigate("tickets")}><Ticket size={20}/><span><b>My tickets</b><small>View confirmed bookings</small></span><ChevronRight size={17}/></button>
+      <button onClick={()=>navigate("favourites")}><Heart size={20}/><span><b>Saved trips</b><small>Your favourites</small></span><ChevronRight size={17}/></button>
+      <button onClick={()=>navigate("notifications")}><Bell size={20}/><span><b>Notifications</b><small>Trip updates & reminders</small></span><ChevronRight size={17}/></button>
     </section>
 
     <section className="profile-section">
@@ -828,7 +828,7 @@ export default function App(){
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}\n      {active==="notifications"&&<NotificationsScreen auth={auth}/>}
-      {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut}/>}
+      {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
     <BottomNav active={active} setActive={setActive}/>
