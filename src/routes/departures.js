@@ -38,9 +38,10 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
 
     const trip = await Trip.findOne({
       _id: req.body.tripId,
-      providerId: provider._id
+      providerId: provider._id,
+      active: true
     });
-    if (!trip) return res.status(404).json({ error: "Trip not found" });
+    if (!trip) return res.status(404).json({ error: "Active trip not found" });
 
     const departure = await Departure.create({
       tripId: trip._id,
@@ -99,10 +100,26 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       if(!Number.isInteger(capacity)||capacity<departure.reservedSeats)return res.status(400).json({error:"Capacity cannot be below reserved seats"});
       departure.capacity=capacity;
     }
-    if(req.body.startsAt!==undefined)departure.startsAt=new Date(req.body.startsAt);
+    if(req.body.startsAt!==undefined){
+      const nextStartsAt=new Date(req.body.startsAt);
+      const timeChanged=nextStartsAt.getTime()!==new Date(departure.startsAt).getTime();
+      if(timeChanged&&departure.reservedSeats>0){
+        return res.status(409).json({error:"Departure time cannot be changed while seats are reserved"});
+      }
+      departure.startsAt=nextStartsAt;
+    }
     if(req.body.status!==undefined){
       const nextStatus=req.body.status;
       if(!["scheduled","cancelled","completed"].includes(nextStatus))return res.status(400).json({error:"Invalid departure status"});
+      if(departure.status==="cancelled"&&nextStatus!=="cancelled"){
+        return res.status(409).json({error:"Cancelled departures cannot be reactivated"});
+      }
+      if(departure.status==="completed"&&nextStatus!=="completed"){
+        return res.status(409).json({error:"Completed departures cannot be reactivated"});
+      }
+      if(nextStatus==="completed"&&new Date(departure.startsAt)>new Date()){
+        return res.status(409).json({error:"Future departures cannot be marked completed"});
+      }
       if(nextStatus==="cancelled"&&departure.status!=="cancelled"){
         departure.status="cancelled";
         await departure.save();
