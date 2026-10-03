@@ -422,3 +422,9 @@
 .ticket-error-state{padding:24px 20px;display:grid;gap:12px}
 .ticket-error-state .secondary-button{height:44px}
 .stepper button:disabled{opacity:.35;cursor:not-allowed}
+
+.hold-box--secure span{display:flex;flex-direction:column;gap:2px}
+.hold-box--secure small{font-size:9px;color:var(--muted)}
+.hold-box--secure.is-expired{border-color:#efd7d2;background:#fff7f5;color:#9f4639}
+.hold-box--secure.is-expired svg{color:#c95d50}
+.payment-main-cta:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
