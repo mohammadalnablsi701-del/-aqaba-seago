@@ -19,11 +19,12 @@ async function loadTicket(token) {
 router.get("/validate", async (req, res, next) => {
   try {
     const { booking } = await loadTicket(req.query.token);
-    const valid = booking.status === "confirmed";
-    const used = Boolean(booking.checkedInAt);
     const trip = booking.tripId || {};
     const provider = booking.providerId || {};
     const departure = booking.departureId || {};
+    const departureUsable = departure.status === "scheduled";
+    const valid = booking.status === "confirmed" && departureUsable;
+    const used = Boolean(booking.checkedInAt);
     const response = {
       valid: valid && !used,
       status: booking.status,
@@ -39,7 +40,7 @@ router.get("/validate", async (req, res, next) => {
     const wantsHtml = String(req.headers.accept || "").includes("text/html");
     if (!wantsHtml) return res.json(response);
 
-    const headline = !valid ? "Ticket not valid" : used ? "Ticket already used" : "Valid SeaGo ticket";
+    const headline = !valid ? (departure.status==="cancelled"?"Departure cancelled":"Ticket not valid") : used ? "Ticket already used" : "Valid SeaGo ticket";
     const stateClass = !valid ? "bad" : used ? "warn" : "ok";
     res.type("html").send(`<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
