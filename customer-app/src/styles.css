@@ -482,3 +482,5 @@
 .auth-method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px}
 .auth-method-tabs button{border:1px solid #d9e5ec;background:#f7fafc;color:#526774;border-radius:10px;padding:9px 12px;font-weight:800;font-size:11px}
 .auth-method-tabs button.active{background:#123f59;color:#fff;border-color:#123f59}
+
+@media(max-width:600px){input,select,textarea{font-size:16px}}
