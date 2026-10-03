@@ -54,3 +54,11 @@
 .schedule-preview{background:#f1f8fb;border:1px solid #dcecf2;color:#42677c;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:800}
 .success-note{background:#eaf8f0;color:#087443;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:800}
 @media(max-width:560px){.weekday-picker{grid-template-columns:repeat(4,1fr)}}
+
+.trip-form-simple .field-help{font-size:10px;color:#8a9aa6;font-weight:600;margin-top:-2px}
+.more-options-toggle{width:100%;border:1px solid #d9e5eb;background:#f7fafc;color:#31556b;border-radius:13px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;font-weight:900}
+.more-options-toggle b{font-size:20px;line-height:1;color:#0b6f9f}
+.advanced-trip-options{display:flex;flex-direction:column;gap:12px;border:1px solid #e3ebf1;background:#fbfdfe;border-radius:15px;padding:14px}
+.advanced-section-label{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#0b6f9f;padding-top:2px}
+.trip-form-simple .save-button{position:sticky;bottom:88px;z-index:3;box-shadow:0 8px 22px rgba(2,93,135,.18)}
+@media(max-width:560px){.trip-form-simple .save-button{bottom:84px}}
