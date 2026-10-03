@@ -30,12 +30,23 @@ router.get("/readiness",async(_req,res,next)=>{
     const demoUserEmails=[process.env.DEMO_PROVIDER_EMAIL,process.env.DEMO_ADMIN_EMAIL].filter(Boolean).map(v=>String(v).trim().toLowerCase());
     const demoUserCount=demoUserEmails.length?await User.countDocuments({email:{$in:demoUserEmails}}):0;
 
+    const allowedOrigins=String(process.env.ALLOWED_ORIGINS||"").split(",").map(v=>v.trim()).filter(Boolean);
+    const publicBaseUrl=String(process.env.PUBLIC_BASE_URL||"").trim();
+    const jwtSecret=String(process.env.JWT_SECRET||"");
+    const mockCheckout=process.env.ENABLE_MOCK_CHECKOUT==="true";
+    const mockSecret=String(process.env.MOCK_PAYMENT_WEBHOOK_SECRET||"");
+    const validPublicBaseUrl=(()=>{try{const u=new URL(publicBaseUrl);return u.protocol==="https:"||u.hostname==="localhost"||u.hostname==="127.0.0.1";}catch{return false;}})();
+
     const checks=[
       {id:"provider",label:"At least one approved provider",ok:providersApproved>0},
       {id:"trips",label:"At least one active trip",ok:activeTrips>0},
       {id:"departures",label:"At least one upcoming departure",ok:upcomingDepartures>0},
       {id:"demo-seed",label:"Demo seeding disabled",ok:process.env.SEED_DEMO_DATA!=="true"},
       {id:"demo-records",label:"No demo provider/trips remain",ok:!demoProvider&&demoTripCount===0},
+      {id:"jwt-secret",label:"Strong JWT secret configured",ok:jwtSecret.length>=32&&!/replace-with|changeme|secret/i.test(jwtSecret)},
+      {id:"cors",label:"Allowed frontend origins configured",ok:allowedOrigins.length>0},
+      {id:"public-url",label:"Public API base URL configured",ok:validPublicBaseUrl},
+      {id:"mock-secret",label:"Mock webhook secret configured",ok:!mockCheckout||(mockSecret.length>=24&&!/replace-with|changeme/i.test(mockSecret))},
       {id:"payment",label:"Real payment gateway configured",ok:(process.env.PAYMENT_PROVIDER||"mock")!=="mock",deferred:true}
     ];
     const blockers=checks.filter(x=>!x.ok&&!x.deferred).map(x=>({id:x.id,label:x.label}));
@@ -52,8 +63,10 @@ router.get("/readiness",async(_req,res,next)=>{
         nodeEnv:process.env.NODE_ENV||"development",
         publicLaunch:process.env.PUBLIC_LAUNCH==="true",
         seedDemoData:process.env.SEED_DEMO_DATA==="true",
-        mockCheckout:process.env.ENABLE_MOCK_CHECKOUT==="true",
-        paymentProvider:process.env.PAYMENT_PROVIDER||"mock"
+        mockCheckout,
+        paymentProvider:process.env.PAYMENT_PROVIDER||"mock",
+        allowedOriginCount:allowedOrigins.length,
+        publicBaseUrlConfigured:validPublicBaseUrl
       },
       counts:{providersApproved,providersPending,activeTrips,upcomingDepartures,confirmedBookings},
       demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,userCount:demoUserCount},
