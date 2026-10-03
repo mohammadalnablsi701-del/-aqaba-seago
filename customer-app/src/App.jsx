@@ -397,6 +397,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const [children,setChildren]=useState(0);
   const [mealPlan,setMealPlan]=useState("without_buffet");
   const guests=adults+children;
+  const seatLimit=selected?.availableSeats!=null?Number(selected.availableSeats):20;
   const [departures,setDepartures]=useState([]);
   const [selected,setSelected]=useState(null);
   const [quote,setQuote]=useState(null);
@@ -415,7 +416,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         setDepartures(rows);
         const wantedDate=initialCriteria?.date || "";
         const matching=rows.find(x=>{
-          const depDate=new Date(x.startsAt).toISOString().slice(0,10);
+          const depDate=localDateInputValue(new Date(x.startsAt));
           return Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1) && (!wantedDate || depDate===wantedDate);
         });
         const first=matching || rows.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
@@ -425,6 +426,16 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
       .finally(()=>{ if(!ignore) setLoading(false); });
     return()=>{ignore=true;};
   },[trip.apiId,live,initialCriteria?.date,initialCriteria?.guests]);
+
+  useEffect(()=>{
+    if(!selected?.availableSeats) return;
+    const cap=Number(selected.availableSeats);
+    if(guests>cap){
+      setChildren(0);
+      setAdults(Math.max(1,Math.min(adults,cap)));
+      setError(`This departure has ${cap} seat${cap===1?"":"s"} available. Guest count was adjusted.`);
+    }
+  },[selected?.id]);
 
   useEffect(()=>{
     let ignore=false;
@@ -511,15 +522,15 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           </div>
 
           <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · GUESTS & PACKAGE</div>
-            <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)}>+</button></div></label>
-            <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)}>+</button></div></label>
+            <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)} disabled={guests>=seatLimit}>+</button></div></label>
+            <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
             {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>{trip.buffetDescription||"Buffet included"}</small></button></div>}
-            <label><span>Account</span><button><UserRound size={18}/>{auth?.user?.email || "Sign in during booking"}<ChevronRight size={17}/></button></label>
+            <div className="booking-account-row"><span>Account</span><div><UserRound size={18}/><b>{auth?.user?.email || "Sign in during booking"}</b><CheckCircle2 size={16}/></div></div>
           </div>
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box"><div className="price-box__heading"><span>PRICE SUMMARY</span><small>No hidden fees</small></div>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? 0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? 0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
+          <div className="price-box"><div className="price-box__heading"><span>PRICE SUMMARY</span><small>No hidden fees</small></div>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? adults*(mealPlan==="with_buffet"?(trip.buffetAdultPrice||trip.price):trip.price)).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? children*(mealPlan==="with_buffet"?(trip.buffetChildPrice||trip.childPrice||trip.price):(trip.childPrice||trip.price))).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
           <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to secure payment <ChevronRight size={18}/></button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
@@ -603,7 +614,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
 
   if(loading) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><LoadingState label="Loading tickets..."/></div>;
 
-  if(error) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="booking-error">{error}</div></div>;
+  if(error) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="ticket-error-state"><div className="booking-error">{error}</div><button className="secondary-button" onClick={()=>setRevision(x=>x+1)}>Try again</button></div></div>;
 
   return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>My SeaGo Tickets</h1><p>Everything you need for check-in, all in one place.</p></div></header>{tickets.length?<div className="ticket-list">{tickets.map(b=>{
     const trip=b.tripId||{};
