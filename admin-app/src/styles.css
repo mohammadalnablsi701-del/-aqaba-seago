@@ -5,3 +5,21 @@
 
 .admin-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .admin-head-actions button{display:inline-flex;align-items:center;gap:6px}
+
+.readiness-grid{display:grid;gap:14px}
+.readiness-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.readiness-summary>div,.readiness-env,.demo-preview,.readiness-checks{background:#fff;border:1px solid #e7edf2;border-radius:16px;padding:14px}
+.readiness-summary b{display:block;font-size:24px}
+.readiness-summary span{font-size:11px;color:#6f7f90}
+.readiness-checks{display:grid;gap:9px}
+.readiness-check{display:flex;align-items:flex-start;gap:9px;padding:10px;border-radius:12px;background:#f8fafb}
+.readiness-check.ok{color:#0d7a63;background:#f1fbf7}
+.readiness-check.bad{color:#aa4c40;background:#fff4f1}
+.readiness-check.deferred{color:#9b6b00;background:#fff8e8}
+.readiness-check span{display:flex;flex-direction:column;gap:2px}
+.readiness-check b{font-size:12px}
+.readiness-check small{font-size:10px}
+.readiness-env,.demo-preview{display:grid;gap:6px}
+.readiness-env>b,.demo-preview>b{font-size:13px}
+.readiness-env span,.demo-preview span,.demo-preview p{font-size:11px;color:#657587}
+@media(max-width:720px){.readiness-summary{grid-template-columns:repeat(2,1fr)}}
