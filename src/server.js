@@ -60,6 +60,7 @@ app.get("/ready",(_req,res)=>{
 
 const server=app.listen(port,async()=>{
   console.log(`Aqaba SeaGo API listening on port ${port}`);
+  console.log("Pilot E2E flag",process.env.RUN_PILOT_E2E_ON_START==="true"?"enabled":"disabled");
   if(process.env.RUN_PILOT_E2E_ON_START==="true"){
     try{
       const r=await runPilotE2EOnce({port});
