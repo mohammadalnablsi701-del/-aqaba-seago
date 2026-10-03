@@ -1,15 +1,25 @@
 import React,{useEffect,useState}from"react";
 import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell}from"lucide-react";
-import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
+import{login,requestPhoneOtp,verifyPhoneOtp,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 
-function Login({onDone}){
-  const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[error,setError]=useState("");
-  async function submit(e){e.preventDefault();setError("");try{const r=await login(email.trim(),password);if(r.user?.role!=="admin")throw new Error("Admin account required");localStorage.setItem("seago_admin_auth",JSON.stringify(r));onDone(r)}catch(e){setError(e.message)}}
-  return <div className="login"><form onSubmit={submit}><h1>Aqaba SeaGo Admin</h1><p>Admin access only</p><input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} required/><input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} required/>{error&&<div className="error">{error}</div>}<button>Sign in</button></form></div>
+function Login({onDone}) {
+  const[method,setMethod]=useState("phone");const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[phone,setPhone]=useState("");const[code,setCode]=useState("");const[otpSent,setOtpSent]=useState(false);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
+  async function submit(e){e.preventDefault();setBusy(true);setError("");try{
+    let r;
+    if(method==="phone"){
+      if(!otpSent){await requestPhoneOtp(phone,"admin","login");setOtpSent(true);return;}
+      r=await verifyPhoneOtp({phone,code,role:"admin",mode:"login"});
+    }else{
+      r=await login(email.trim(),password);
+    }
+    if(r.user?.role!=="admin")throw new Error("Admin account required");
+    localStorage.setItem("seago_admin_auth",JSON.stringify(r));onDone(r)
+  }catch(e){setError(e.message)}finally{setBusy(false)}}
+  function switchMethod(next){setMethod(next);setOtpSent(false);setCode("");setError("")}
+  return <div className="login"><form onSubmit={submit}><h1>Aqaba SeaGo Admin</h1><p>Admin access only</p><div className="auth-method-tabs"><button type="button" className={method==="phone"?"active":""} onClick={()=>switchMethod("phone")}>Phone</button><button type="button" className={method==="email"?"active":""} onClick={()=>switchMethod("email")}>Email</button></div>{method==="phone"?<><input placeholder="+962 7X XXX XXXX" inputMode="tel" value={phone} onChange={e=>setPhone(e.target.value)} disabled={otpSent} required/>{otpSent&&<input placeholder="Verification code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,10))} required/>}</>:<><input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} required/><input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} required/></>}{error&&<div className="error">{error}</div>}<button disabled={busy}>{busy?"Please wait...":method==="phone"?(otpSent?"Verify & sign in":"Send code"):"Sign in"}</button>{method==="phone"&&otpSent&&<button type="button" className="auth-switch" onClick={()=>{setOtpSent(false);setCode("");setError("")}}>Change phone number</button>}</form></div>
 }
-
 export default function App(){
   const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   useEffect(()=>{
