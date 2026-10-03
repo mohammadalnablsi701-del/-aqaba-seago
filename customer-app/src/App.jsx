@@ -47,10 +47,24 @@ function internationalPhone(value,countryCode="+962"){
   return countryCode+local;
 }
 function CountryPhoneField({code,setCode,value,onChange,disabled=false,required=false,placeholder="Phone number"}){
+  const[open,setOpen]=useState(false);
+  const[query,setQuery]=useState("");
+  const selected=COUNTRY_CODES.find(x=>x[2]===code)||COUNTRY_CODES[0];
+  const q=query.trim().toLowerCase();
+  const filtered=q?COUNTRY_CODES.filter(([iso,label,dial])=>label.toLowerCase().includes(q)||iso.toLowerCase().includes(q)||dial.includes(q)):COUNTRY_CODES;
+  function choose(dial){setCode(dial);setOpen(false);setQuery("");}
   return <div className="country-phone-field">
-    <select aria-label="Country code" value={code} onChange={e=>setCode(e.target.value)} disabled={disabled}>
-      {COUNTRY_CODES.map(([iso,label,dial])=><option key={iso} value={dial}>{label} {dial}</option>)}
-    </select>
+    <div className="country-code-picker">
+      <button type="button" className="country-code-trigger" disabled={disabled} onClick={()=>setOpen(v=>!v)} aria-expanded={open}>
+        <span>{selected[1]}</span><b>{selected[2]}</b><i>⌄</i>
+      </button>
+      {open&&!disabled&&<div className="country-code-menu">
+        <input className="country-code-search" autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search country or code..." />
+        <div className="country-code-options">
+          {filtered.length?filtered.map(([iso,label,dial])=><button type="button" key={iso+"-"+dial} className={dial===code?"selected":""} onClick={()=>choose(dial)}><span>{label}</span><b>{dial}</b></button>):<div className="country-code-empty">No country found</div>}
+        </div>
+      </div>}
+    </div>
     <input inputMode="tel" value={value} onChange={onChange} disabled={disabled} required={required} placeholder={placeholder}/>
   </div>;
 }
