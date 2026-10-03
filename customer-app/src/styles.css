@@ -457,3 +457,5 @@
 .policy-link-list b{font-size:11px;color:var(--ink)}
 .policy-link-list small{font-size:9px;color:var(--muted)}
 .legal-copy p{margin-top:7px}
+
+.api-notice--error{background:#fff4f1;border-color:#efd9d4;color:#9f493d}
