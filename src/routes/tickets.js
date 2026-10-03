@@ -3,6 +3,7 @@ import Booking from "../models/Booking.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
+import { auditProviderAction } from "../services/providerAudit.js";
 import { verifyTicketToken } from "../services/tickets.js";
 
 const router = express.Router();
@@ -135,6 +136,7 @@ router.post("/check-in", requireAuth, requireRole("provider","admin"), async (re
       {new:true}
     );
     if(!claimed)return res.status(409).json({error:"Ticket already checked in"});
+    if(req.user.role==="provider"){const access=await requireProviderCapability(req.user,"checkin");if(access)await auditProviderAction({access,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats}});}
     res.json({
       ok:true,
       bookingId:claimed._id,
