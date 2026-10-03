@@ -131,3 +131,6 @@ export async function pushNotificationStatus(){
 export async function sendTestPush(token){
   return request("/api/push/test",{method:"POST",token});
 }
+
+export const requestPhoneOtp=(phone,role,mode)=>request("/api/auth/otp/request",{method:"POST",body:JSON.stringify({phone,role,mode})});
+export const verifyPhoneOtp=(data)=>request("/api/auth/otp/verify",{method:"POST",body:JSON.stringify(data)});
