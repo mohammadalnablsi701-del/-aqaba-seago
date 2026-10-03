@@ -55,6 +55,37 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
   }
 });
 
+router.post("/bulk", requireAuth, requireRole("provider"), async (req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
+    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const trip=await Trip.findOne({_id:req.body.tripId,providerId:provider._id,active:true});
+    if(!trip)return res.status(404).json({error:"Active trip not found"});
+
+    const startsAtList=Array.isArray(req.body.startsAtList)?req.body.startsAtList:[];
+    const capacity=Number(req.body.capacity);
+    if(!Number.isInteger(capacity)||capacity<1||capacity>500)return res.status(400).json({error:"Capacity must be a whole number between 1 and 500"});
+    if(startsAtList.length<1||startsAtList.length>60)return res.status(400).json({error:"Choose between 1 and 60 departure times"});
+
+    const normalized=[];
+    const seen=new Set();
+    for(const value of startsAtList){
+      const d=new Date(value);
+      if(Number.isNaN(d.getTime())||d.getTime()<=Date.now()+5*60*1000)return res.status(400).json({error:"All departures must be valid and at least 5 minutes in the future"});
+      const key=d.toISOString();
+      if(seen.has(key))continue;
+      seen.add(key);
+      normalized.push(d);
+    }
+
+    const existing=await Departure.find({tripId:trip._id,status:"scheduled",startsAt:{$in:normalized}}).select("startsAt");
+    const existingSet=new Set(existing.map(x=>new Date(x.startsAt).toISOString()));
+    const docs=normalized.filter(d=>!existingSet.has(d.toISOString())).map(startsAt=>({tripId:trip._id,startsAt,capacity,status:"scheduled"}));
+    const created=docs.length?await Departure.insertMany(docs):[];
+    res.status(201).json({created:created.length,skippedExisting:normalized.length-created.length,items:created});
+  }catch(e){next(e);}
+});
+
 router.get("/", async (req, res, next) => {
   try {
     await releaseExpiredCheckoutHolds({ limit: 200 });
