@@ -211,3 +211,34 @@
 .cancellation-policy-note{margin:12px 20px 0;border:1px solid #dce9ef;background:#f7fbfd;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px}
 .cancellation-policy-note b{font-size:11px;color:var(--navy)}
 .cancellation-policy-note span{font-size:10px;color:var(--muted);line-height:1.45}
+
+.payment-handoff{padding:28px 22px 34px;text-align:center}
+.payment-handoff__top{display:flex;align-items:center;justify-content:space-between}
+.payment-handoff__top>span{font-size:10px;font-weight:800;letter-spacing:1.7px;color:var(--aqua)}
+.payment-handoff__icon,.confirmation-check{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;margin:28px auto 14px;background:#eafaf6;color:#00a889}
+.payment-handoff h1,.confirmation-screen h1{font-family:Poppins;font-size:28px;line-height:1.15;margin:8px 0}
+.payment-handoff>p,.confirmation-screen>p{font-size:13px;line-height:1.6;color:var(--muted);margin:0 auto;max-width:350px}
+.payment-review-card{margin:22px 0 14px;border:1px solid var(--line);border-radius:18px;padding:14px 16px;background:#fbfdfe;text-align:left}
+.payment-review-card>div{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--line)}
+.payment-review-card>div:last-child{border-bottom:0}
+.payment-review-card span{font-size:10px;color:#8a9aac}
+.payment-review-card b{font-size:11px;color:var(--ink);text-align:right}
+.payment-review-card strong{font-family:Poppins;font-size:17px;color:var(--navy)}
+.hold-box--secure{display:flex;align-items:center;justify-content:center;gap:7px;background:#eefaf7;color:#267264}
+.hold-box--secure svg{color:#00a889}
+.payment-safety{display:grid;gap:8px;margin:14px 0}
+.payment-safety span{display:flex;align-items:flex-start;gap:7px;border:1px solid var(--line);border-radius:12px;padding:10px 11px;background:white;text-align:left;font-size:10px;color:#5f7488}
+.payment-safety svg{color:#00a889;flex:none}
+.payment-main-cta{width:100%;height:52px;margin-top:8px}
+.payment-back{width:100%;margin-top:10px}
+.confirmation-screen{padding:24px 22px 36px;text-align:center}
+.confirmation-screen__brand{display:flex;justify-content:center}
+.confirmation-kicker{display:block;font-size:10px;font-weight:800;letter-spacing:1.8px;color:#00a889}
+.confirmation-card{margin:24px 0 16px;display:grid;gap:10px;text-align:left}
+.confirmation-card>div{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:15px;padding:13px;background:#fbfdfe}
+.confirmation-card svg{color:var(--blue);flex:none}
+.confirmation-card span{display:flex;flex-direction:column;gap:3px}
+.confirmation-card b{font-size:12px;color:var(--ink)}
+.confirmation-card small{font-size:10px;color:var(--muted);line-height:1.4}
+.confirmation-cta{width:100%;height:52px;margin-top:6px}
+.confirmation-note{display:block;margin-top:12px;font-size:10px;color:#91a0af}
