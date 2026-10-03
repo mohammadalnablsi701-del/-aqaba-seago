@@ -97,10 +97,12 @@ router.get("/readiness",async(_req,res,next)=>{
     const blockers=checks.filter(x=>!x.ok&&!x.deferred).map(x=>({id:x.id,label:x.label}));
     const deferredChecks=checks.filter(x=>x.deferred&&!x.ok).map(x=>({id:x.id,label:x.label}));
     const pilotReady=blockers.length===0;
+    const controlledPilotReady=pilotReady&&mockCheckout&&process.env.PUBLIC_LAUNCH!=="true";
 
     res.json({
       generatedAt:new Date(),
       pilotReady,
+      controlledPilotReady,
       status:pilotReady?"ready":"blocked",
       blockers,
       deferredChecks,
