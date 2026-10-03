@@ -58,9 +58,14 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
 router.get("/", async (req, res, next) => {
   try {
     await releaseExpiredCheckoutHolds({ limit: 200 });
+    const approvedProviders=await Provider.find({status:"approved"}).select("_id");
+    const approvedProviderIds=approvedProviders.map(p=>p._id);
+    const activeTrips=await Trip.find({active:true,providerId:{$in:approvedProviderIds}}).select("_id");
+    const activeTripIds=activeTrips.map(t=>t._id);
     const query = {
       status: "scheduled",
-      startsAt: { $gte: new Date() }
+      startsAt: { $gte: new Date() },
+      tripId: { $in: activeTripIds }
     };
 
     if (req.query.tripId) query.tripId = req.query.tripId;
@@ -163,6 +168,8 @@ router.get("/:departureId/quote", async (req, res, next) => {
 
     const trip = await Trip.findOne({ _id: departure.tripId, active: true });
     if (!trip) return res.status(404).json({ error: "Trip not found" });
+    const provider = await Provider.findOne({ _id: trip.providerId, status: "approved" }).select("_id");
+    if (!provider) return res.status(404).json({ error: "Trip not found" });
     const pricing = calculateTieredPricing({ pricing: trip.pricing, adults, children, mealPlan });
 
     res.json({
