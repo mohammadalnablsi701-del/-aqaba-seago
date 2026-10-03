@@ -9,8 +9,25 @@ import { cancelDepartureBookings } from "../services/cancellations.js";
 
 const router = express.Router();
 
+function validateDepartureInput({startsAt,capacity},{partial=false}={}){
+  const errors=[];
+  if(!partial||startsAt!==undefined){
+    const d=new Date(startsAt);
+    if(!startsAt||Number.isNaN(d.getTime())) errors.push("Valid departure date and time are required");
+    else if(d.getTime()<=Date.now()+5*60*1000) errors.push("Departure must be scheduled at least 5 minutes in the future");
+  }
+  if(!partial||capacity!==undefined){
+    const n=Number(capacity);
+    if(!Number.isInteger(n)||n<1||n>500) errors.push("Capacity must be a whole number between 1 and 500");
+  }
+  return errors;
+}
+
+
 router.post("/", requireAuth, requireRole("provider"), async (req, res, next) => {
   try {
+    const errors=validateDepartureInput(req.body);
+    if(errors.length)return res.status(400).json({error:errors[0],errors});
     const provider = await Provider.findOne({
       ownerUserId: req.user._id,
       status: "approved"
@@ -69,6 +86,8 @@ router.get("/", async (req, res, next) => {
 
 router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,res,next)=>{
   try{
+    const errors=validateDepartureInput(req.body,{partial:true});
+    if(errors.length)return res.status(400).json({error:errors[0],errors});
     const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
     if(!provider)return res.status(403).json({error:"Approved provider profile required"});
     const departure=await Departure.findById(req.params.departureId);
@@ -83,6 +102,7 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
     if(req.body.startsAt!==undefined)departure.startsAt=new Date(req.body.startsAt);
     if(req.body.status!==undefined){
       const nextStatus=req.body.status;
+      if(!["scheduled","cancelled","completed"].includes(nextStatus))return res.status(400).json({error:"Invalid departure status"});
       if(nextStatus==="cancelled"&&departure.status!=="cancelled"){
         await cancelDepartureBookings({departureId:departure._id,providerId:provider._id,reason:req.body.cancellationReason||"Departure cancelled by provider"});
       }
