@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from"react";
-import{Percent,RefreshCw,Save,RotateCcw}from"lucide-react";
+import{Percent,RefreshCw,Save,RotateCcw,LogOut}from"lucide-react";
 import{login,trips,setCommission,refunds,notifications}from"./api.js";
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
@@ -15,7 +15,8 @@ export default function App(){
   async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[t,r,n]=await Promise.all([trips(auth.token),refunds(auth.token),notifications(auth.token)]);setRows(t);setRefundRows(r);setNotificationRows(n)}catch(e){setError(e.message)}finally{setLoading(false)}}
   useEffect(()=>{load()},[auth?.token]);
   if(!auth)return <Login onDone={setAuth}/>;
-  return <div className="app"><header><div><b>Aqaba SeaGo</b><span>Admin Dashboard</span></div><button onClick={load}><RefreshCw size={16}/> Refresh</button></header><main>
+  function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setRows([]);setRefundRows([]);setNotificationRows([]);}
+  return <div className="app"><header><div><b>Aqaba SeaGo</b><span>Admin Dashboard</span></div><div className="admin-head-actions"><button onClick={load}><RefreshCw size={16}/> Refresh</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
     <div className="admin-tabs"><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
     {error&&<div className="error">{error}</div>}
     {loading?<p>Loading...</p>:tab==="commissions"?<>
