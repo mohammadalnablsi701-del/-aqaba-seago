@@ -1,6 +1,6 @@
 import React,{useEffect,useState}from"react";
-import{Percent,RefreshCw,Save,RotateCcw,LogOut}from"lucide-react";
-import{login,trips,setCommission,refunds,notifications}from"./api.js";
+import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel}from"lucide-react";
+import{login,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview}from"./api.js";
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 
@@ -11,20 +11,28 @@ function Login({onDone}){
 }
 
 export default function App(){
-  const[auth,setAuth]=useState(stored());const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[tab,setTab]=useState("commissions");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  const[auth,setAuth]=useState(stored());const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[tab,setTab]=useState("commissions");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   useEffect(()=>{
     const expired=()=>{setAuth(null);setRows([]);setRefundRows([]);setNotificationRows([]);setError("Your session expired. Please sign in again.");};
     window.addEventListener("seago:session-expired",expired);
     return()=>window.removeEventListener("seago:session-expired",expired);
   },[]);
-  async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[t,r,n]=await Promise.all([trips(auth.token),refunds(auth.token),notifications(auth.token)]);setRows(t);setRefundRows(r);setNotificationRows(n)}catch(e){setError(e.message)}finally{setLoading(false)}}
+  async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[t,r,n,rd,dp]=await Promise.all([trips(auth.token),refunds(auth.token),notifications(auth.token),readiness(auth.token),demoCleanupPreview(auth.token)]);setRows(t);setRefundRows(r);setNotificationRows(n);setReady(rd);setDemoPreview(dp)}catch(e){setError(e.message)}finally{setLoading(false)}}
   useEffect(()=>{load()},[auth?.token]);
   if(!auth)return <Login onDone={setAuth}/>;
   function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setRows([]);setRefundRows([]);setNotificationRows([]);}
   return <div className="app"><header><div><b>Aqaba SeaGo</b><span>Admin Dashboard</span></div><div className="admin-head-actions"><button onClick={load}><RefreshCw size={16}/> Refresh</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
-    <div className="admin-tabs"><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
+    <div className="admin-tabs"><button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}>Pilot readiness</button><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
     {error&&<div className="error">{error}</div>}
-    {loading?<p>Loading...</p>:tab==="commissions"?<>
+    {loading?<p>Loading...</p>:tab==="readiness"?<>
+      <div className="title"><ShipWheel/><div><small>PILOT</small><h1>Pilot readiness</h1><p>Operational checks before inviting the first real provider and customers.</p></div></div>
+      {ready&&<div className="readiness-grid">
+        <div className="readiness-summary"><div><b>{ready.counts.providersApproved}</b><span>Approved providers</span></div><div><b>{ready.counts.activeTrips}</b><span>Active trips</span></div><div><b>{ready.counts.upcomingDepartures}</b><span>Upcoming departures</span></div><div><b>{ready.counts.confirmedBookings}</b><span>Confirmed bookings</span></div></div>
+        <div className="readiness-checks">{ready.checks.map(x=><div key={x.id} className={"readiness-check "+(x.ok?"ok":x.deferred?"deferred":"bad")}>{x.ok?<CheckCircle2 size={18}/>:<XCircle size={18}/>}<span><b>{x.label}</b>{x.deferred&&!x.ok&&<small>Deferred for now</small>}</span></div>)}</div>
+        <div className="readiness-env"><b>Environment</b><span>Public launch: {String(ready.environment.publicLaunch)}</span><span>Demo seed: {String(ready.environment.seedDemoData)}</span><span>Mock checkout: {String(ready.environment.mockCheckout)}</span><span>Payment provider: {ready.environment.paymentProvider}</span></div>
+        <div className="demo-preview"><b>Demo cleanup preview</b><p>No records are deleted here. This is a safe inventory only.</p><span>Demo provider: {demoPreview?.provider?"Found":"Not found"}</span><span>Demo trips: {demoPreview?.trips?.length||0}</span><span>Demo departures: {demoPreview?.departureCount||0}</span><span>Demo users: {demoPreview?.users?.length||0}</span></div>
+      </div>}
+    </>:tab==="commissions"?<>
       <div className="title"><Percent/><div><small>COMMISSIONS</small><h1>Trip commission control</h1><p>Only admin can change SeaGo commission. Provider apps cannot edit this value.</p></div></div>
       <div className="list">{rows.map(t=><TripRow key={t._id} t={t} token={auth.token} onSaved={load}/>)}</div>
     </>:tab==="refunds"?<>
