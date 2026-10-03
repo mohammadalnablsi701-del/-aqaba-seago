@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn
+  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn
 } from "./api.js";
 
 const COUNTRY_CODES=[
@@ -702,49 +702,6 @@ function FavouritesScreen({ favourites, tripList, onSelectTrip, toggleFavourite 
   return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>SAVED FOR LATER</span><h1>Favourites</h1></div></header>{list.length?<div className="trip-grid">{list.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite toggleFavourite={toggleFavourite}/>)}</div>:<div className="empty-state"><Heart size={48}/><h2>No favourites yet</h2><p>Tap the heart on any experience to save it here.</p></div>}</div>;
 }
 
-function CancelBookingControl({ booking, token, onCancelled }) {
-  const [open,setOpen]=useState(false);
-  const [policy,setPolicy]=useState(null);
-  const [reason,setReason]=useState("");
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState("");
-
-  async function showPolicy(){
-    setError("");
-    setOpen(true);
-    setBusy(true);
-    try{setPolicy(await getCancellationPolicy(booking._id,token));}
-    catch(e){setError(e.message);}
-    finally{setBusy(false);}
-  }
-
-  async function confirmCancel(){
-    if(!policy)return;
-    setBusy(true);setError("");
-    try{
-      const r=await cancelBooking(booking._id,reason,token);
-      onCancelled?.(r);
-    }catch(e){setError(e.message);}
-    finally{setBusy(false);}
-  }
-
-  if(booking.status!=="confirmed")return null;
-
-  return <div className="cancel-booking-control">
-    {!open?<button type="button" className="cancel-booking-button" onClick={showPolicy}>Cancel booking</button>:
-      <div className="cancel-sheet">
-        <b>Cancellation policy</b>
-        {busy&&!policy?<small>Checking refund...</small>:policy&&<>
-          <p>You will receive <strong>{policy.refundPercentage}% refund</strong> ({Number(policy.refundAmount||0).toFixed(2)} {policy.currency}).</p>
-          <ul>{policy.rules.map(r=><li key={r.label}>{r.label}: {r.refundPercentage}% refund</li>)}</ul>
-          <textarea rows="2" placeholder="Reason for cancellation (optional)" value={reason} onChange={e=>setReason(e.target.value)}/>
-          <div className="cancel-actions"><button type="button" onClick={()=>{setOpen(false);setPolicy(null)}}>Keep booking</button><button type="button" className="danger" disabled={busy} onClick={confirmCancel}>{busy?"Cancelling...":"Confirm cancellation"}</button></div>
-        </>}
-        {error&&<div className="booking-error">{error}</div>}
-      </div>}
-  </div>;
-}
-
 function TicketsScreen({ auth, onAuthenticated }) {
   const [tickets,setTickets]=useState([]);
   const [loading,setLoading]=useState(Boolean(auth?.token&&hasApi()));
@@ -790,13 +747,15 @@ function TicketsScreen({ auth, onAuthenticated }) {
       <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}</div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
       {b.status==="confirmed"&&<div className="ticket-ready-banner"><CheckCircle2 size={16}/><span><b>Ready for check-in</b><small>Keep this ticket open when you arrive</small></span></div>}
       <div className="ticket-card__details">
+        <div style={{minWidth:0}}><small>Customer name</small><strong dir="auto" style={{overflowWrap:"anywhere"}}>{b.customer?.name || auth?.user?.name || "Not provided"}</strong></div>
+        <div style={{minWidth:0}}><small>Phone number</small><strong dir="ltr" style={{overflowWrap:"anywhere"}}>{b.customer?.phone || auth?.user?.phoneNormalized || auth?.user?.phone || "Not provided"}</strong></div>
         <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
         <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
         <div><small>Persons</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
       <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong>{b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={108} level="L" includeMargin={true}/><small>Show at check-in</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
-    <CancelBookingControl booking={b} token={auth.token} onCancelled={()=>setRevision(x=>x+1)}/>{b.cancellation?.cancelledAt&&<div className={"ticket-cancellation ticket-cancellation--"+(b.cancellation.refundStatus||"none")}>
+    {b.cancellation?.cancelledAt&&<div className={"ticket-cancellation ticket-cancellation--"+(b.cancellation.refundStatus||"none")}>
       <b>{b.status==="refunded"||b.cancellation.refundStatus==="processed"?"Refund completed":"Booking cancelled"}</b>
       <span>{b.cancellation.refundPercentage||0}% refund · {Number(b.cancellation.refundAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</span>
       <small>{b.cancellation.refundStatus==="pending"?"Refund is being processed.":b.cancellation.refundStatus==="processed"?"Refund marked as processed.":b.cancellation.refundStatus==="failed"?"Refund needs support review.":"No refund is due under this cancellation."}</small>
@@ -894,7 +853,7 @@ function SupportScreen({ navigate, onBack }) {
     <div className="support-faq">
       <details><summary>Where is my departure point?</summary><p>Open your ticket to see the departure location and the Google Maps shortcut when provided by the operator.</p></details>
       <details><summary>When do I receive my QR ticket?</summary><p>Your QR ticket becomes available after successful payment and confirmed booking creation.</p></details>
-      <details><summary>What if I need to cancel?</summary><p>Open your ticket and use the cancellation option. The refund amount is shown before you confirm.</p></details>
+      <details><summary>What if I need to cancel?</summary><p>Contact SeaGo support with the booking reference shown on your ticket to request a cancellation. Refund eligibility depends on the cancellation policy.</p></details>
     </div>
   </div>;
 }
