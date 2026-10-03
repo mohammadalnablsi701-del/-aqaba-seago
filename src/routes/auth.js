@@ -48,7 +48,7 @@ router.post("/login",async(req,res,next)=>{
     const password=req.body.password;
     if(!validEmail(email)||typeof password!=="string")return res.status(401).json({error:"Invalid credentials"});
     const user=await User.findOne({email});
-    if(!user||!(await bcrypt.compare(password,user.passwordHash)))return res.status(401).json({error:"Invalid credentials"});
+    if(!user||!user.passwordHash||!(await bcrypt.compare(password,user.passwordHash)))return res.status(401).json({error:"Invalid credentials"});
     if(!user.isActive)return res.status(401).json({error:"Invalid account"});
     res.json({user:safe(user),token:sign(user)});
   }catch(e){next(e);}
