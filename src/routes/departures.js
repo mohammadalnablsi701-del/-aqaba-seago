@@ -123,22 +123,29 @@ router.get("/:departureId/quote", async (req, res, next) => {
     const adults = Number(req.query.adults ?? req.query.seats ?? 0);
     const children = Number(req.query.children ?? 0);
     const mealPlan = req.query.mealPlan === "with_buffet" ? "with_buffet" : "without_buffet";
+    if (!Number.isInteger(adults) || adults < 0) {
+      return res.status(400).json({ error: "Invalid adults" });
+    }
+    if (!Number.isInteger(children) || children < 0) {
+      return res.status(400).json({ error: "Invalid children" });
+    }
     const seats = adults + children;
     const departure = await Departure.findById(req.params.departureId);
 
-    if (!departure || departure.status !== "scheduled") {
+    if (!departure || departure.status !== "scheduled" || departure.startsAt <= new Date()) {
       return res.status(404).json({ error: "Departure not found" });
     }
 
-    if (!Number.isInteger(seats) || seats < 1) {
-      return res.status(400).json({ error: "Invalid seats" });
+    if (seats < 1) {
+      return res.status(400).json({ error: "At least one guest is required" });
     }
 
     if (departure.reservedSeats + seats > departure.capacity) {
       return res.status(409).json({ error: "Not enough seats" });
     }
 
-    const trip = await Trip.findById(departure.tripId);
+    const trip = await Trip.findOne({ _id: departure.tripId, active: true });
+    if (!trip) return res.status(404).json({ error: "Trip not found" });
     const pricing = calculateTieredPricing({ pricing: trip.pricing, adults, children, mealPlan });
 
     res.json({
