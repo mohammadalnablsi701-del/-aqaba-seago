@@ -11,6 +11,38 @@ import {
   loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush
 } from "./api.js";
 
+const COUNTRY_CODES=[
+  ["JO","🇯🇴 Jordan","+962"],["SA","🇸🇦 Saudi Arabia","+966"],["AE","🇦🇪 UAE","+971"],["EG","🇪🇬 Egypt","+20"],
+  ["PS","🇵🇸 Palestine","+970"],["IQ","🇮🇶 Iraq","+964"],["KW","🇰🇼 Kuwait","+965"],["QA","🇶🇦 Qatar","+974"],
+  ["BH","🇧🇭 Bahrain","+973"],["OM","🇴🇲 Oman","+968"],["LB","🇱🇧 Lebanon","+961"],["SY","🇸🇾 Syria","+963"],
+  ["TR","🇹🇷 Turkey","+90"],["US","🇺🇸 USA / Canada","+1"],["GB","🇬🇧 United Kingdom","+44"],["DE","🇩🇪 Germany","+49"],
+  ["FR","🇫🇷 France","+33"],["IT","🇮🇹 Italy","+39"],["ES","🇪🇸 Spain","+34"],["NL","🇳🇱 Netherlands","+31"],
+  ["BE","🇧🇪 Belgium","+32"],["SE","🇸🇪 Sweden","+46"],["NO","🇳🇴 Norway","+47"],["DK","🇩🇰 Denmark","+45"],
+  ["CH","🇨🇭 Switzerland","+41"],["AT","🇦🇹 Austria","+43"],["GR","🇬🇷 Greece","+30"],["CY","🇨🇾 Cyprus","+357"],
+  ["IN","🇮🇳 India","+91"],["PK","🇵🇰 Pakistan","+92"],["BD","🇧🇩 Bangladesh","+880"],["PH","🇵🇭 Philippines","+63"],
+  ["ID","🇮🇩 Indonesia","+62"],["MY","🇲🇾 Malaysia","+60"],["SG","🇸🇬 Singapore","+65"],["CN","🇨🇳 China","+86"],
+  ["JP","🇯🇵 Japan","+81"],["KR","🇰🇷 South Korea","+82"],["AU","🇦🇺 Australia","+61"],["NZ","🇳🇿 New Zealand","+64"],
+  ["RU","🇷🇺 Russia","+7"],["UA","🇺🇦 Ukraine","+380"],["ZA","🇿🇦 South Africa","+27"],["MA","🇲🇦 Morocco","+212"],
+  ["TN","🇹🇳 Tunisia","+216"],["DZ","🇩🇿 Algeria","+213"],["LY","🇱🇾 Libya","+218"],["SD","🇸🇩 Sudan","+249"]
+];
+function internationalPhone(value,countryCode="+962"){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+  if(raw.startsWith("+")) return "+"+raw.slice(1).replace(/\D/g,"");
+  if(raw.startsWith("00")) return "+"+raw.slice(2).replace(/\D/g,"");
+  let local=raw.replace(/\D/g,"");
+  local=local.replace(/^0+/,"");
+  return countryCode+local;
+}
+function CountryPhoneField({code,setCode,value,onChange,disabled=false,required=false,placeholder="Phone number"}){
+  return <div className="country-phone-field">
+    <select aria-label="Country code" value={code} onChange={e=>setCode(e.target.value)} disabled={disabled}>
+      {COUNTRY_CODES.map(([iso,label,dial])=><option key={iso} value={dial}>{label} {dial}</option>)}
+    </select>
+    <input inputMode="tel" value={value} onChange={onChange} disabled={disabled} required={required} placeholder={placeholder}/>
+  </div>;
+}
+
 const CATEGORY_LABELS = {
   group_boat: "Boat Trip",
   private_boat: "Private Boat",
@@ -349,6 +381,7 @@ function AuthForm({ onAuthenticated }) {
   const [mode,setMode]=useState("login");
   const [method,setMethod]=useState("email");
   const [form,setForm]=useState({name:"",email:"",phone:"",password:"",code:""});
+  const [countryCode,setCountryCode]=useState("+962");
   const [otpSent,setOtpSent]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -359,17 +392,17 @@ function AuthForm({ onAuthenticated }) {
     try {
       if(method==="phone"){
         if(!otpSent){
-          await requestPhoneOtp(form.phone,"customer",mode);
+          await requestPhoneOtp(internationalPhone(form.phone,countryCode),"customer",mode);
           setOtpSent(true);
           return;
         }
-        const result=await verifyPhoneOtp({phone:form.phone,code:form.code,role:"customer",mode,name:form.name});
+        const result=await verifyPhoneOtp({phone:internationalPhone(form.phone,countryCode),code:form.code,role:"customer",mode,name:form.name});
         onAuthenticated(result);
         return;
       }
       const result = mode === "login"
         ? await loginCustomer({email:form.email,password:form.password})
-        : await registerCustomer(form);
+        : await registerCustomer({...form,phone:internationalPhone(form.phone,countryCode)});
       onAuthenticated(result);
     } catch (err) {
       setError(err.message);
@@ -395,12 +428,12 @@ function AuthForm({ onAuthenticated }) {
       <form onSubmit={submit}>
         {method==="phone"?<>
           {mode==="register" && !otpSent && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
-          <input placeholder="+962 7X XXX XXXX" inputMode="tel" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} disabled={otpSent} required/>
+          <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} disabled={otpSent} required placeholder="7X XXX XXXX"/>
           {otpSent&&<input placeholder="Verification code" inputMode="numeric" autoComplete="one-time-code" value={form.code} onChange={e=>setForm({...form,code:e.target.value.replace(/\D/g,"").slice(0,10)})} required/>}
         </>:<>
           {mode==="register" && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
           <input type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
-          {mode==="register" && <input placeholder="Phone (optional)" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/>}
+          {mode==="register" && <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="Phone (optional)"/>}
           <input type="password" minLength="8" maxLength="128" placeholder="Password (8+ characters)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
         </>}
         {error && <div className="form-error">{error}</div>}
