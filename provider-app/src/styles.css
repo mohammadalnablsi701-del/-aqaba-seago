@@ -102,3 +102,18 @@
 .today-hero-actions{display:flex;gap:8px;flex-wrap:wrap}.today-hero button{border:0;border-radius:11px;padding:10px 12px;background:rgba(255,255,255,.14);color:#fff;font-weight:900;display:inline-flex;align-items:center;gap:6px}.today-hero button.primary{background:#fff;color:#075a79}
 .action-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}.action-summary>div{background:#fff;border:1px solid #e3ebf1;border-radius:15px;padding:13px;display:flex;flex-direction:column;gap:3px}.action-summary span{font-size:10px;color:#728694}.action-summary b{font-size:21px;color:#16394e}
 @media(max-width:560px){.today-hero{align-items:stretch;flex-direction:column}.today-hero-actions button{flex:1;justify-content:center}.action-summary{grid-template-columns:1fr 1fr 1fr}.action-summary b{font-size:18px}}
+
+.booking-filters{display:flex;gap:7px;overflow-x:auto;padding:2px 0 10px}
+.booking-filters button{white-space:nowrap;border:1px solid #d9e4ea;background:#fff;color:#617888;border-radius:999px;padding:8px 11px;font-size:10px;font-weight:900}
+.booking-filters button.active{background:#0b6f9f;color:#fff;border-color:#0b6f9f}
+.booking-card-list{display:flex;flex-direction:column;gap:10px}
+.booking-card{border:1px solid #e3ebf1;border-radius:15px;background:#fff;overflow:hidden}
+.booking-card-main{width:100%;border:0;background:#fff;padding:13px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.booking-card-main>div{display:flex;flex-direction:column;gap:3px}
+.booking-card-main b{color:#16394e}.booking-card-main span{font-size:11px;color:#718492}
+.booking-card-main em{font-style:normal;font-size:9px;font-weight:900;letter-spacing:.06em;padding:6px 8px;border-radius:999px}
+.booking-card-main em.valid{background:#fff7e8;color:#9a5b00}.booking-card-main em.used{background:#e9fbf2;color:#087443}
+.booking-quick-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:0 13px 13px}
+.booking-quick-actions a,.booking-quick-actions button{border:0;border-radius:9px;background:#eef6fb;color:#0a5f91;text-decoration:none;padding:9px;text-align:center;font-size:10px;font-weight:900}
+.empty-booking-state{text-align:center;padding:30px 15px;color:#7a8d9a}.empty-booking-state h3{margin:8px 0 4px;color:#16394e}.empty-booking-state p{font-size:11px}
+@media(max-width:560px){.section-toolbar .booking-search{width:145px;min-width:0}}
