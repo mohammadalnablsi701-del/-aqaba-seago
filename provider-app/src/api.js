@@ -17,6 +17,7 @@ export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:J
 export const registerProvider=data=>req("/api/auth/register",{method:"POST",body:JSON.stringify({...data,role:"provider"})});
 export const me=token=>req("/api/providers/me",{token});
 export const createProviderProfile=(token,data)=>req("/api/providers",{token,method:"POST",body:JSON.stringify(data)});
+export const updateProviderSettings=(token,data)=>req("/api/providers/me/settings",{token,method:"PATCH",body:JSON.stringify(data)});
 export const trips=token=>req("/api/providers/me/trips",{token});
 export const departures=(token,date)=>req("/api/providers/me/departures?date="+encodeURIComponent(date),{token});
 export const bookings=(token,date)=>req("/api/providers/me/bookings"+(date?"?date="+encodeURIComponent(date):""),{token});
