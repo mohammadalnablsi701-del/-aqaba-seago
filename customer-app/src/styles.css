@@ -242,3 +242,19 @@
 .confirmation-card small{font-size:10px;color:var(--muted);line-height:1.4}
 .confirmation-cta{width:100%;height:52px;margin-top:6px}
 .confirmation-note{display:block;margin-top:12px;font-size:10px;color:#91a0af}
+
+.tickets-header{align-items:flex-start}
+.tickets-header p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.4}
+.ticket-provider{display:flex;align-items:center;gap:4px;margin-top:5px!important;color:#4f7f78!important}
+.ticket-provider svg{color:#00a889}
+.ticket-ready-banner{display:flex;align-items:center;gap:9px;background:#eefaf7;border:1px solid #d8f0e8;border-radius:13px;padding:10px 11px;margin:14px 0 2px;color:#16735f}
+.ticket-ready-banner span{display:flex;flex-direction:column;gap:2px}
+.ticket-ready-banner b{font-size:11px}
+.ticket-ready-banner small{font-size:9px;text-transform:none;letter-spacing:0;color:#5f8078}
+.ticket-location-title{display:flex;align-items:flex-start;gap:7px}
+.ticket-location-title svg{color:var(--blue);flex:none;margin-top:2px}
+.ticket-location-title span{display:flex;flex-direction:column;gap:2px}
+.ticket-card__footer{margin-top:15px;padding-top:14px;border-top:1px dashed #d8e2ea}
+.ticket-ref-note{margin-top:5px;font-size:9px;color:#91a0af}
+.ticket-qr{padding:10px 10px 8px;border-radius:16px;box-shadow:0 8px 24px rgba(4,37,74,.06)}
+.ticket-empty{padding-top:90px}
