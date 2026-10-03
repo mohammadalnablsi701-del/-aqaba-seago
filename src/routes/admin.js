@@ -24,7 +24,38 @@ router.get("/providers",async(_req,res,next)=>{try{
   res.json(rows.map(p=>({...p.toObject(),operations:byProvider.get(String(p._id))||{tripCount:0,activeTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0},settingsConfigured:Boolean(p.settings?.configured)})));
 }catch(e){next(e);}});
 router.get("/notifications",async(_req,res,next)=>{try{const rows=await NotificationLog.find({}).sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
-router.get("/refunds",async(_req,res,next)=>{try{const rows=await Booking.find({"cancellation.cancelledAt":{$exists:true}}).populate("customerId","name email phone").populate("providerId","businessName").populate("tripId","titleEn titleAr").populate("departureId","startsAt status").sort({"cancellation.cancelledAt":-1}).limit(300);const ids=rows.map(x=>x._id);const payments=await Payment.find({bookingId:{$in:ids}}).select("bookingId status amount currency refundedAmount refundedAt refundReference provider");const byBooking=new Map(payments.map(p=>[String(p.bookingId),p]));res.json(rows.map(b=>({...b.toObject(),bookingReference:"SG-"+String(b._id).slice(-8).toUpperCase(),payment:byBooking.get(String(b._id))||null})));}catch(e){next(e);}});
+router.get("/refunds",async(_req,res,next)=>{try{
+  const rows=await Booking.find({"cancellation.cancelledAt":{$exists:true}})
+    .populate("customerId","name email phone")
+    .populate("providerId","businessName")
+    .populate("tripId","titleEn titleAr")
+    .populate("departureId","startsAt status")
+    .sort({"cancellation.cancelledAt":-1}).limit(300);
+  const ids=rows.map(x=>x._id);
+  const payments=ids.length?await Payment.find({bookingId:{$in:ids}}).select("bookingId status amount currency refundedAmount refundedAt refundReference provider"):[];
+  const byBooking=new Map(payments.map(p=>[String(p.bookingId),p]));
+  res.json(rows.map(b=>{
+    const o=b.toObject();
+    const original=Number(o.pricing?.grossAmount||0);
+    const refund=Number(o.cancellation?.refundAmount||0);
+    const retained=Math.max(0,original-refund);
+    const originalCommission=Number(o.pricing?.commissionAmount||0);
+    const originalProviderNet=Number(o.pricing?.providerNetAmount||0);
+    const ratio=original>0?retained/original:0;
+    return {...o,
+      bookingReference:"SG-"+String(b._id).slice(-8).toUpperCase(),
+      payment:byBooking.get(String(b._id))||null,
+      financialImpact:{
+        currency:o.pricing?.currency||"JOD",
+        originalAmount:original,
+        refundAmount:refund,
+        retainedAmount:retained,
+        seaGoRetained:Number((originalCommission*ratio).toFixed(2)),
+        providerNetAfterRefund:Number((originalProviderNet*ratio).toFixed(2))
+      }
+    };
+  }));
+}catch(e){next(e);}});
 router.patch("/trips/:tripId/commission",async(req,res,next)=>{try{const percentage=Number(req.body.percentage);if(!Number.isFinite(percentage)||percentage<0||percentage>100)return res.status(400).json({error:"Commission percentage must be between 0 and 100"});const trip=await Trip.findById(req.params.tripId);if(!trip)return res.status(404).json({error:"Trip not found"});trip.pricing.commissionType="percentage";trip.pricing.commissionValue=percentage;await trip.save();res.json(trip);}catch(e){next(e);}});
 router.patch("/providers/:providerId/approve",async(req,res,next)=>{try{const p=await Provider.findById(req.params.providerId).populate("ownerUserId","isActive role");if(!p)return res.status(404).json({error:"Provider not found"});if(!p.ownerUserId||p.ownerUserId.role!=="provider"||!p.ownerUserId.isActive)return res.status(409).json({error:"Provider owner account is not active"});if(p.status==="approved")return res.json(p);if(p.status!=="pending")return res.status(409).json({error:"Only pending provider applications can be approved"});p.status="approved";p.approvedAt=new Date();p.approvedBy=req.user._id;await p.save();res.json(p);}catch(e){next(e);}});
 router.patch("/providers/:providerId/status",async(req,res,next)=>{
