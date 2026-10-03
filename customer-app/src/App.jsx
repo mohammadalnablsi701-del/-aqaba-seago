@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush
+  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush
 } from "./api.js";
 
 const CATEGORY_LABELS = {
@@ -347,7 +347,9 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
 
 function AuthForm({ onAuthenticated }) {
   const [mode,setMode]=useState("login");
-  const [form,setForm]=useState({name:"",email:"",phone:"",password:""});
+  const [method,setMethod]=useState("phone");
+  const [form,setForm]=useState({name:"",email:"",phone:"",password:"",code:""});
+  const [otpSent,setOtpSent]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
 
@@ -355,6 +357,16 @@ function AuthForm({ onAuthenticated }) {
     e.preventDefault();
     setBusy(true); setError("");
     try {
+      if(method==="phone"){
+        if(!otpSent){
+          await requestPhoneOtp(form.phone,"customer",mode);
+          setOtpSent(true);
+          return;
+        }
+        const result=await verifyPhoneOtp({phone:form.phone,code:form.code,role:"customer",mode,name:form.name});
+        onAuthenticated(result);
+        return;
+      }
       const result = mode === "login"
         ? await loginCustomer({email:form.email,password:form.password})
         : await registerCustomer(form);
@@ -366,31 +378,44 @@ function AuthForm({ onAuthenticated }) {
     }
   }
 
+  function switchMode(next){setMode(next);setOtpSent(false);setError("");setForm(v=>({...v,code:""}));}
+  function switchMethod(next){setMethod(next);setOtpSent(false);setError("");setForm(v=>({...v,code:""}));}
+
   return (
     <div className="auth-panel">
       <div className="auth-panel__head">
         <span>SEAGO ACCOUNT</span>
         <h2>{mode==="login" ? "Sign in to book" : "Create your account"}</h2>
-        <p>Your account keeps bookings and favourites together.</p>
+        <p>{method==="phone"?"Use your mobile number and a one-time code.":"Use your email and password."}</p>
+      </div>
+      <div className="auth-method-tabs">
+        <button type="button" className={method==="phone"?"active":""} onClick={()=>switchMethod("phone")}>Phone</button>
+        <button type="button" className={method==="email"?"active":""} onClick={()=>switchMethod("email")}>Email</button>
       </div>
       <form onSubmit={submit}>
-        {mode==="register" && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
-        <input type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
-        {mode==="register" && <input placeholder="Phone (optional)" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/>}
-        <input type="password" minLength="8" maxLength="128" placeholder="Password (8+ characters)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
+        {method==="phone"?<>
+          {mode==="register" && !otpSent && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
+          <input placeholder="+962 7X XXX XXXX" inputMode="tel" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} disabled={otpSent} required/>
+          {otpSent&&<input placeholder="Verification code" inputMode="numeric" autoComplete="one-time-code" value={form.code} onChange={e=>setForm({...form,code:e.target.value.replace(/\D/g,"").slice(0,10)})} required/>}
+        </>:<>
+          {mode==="register" && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
+          <input type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
+          {mode==="register" && <input placeholder="Phone (optional)" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/>}
+          <input type="password" minLength="8" maxLength="128" placeholder="Password (8+ characters)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
+        </>}
         {error && <div className="form-error">{error}</div>}
         <button className="primary-button auth-submit" disabled={busy}>
           {busy ? <LoaderCircle className="spin" size={18}/> : null}
-          {mode==="login" ? "Sign in" : "Create account"}
+          {method==="phone"?(otpSent?"Verify & continue":"Send code"):(mode==="login"?"Sign in":"Create account")}
         </button>
       </form>
-      <button className="auth-switch" onClick={()=>setMode(mode==="login"?"register":"login")}>
+      {method==="phone"&&otpSent&&<button className="auth-switch" onClick={()=>{setOtpSent(false);setForm(v=>({...v,code:""}));setError("")}}>Change phone number</button>}
+      <button className="auth-switch" onClick={()=>switchMode(mode==="login"?"register":"login")}>
         {mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in"}
       </button>
     </div>
   );
 }
-
 function formatDeparture(value) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("en", {
