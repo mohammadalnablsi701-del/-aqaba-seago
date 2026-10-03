@@ -4,7 +4,7 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { calculateTieredPricing } from "../services/pricing.js";
-import { releaseExpiredCheckoutHolds } from "../services/payments.js";
+import { releaseExpiredCheckoutHolds, releaseCheckoutHoldsForDeparture } from "../services/payments.js";
 import { cancelDepartureBookings } from "../services/cancellations.js";
 
 const router = express.Router();
@@ -104,6 +104,7 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       const nextStatus=req.body.status;
       if(!["scheduled","cancelled","completed"].includes(nextStatus))return res.status(400).json({error:"Invalid departure status"});
       if(nextStatus==="cancelled"&&departure.status!=="cancelled"){
+        await releaseCheckoutHoldsForDeparture(departure._id);
         await cancelDepartureBookings({departureId:departure._id,providerId:provider._id,reason:req.body.cancellationReason||"Departure cancelled by provider"});
       }
       departure.status=nextStatus;
