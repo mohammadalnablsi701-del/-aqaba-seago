@@ -6,6 +6,7 @@ import { seedDemoData } from "./services/demoSeed.js";
 import { cleanupDemoDataOnce } from "./services/demoCleanup.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders, sendTestEmail } from "./services/notifications.js";
+import { runPilotE2EOnce } from "./services/pilotE2E.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -57,7 +58,17 @@ app.get("/ready",(_req,res)=>{
   });
 });
 
-const server=app.listen(port,()=>console.log(`Aqaba SeaGo API listening on port ${port}`));
+const server=app.listen(port,async()=>{
+  console.log(`Aqaba SeaGo API listening on port ${port}`);
+  if(process.env.RUN_PILOT_E2E_ON_START==="true"){
+    try{
+      const r=await runPilotE2EOnce({port});
+      console.log("Pilot E2E result",JSON.stringify(r));
+    }catch(e){
+      console.error("Pilot E2E failed",e?.message||e,e?.data||"");
+    }
+  }
+});
 
 let shuttingDown=false;
 async function shutdown(signal){
