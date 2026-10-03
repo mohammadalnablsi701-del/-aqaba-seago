@@ -64,3 +64,11 @@
 
 .provider-admin-actions button.danger{background:#b42318}
 .provider-admin-actions button.secondary{background:#eef2f5;color:#526b7c}
+
+.controlled-pilot-card{display:grid;gap:12px;padding:18px;border-radius:18px;border:1px solid #d9e6ed;background:#fff;margin-bottom:14px}
+.controlled-pilot-card.ready{background:#f2fbf6;border-color:#cfead9}
+.controlled-pilot-card.blocked{background:#fff8ef;border-color:#f0dfc2}
+.controlled-pilot-card small{font-size:9px;font-weight:900;letter-spacing:.12em;color:#0b82a8}
+.controlled-pilot-card h2{margin:4px 0 5px}.controlled-pilot-card p{margin:0;color:#6f8290;font-size:12px;line-height:1.5}
+.controlled-pilot-actions{display:flex;gap:8px;flex-wrap:wrap}.controlled-pilot-actions a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:10px;background:#0b6f9f;color:#fff;padding:10px 12px;font-size:11px;font-weight:800}
+.controlled-pilot-card em{font-style:normal;font-size:10px;font-weight:800;color:#8a5a00}
