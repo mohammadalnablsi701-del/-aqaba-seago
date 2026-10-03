@@ -105,9 +105,16 @@ function ApiNotice({ usingFallback }) {
   );
 }
 
+function localDateInputValue(date=new Date()) {
+  const y=date.getFullYear();
+  const m=String(date.getMonth()+1).padStart(2,"0");
+  const d=String(date.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+}
+
 function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch, onOpenMenu, onSeeAll }) {
   const [tripType,setTripType]=useState("All Trips");
-  const [date,setDate]=useState(()=>new Date().toISOString().slice(0,10));
+  const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
   const [searching,setSearching]=useState(false);
 
@@ -143,7 +150,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           <label className="search-row search-row--control">
             <span className="search-row__icon"><CalendarDays size={18}/></span>
             <span><small>Date</small>
-              <input type="date" value={date} min={new Date().toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)}/>
+              <input type="date" value={date} min={localDateInputValue()} onChange={e=>setDate(e.target.value)}/>
             </span>
             <ChevronRight size={18}/>
           </label>
@@ -164,8 +171,14 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 
       <ApiNotice usingFallback={usingFallback} />
 
+      <section className="home-trust-strip" aria-label="SeaGo booking benefits">
+        <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>Clear pricing</b><small>No hidden fees</small></span></div>
+        <div><Ticket size={16}/><span><b>Instant ticket</b><small>After payment</small></span></div>
+      </section>
+
       <section className="content-section">
-        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
+        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2><p>Trusted trips picked for an easy day on the Red Sea.</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
         <div className="trip-strip">
           {tripList.slice(0,3).map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
@@ -192,7 +205,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
           <span><CalendarDays size={14}/>{trip.duration}</span>
           <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
         </div>
-        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div>
+        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">View experience <ChevronRight size={15}/></div>
       </div>
     </article>
   );
