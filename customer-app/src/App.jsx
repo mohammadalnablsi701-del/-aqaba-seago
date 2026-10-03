@@ -485,7 +485,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const holdExpired=holdRemaining===0;
   const holdMinutes=holdRemaining!=null?Math.floor(holdRemaining/60000):0;
   const holdSeconds=holdRemaining!=null?Math.floor((holdRemaining%60000)/1000):0;
-  const total=quote?.pricing?.grossAmount ?? trip.price*guests;
+  const total=quote?.pricing?.grossAmount ?? null;
 
   if(success) {
     return (
@@ -498,7 +498,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           <div><span>Experience</span><b>{trip.title}</b></div>
           {selected?.startsAt&&<div><span>Departure</span><b>{formatDeparture(selected.startsAt)}</b></div>}
           <div><span>Guests</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
-          <div><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div>
+          <div><span>Total</span><strong>{quote?Number(total).toFixed(2):"—"} JOD</strong></div>
         </div>
         {!success.demo && success.expiresAt && <div className={"hold-box hold-box--secure "+(holdExpired?"is-expired":"")}><CheckCircle2 size={16}/><span>{holdExpired?<><b>Seat hold expired</b><small>Return to trip details to check availability again.</small></>:<>Seats reserved for <b>{String(holdMinutes).padStart(2,"0")}:{String(holdSeconds).padStart(2,"0")}</b><small>Complete payment before the timer ends.</small></>}</span></div>}
         <div className="payment-safety"><span><CheckCircle2 size={15}/> Booking created only after successful payment</span><span><CheckCircle2 size={15}/> QR ticket available immediately after confirmation</span></div>
@@ -546,7 +546,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box"><div className="price-box__heading"><span>PRICE SUMMARY</span><small>No hidden fees</small></div>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote?.pricing?.adultUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetAdultPrice:trip.price)).toFixed(2)}</span><b>{Number(quote?.pricing?.adultSubtotal ?? adults*(mealPlan==="with_buffet"?(trip.buffetAdultPrice||trip.price):trip.price)).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote?.pricing?.childUnitPrice ?? (mealPlan==="with_buffet"?trip.buffetChildPrice:trip.childPrice)).toFixed(2)}</span><b>{Number(quote?.pricing?.childSubtotal ?? children*(mealPlan==="with_buffet"?(trip.buffetChildPrice||trip.childPrice||trip.price):(trip.childPrice||trip.price))).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div></div>
+          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quote?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote.pricing?.adultUnitPrice||0).toFixed(2)}</span><b>{Number(quote.pricing?.adultSubtotal||0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote.pricing?.childUnitPrice||0).toFixed(2)}</span><b>{Number(quote.pricing?.childSubtotal||0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total||0).toFixed(2)} JOD</strong></div></>:<div className="live-price-loading"><LoaderCircle className="spin" size={16}/><span>{selected?"Fetching current price...":"Choose a departure to see the live price"}</span></div>}</div>
           <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to secure payment <ChevronRight size={18}/></button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
