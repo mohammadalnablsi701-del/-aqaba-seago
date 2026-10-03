@@ -56,3 +56,6 @@ export const createProviderTeamMember=(token,data)=>req("/api/providers/me/team"
 export const updateProviderTeamMember=(token,id,data)=>req("/api/providers/me/team/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
 
 export const providerAuditLog=token=>req("/api/providers/me/audit-log",{token});
+
+export const requestPhoneOtp=(phone,role,mode)=>req("/api/auth/otp/request",{method:"POST",body:JSON.stringify({phone,role,mode})});
+export const verifyPhoneOtp=(data)=>req("/api/auth/otp/verify",{method:"POST",body:JSON.stringify(data)});
