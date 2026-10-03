@@ -30,3 +30,17 @@
 .demo-cleanup-control button{border:0;border-radius:10px;background:#a84439;color:white;padding:10px 12px;font-size:11px;font-weight:700}
 .demo-cleanup-control button:disabled{opacity:.4;cursor:not-allowed}
 .demo-cleanup-control em{font-style:normal;font-size:10px;color:#6f7f90}
+
+.pilot-status{display:flex;justify-content:space-between;align-items:center;gap:14px;border-radius:16px;padding:16px;border:1px solid #e7edf2;background:#fff}
+.pilot-status>div{display:flex;flex-direction:column;gap:4px}
+.pilot-status b{font-size:16px}
+.pilot-status span{font-size:11px}
+.pilot-status em{font-style:normal;font-size:10px;font-weight:900;text-transform:uppercase;padding:6px 8px;border-radius:999px}
+.pilot-status.ready{background:#f1fbf7;border-color:#ccefe2;color:#0d765f}
+.pilot-status.ready em{background:#ddf6ed;color:#0d765f}
+.pilot-status.blocked{background:#fff4f1;border-color:#f3d5ce;color:#a84439}
+.pilot-status.blocked em{background:#fff8e8;color:#946400}
+.pilot-blockers{display:grid;gap:6px;background:#fff;border:1px solid #f0dfda;border-radius:16px;padding:14px}
+.pilot-blockers b{font-size:12px;color:#a84439}
+.pilot-blockers span{font-size:11px;color:#657587}
+.pilot-blockers span:before{content:"• ";color:#a84439}
