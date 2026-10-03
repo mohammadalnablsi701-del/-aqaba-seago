@@ -160,8 +160,8 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
             </div>
           </div>
           <button className="primary-button" onClick={submitSearch} disabled={searching||loading}>
-            {searching?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>}
-            {searching?"Searching...":"Search Trips"} <ChevronRight size={18}/>
+            {(searching||loading)?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>}
+            {loading?"Loading trips...":searching?"Searching...":"Search Trips"} {!loading&&<ChevronRight size={18}/>}
           </button>
         </div>
       </section>
