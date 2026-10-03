@@ -1,0 +1,24 @@
+{
+  "name": "Aqaba SeaGo Admin",
+  "short_name": "SeaGo Admin",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#071F33",
+  "theme_color": "#071F33",
+  "description": "Aqaba SeaGo administration dashboard.",
+  "icons": [
+    {
+      "src": "./app-admin-192.png?v=identity-v1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./app-admin-512.png?v=identity-v1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
