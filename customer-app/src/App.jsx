@@ -275,6 +275,8 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
 }
 
 function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
+  const[departures,setDepartures]=useState([]);const[selectedDeparture,setSelectedDeparture]=useState(null);const[loadingDepartures,setLoadingDepartures]=useState(Boolean(trip?.apiId&&hasApi()));const[departureError,setDepartureError]=useState("");
+  useEffect(()=>{let ignore=false;if(!trip?.apiId||!hasApi()){setLoadingDepartures(false);return;}setLoadingDepartures(true);listDepartures(trip.apiId).then(rows=>{if(ignore)return;const liveRows=rows.filter(d=>d.status==="scheduled"&&Number(d.availableSeats||0)>0&&new Date(d.startsAt)>new Date()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));setDepartures(liveRows);setSelectedDeparture(liveRows[0]||null);setDepartureError("");}).catch(e=>{if(!ignore)setDepartureError(e.message)}).finally(()=>{if(!ignore)setLoadingDepartures(false)});return()=>{ignore=true}},[trip?.apiId]);
   if(!trip) return null;
   return (
     <div className="screen detail-screen">
@@ -318,6 +320,8 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
           </div>
         </section>
 
+        <section className="detail-section live-departures-section"><span className="detail-section__label">UPCOMING DEPARTURES</span>{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{departures.slice(0,6).map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{formatDeparture(d.startsAt)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}</div>:<div className="no-departures">{departureError?"Live availability is temporarily unavailable.":"No future departures are available yet."}</div>}</section>
+
         {trip.buffetEnabled&&<section className="buffet-info detail-card-section"><span>OPEN BUFFET OPTION</span><h2>Add a meal to your trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}
 
         {trip.departureLocation?.name&&<section className="departure-location detail-card-section"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps <ChevronRight size={15}/></a>}</section>}
@@ -335,7 +339,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
 
       <div className="sticky-booking">
         <div><small>From</small><strong>{trip.price} JOD</strong><span>/ adult</span></div>
-        <button className="primary-button" disabled={Boolean(trip.apiId&&!trip.liveInventory?.nextDepartureAt)} onClick={onBook}>{trip.apiId&&!trip.liveInventory?.nextDepartureAt?"No departures available":"Check availability"} <ChevronRight size={18}/></button>
+        <button className="primary-button" disabled={Boolean(trip.apiId&&!selectedDeparture)} onClick={()=>onBook(selectedDeparture)}>{trip.apiId&&!selectedDeparture?"No departures available":"Continue with selected time"} <ChevronRight size={18}/></button>
       </div>
     </div>
   );
@@ -417,12 +421,14 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
       .then(rows=>{
         if(ignore) return;
         setDepartures(rows);
+        const wantedDepartureId=initialCriteria?.departureId || "";
         const wantedDate=initialCriteria?.date || "";
+        const exact=rows.find(x=>String(x.id)===String(wantedDepartureId)&&Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
         const matching=rows.find(x=>{
           const depDate=localDateInputValue(new Date(x.startsAt));
           return Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1) && (!wantedDate || depDate===wantedDate);
         });
-        const first=matching || rows.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
+        const first=exact || matching || rows.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
         setSelected(first || null);
       })
       .catch(err=>{ if(!ignore) setError(err.message); })
@@ -1162,7 +1168,7 @@ export default function App(){
 
   if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
-  if(detail) return <DetailScreen trip={detail} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={()=>setBooking(true)}/>;
+  if(detail) return <DetailScreen trip={detail} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>;
 
   return <div className="app-shell">
     <main>
