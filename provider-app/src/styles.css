@@ -65,3 +65,11 @@
 
 .skip-schedule{width:100%;border:1px solid #d7e3e9;background:#fff;color:#627887;border-radius:13px;padding:12px;font-weight:800}
 .skip-schedule:hover{background:#f7fafc}
+
+.trip-template-block{border:1px solid #dfeaf0;background:#f8fcfe;border-radius:16px;padding:13px}
+.trip-template-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.trip-template-grid button{border:1px solid #d8e5eb;background:#fff;border-radius:12px;padding:11px;text-align:left;display:flex;flex-direction:column;gap:3px;color:#24485e}
+.trip-template-grid button strong{font-size:12px}
+.trip-template-grid button span{font-size:10px;color:#7b8f9b}
+.trip-template-grid button.active{border-color:#00a9bc;background:#eaf9fb;color:#075f73}
+@media(max-width:560px){.trip-template-grid{grid-template-columns:1fr 1fr}}
