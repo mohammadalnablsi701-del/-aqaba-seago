@@ -484,3 +484,8 @@
 .auth-method-tabs button.active{background:#123f59;color:#fff;border-color:#123f59}
 
 @media(max-width:600px){input,select,textarea{font-size:16px}}
+
+.country-phone-field{display:grid;grid-template-columns:minmax(145px,.95fr) 1.35fr;gap:8px;align-items:center}
+.country-phone-field select,.country-phone-field input{width:100%;height:50px;border:1px solid var(--line);border-radius:13px;padding:0 12px;background:#fff;color:var(--ink);font-size:16px}
+.country-phone-field select{padding-right:6px}
+@media(max-width:430px){.country-phone-field{grid-template-columns:1fr 1.12fr}.country-phone-field select{font-size:14px}}
