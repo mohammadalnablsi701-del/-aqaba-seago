@@ -3,6 +3,7 @@ import Departure from "../models/Departure.js";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireProviderCapability } from "../services/providerAccess.js";
 import { calculateTieredPricing } from "../services/pricing.js";
 import { releaseExpiredCheckoutHolds, releaseCheckoutHoldsForDeparture } from "../services/payments.js";
 import { cancelDepartureBookings } from "../services/cancellations.js";
@@ -28,13 +29,9 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
   try {
     const errors=validateDepartureInput(req.body);
     if(errors.length)return res.status(400).json({error:errors[0],errors});
-    const provider = await Provider.findOne({
-      ownerUserId: req.user._id,
-      status: "approved"
-    });
-    if (!provider) {
-      return res.status(403).json({ error: "Approved provider profile required" });
-    }
+    const access=await requireProviderCapability(req.user,"manage_departures");
+    const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Departure management permission required"});
 
     const trip = await Trip.findOne({
       _id: req.body.tripId,
@@ -57,8 +54,8 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
 
 router.post("/bulk", requireAuth, requireRole("provider"), async (req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await requireProviderCapability(req.user,"manage_departures");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Departure management permission required"});
     const trip=await Trip.findOne({_id:req.body.tripId,providerId:provider._id,active:true});
     if(!trip)return res.status(404).json({error:"Active trip not found"});
 
@@ -125,8 +122,8 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
   try{
     const errors=validateDepartureInput(req.body,{partial:true});
     if(errors.length)return res.status(400).json({error:errors[0],errors});
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await requireProviderCapability(req.user,"manage_departures");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Departure management permission required"});
     const departure=await Departure.findById(req.params.departureId);
     if(!departure)return res.status(404).json({error:"Departure not found"});
     const trip=await Trip.findOne({_id:departure.tripId,providerId:provider._id});
