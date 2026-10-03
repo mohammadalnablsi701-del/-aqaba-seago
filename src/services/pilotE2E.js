@@ -8,6 +8,7 @@ import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import InAppNotification from "../models/InAppNotification.js";
 import NotificationLog from "../models/NotificationLog.js";
+import ProviderMember from "../models/ProviderMember.js";
 
 async function api(base,path,{method="GET",token,body,headers={}}={}) {
   const r=await fetch(base+path,{
@@ -38,9 +39,11 @@ export async function runPilotE2EOnce({port}) {
   const adminEmail=`pilot-admin-${stamp}@aqabaseago.test`;
   const providerEmail=`pilot-provider-${stamp}@aqabaseago.test`;
   const customerEmail=`pilot-customer-${stamp}@aqabaseago.test`;
+  const managerEmail=`pilot-manager-${stamp}@aqabaseago.test`;
+  const checkinEmail=`pilot-checkin-${stamp}@aqabaseago.test`;
   const base=`http://127.0.0.1:${port}`;
 
-  let adminUser=null,providerUser=null,customerUser=null;
+  let adminUser=null,providerUser=null,customerUser=null,managerUser=null,checkinUser=null;
   let provider=null,trip=null,departure=null,booking=null;
   let paymentId=null;
 
@@ -91,6 +94,47 @@ export async function runPilotE2EOnce({port}) {
     if(Number(meWithSettings.settings?.defaultCapacity)!==24||meWithSettings.settings?.departureLocation?.name!=="Pilot Marina") throw new Error("Provider settings were not persisted");
     step("provider-settings-persisted");
 
+    const managerMember=await api(base,"/api/providers/me/team",{method:"POST",token:providerToken,body:{
+      name:"Pilot Manager",email:managerEmail,phone:"+962790000333",password,role:"manager"
+    }});
+    managerUser=await User.findOne({email:managerEmail});
+    if(managerMember.role!=="manager")throw new Error("Manager team member was not created");
+    const managerLogin=await api(base,"/api/auth/login",{method:"POST",body:{email:managerEmail,password}});
+    const managerToken=managerLogin.token;
+    const managerMe=await api(base,"/api/providers/me",{token:managerToken});
+    if(managerMe.accessRole!=="manager"||!managerMe.capabilities?.includes("manage_trips"))throw new Error("Manager access was not resolved");
+    step("provider-team-manager-login");
+
+    const checkinMember=await api(base,"/api/providers/me/team",{method:"POST",token:providerToken,body:{
+      name:"Pilot Checkin",email:checkinEmail,phone:"+962790000444",password,role:"checkin"
+    }});
+    checkinUser=await User.findOne({email:checkinEmail});
+    if(checkinMember.role!=="checkin")throw new Error("Check-in team member was not created");
+    const checkinLogin=await api(base,"/api/auth/login",{method:"POST",body:{email:checkinEmail,password}});
+    const checkinToken=checkinLogin.token;
+    const checkinMe=await api(base,"/api/providers/me",{token:checkinToken});
+    if(checkinMe.accessRole!=="checkin"||!checkinMe.capabilities?.includes("checkin")||checkinMe.capabilities?.includes("manage_trips"))throw new Error("Check-in access was not resolved");
+    step("provider-team-checkin-login");
+
+    let checkinTripBlocked=false;
+    try{
+      await api(base,"/api/trips",{method:"POST",token:checkinToken,body:{
+        titleAr:"غير مسموح",titleEn:"Forbidden Team Trip",category:"snorkeling",durationMinutes:60,
+        pricing:{adultPrice:10,childPrice:5}
+      }});
+    }catch(e){checkinTripBlocked=e.status===403;}
+    if(!checkinTripBlocked)throw new Error("Check-in staff could create trips");
+    step("provider-team-checkin-trip-blocked");
+
+    let checkinSettingsBlocked=false;
+    try{
+      await api(base,"/api/providers/me/settings",{method:"PATCH",token:checkinToken,body:{
+        phone:"+962790000444",defaultCapacity:20,defaultDepartureTime:"09:00",departureLocation:{}
+      }});
+    }catch(e){checkinSettingsBlocked=e.status===403;}
+    if(!checkinSettingsBlocked)throw new Error("Check-in staff could edit provider settings");
+    step("provider-team-checkin-settings-blocked");
+
     trip=await api(base,"/api/trips",{method:"POST",token:providerToken,body:{
       titleAr:"رحلة اختبار SeaGo",
       titleEn:"SeaGo Pilot E2E Trip",
@@ -101,6 +145,11 @@ export async function runPilotE2EOnce({port}) {
       pricing:{adultPrice:20,childPrice:10,buffetEnabled:false}
     }});
     step("trip-created",{tripId:trip._id});
+
+    const managerStartsAt=new Date(Date.now()+60*60*60*1000).toISOString();
+    const managerDeparture=await api(base,"/api/departures",{method:"POST",token:managerToken,body:{tripId:trip._id,startsAt:managerStartsAt,capacity:5}});
+    if(!managerDeparture._id)throw new Error("Manager could not create departure");
+    step("provider-team-manager-departure-created");
 
     const startsAt=new Date(Date.now()+48*60*60*1000).toISOString();
     departure=await api(base,"/api/departures",{method:"POST",token:providerToken,body:{
@@ -189,12 +238,18 @@ export async function runPilotE2EOnce({port}) {
     if(!inspected.valid||Number(inspected.guests)!==3) throw new Error("Provider ticket inspection failed");
     step("ticket-inspected");
 
-    const checked=await api(base,"/api/tickets/check-in",{method:"POST",token:providerToken,body:{token:booking.ticketToken}});
-    if(!checked.ok||Number(checked.guests)!==3) throw new Error("Provider check-in failed");
-    step("ticket-checked-in");
+    const concurrent=await Promise.allSettled([
+      api(base,"/api/tickets/check-in",{method:"POST",token:managerToken,body:{token:booking.ticketToken}}),
+      api(base,"/api/tickets/check-in",{method:"POST",token:checkinToken,body:{token:booking.ticketToken}})
+    ]);
+    const successes=concurrent.filter(x=>x.status==="fulfilled");
+    const conflicts=concurrent.filter(x=>x.status==="rejected"&&x.reason?.status===409);
+    if(successes.length!==1||conflicts.length!==1)throw new Error("Concurrent team check-in was not atomic");
+    if(Number(successes[0].value.guests)!==3)throw new Error("Concurrent check-in guest count mismatch");
+    step("provider-team-concurrent-checkin-atomic",{successes:successes.length,conflicts:conflicts.length});
 
     const usedValidation=await api(base,`/api/tickets/validate?token=${encodeURIComponent(booking.ticketToken)}`);
-    if(usedValidation.valid||!usedValidation.used) throw new Error("Customer ticket did not become used after check-in");
+    if(usedValidation.valid||!usedValidation.used) throw new Error("Customer ticket did not become used after team check-in");
     step("customer-ticket-used");
 
     let duplicateRejected=false;
@@ -245,12 +300,14 @@ export async function runPilotE2EOnce({port}) {
       bookingConfirmed:true,
       qrInspected:true,
       checkedIn:true,
-      duplicateCheckInBlocked:true
+      duplicateCheckInBlocked:true,
+      providerTeam:true,
+      concurrentTeamCheckInAtomic:true
     };
     return result;
   }finally{
     try{
-      const userIds=[adminUser?._id,providerUser?._id,customerUser?._id].filter(Boolean);
+      const userIds=[adminUser?._id,providerUser?._id,customerUser?._id,managerUser?._id,checkinUser?._id].filter(Boolean);
       const providerId=provider?._id;
       const tripId=trip?._id;
       const departureId=departure?._id;
@@ -275,6 +332,7 @@ export async function runPilotE2EOnce({port}) {
       if(tripId) await Departure.deleteMany({tripId});
       else if(departureId) await Departure.deleteMany({_id:departureId});
       if(tripId) await Trip.deleteMany({_id:tripId});
+      if(providerId) await ProviderMember.deleteMany({providerId});
       if(providerId) await Provider.deleteMany({_id:providerId});
       if(userIds.length) await User.deleteMany({_id:{$in:userIds}});
       result.cleanup={ok:true};
