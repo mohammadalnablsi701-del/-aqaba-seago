@@ -1,4 +1,4 @@
-name: Deploy Customer App Preview
+name: Deploy Aqaba SeaGo Apps Preview
 
 on:
   push:
@@ -29,13 +29,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
 
       - name: Install dependencies
         working-directory: customer-app
         run: npm install
 
-      - name: Build preview
+      - name: Build customer app
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
