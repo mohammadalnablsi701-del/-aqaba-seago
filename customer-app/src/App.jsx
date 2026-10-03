@@ -409,15 +409,21 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
 
   if(success) {
     return (
-      <div className="screen standard-screen booking-success">
-        <BrandLogo />
-        <CheckCircle2 size={70}/>
-        <span>PAYMENT REQUIRED</span>
-        <h1>Complete payment to confirm</h1>
-        <p>{success.demo ? "Preview flow completed." : "No booking is created until payment succeeds. Your selected seats are temporarily protected during checkout."}</p>
-        {!success.demo && success.expiresAt && <div className="hold-box">Checkout expires: <b>{formatDeparture(success.expiresAt)}</b></div>}
-        {!success.demo && success.checkoutUrl && <button className="primary-button" onClick={()=>{window.location.href=success.checkoutUrl;}}>Continue to payment <ChevronRight size={18}/></button>}
-        <button className="secondary-button" onClick={onBack}>Back to trip</button>
+      <div className="screen standard-screen payment-handoff">
+        <div className="payment-handoff__top"><BrandLogo /><span>STEP 2 OF 2</span></div>
+        <div className="payment-handoff__icon"><CheckCircle2 size={34}/></div>
+        <h1>{success.demo ? "Preview ready" : "Ready for secure payment"}</h1>
+        <p>{success.demo ? "The booking flow is ready for the payment step." : "Your selected seats are temporarily protected. Complete payment to create the confirmed booking and QR ticket."}</p>
+        <div className="payment-review-card">
+          <div><span>Experience</span><b>{trip.title}</b></div>
+          {selected?.startsAt&&<div><span>Departure</span><b>{formatDeparture(selected.startsAt)}</b></div>}
+          <div><span>Guests</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
+          <div><span>Total</span><strong>{Number(total).toFixed(2)} JOD</strong></div>
+        </div>
+        {!success.demo && success.expiresAt && <div className="hold-box hold-box--secure"><CheckCircle2 size={16}/><span>Seats held until <b>{formatDeparture(success.expiresAt)}</b></span></div>}
+        <div className="payment-safety"><span><CheckCircle2 size={15}/> Booking created only after successful payment</span><span><CheckCircle2 size={15}/> QR ticket available immediately after confirmation</span></div>
+        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" onClick={()=>{window.location.href=success.checkoutUrl;}}>Pay securely · {Number(total).toFixed(2)} JOD <ChevronRight size={18}/></button>}
+        <button className="secondary-button payment-back" onClick={onBack}>Back to trip details</button>
       </div>
     );
   }
@@ -581,13 +587,19 @@ function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
 
 function PaymentReturnScreen({ onViewTicket }) {
   return (
-    <div className="screen standard-screen booking-success">
-      <BrandLogo />
-      <CheckCircle2 size={76}/>
-      <span>PAYMENT SUCCESSFUL</span>
-      <h1>Booking confirmed</h1>
-      <p>Your payment was completed successfully and your SeaGo ticket is ready.</p>
-      <button className="primary-button" onClick={onViewTicket}>View ticket <Ticket size={18}/></button>
+    <div className="screen standard-screen confirmation-screen">
+      <div className="confirmation-screen__brand"><BrandLogo /></div>
+      <div className="confirmation-check"><CheckCircle2 size={44}/></div>
+      <span className="confirmation-kicker">BOOKING CONFIRMED</span>
+      <h1>You’re going to the Red Sea.</h1>
+      <p>Your payment was successful. Your booking is confirmed and your QR ticket is ready.</p>
+      <div className="confirmation-card">
+        <div><Ticket size={22}/><span><b>Your digital ticket is ready</b><small>Show the QR ticket at check-in</small></span></div>
+        <div><Bell size={22}/><span><b>We’ll keep you updated</b><small>Trip reminders and important changes appear in Alerts</small></span></div>
+        <div><MapPin size={22}/><span><b>Departure details included</b><small>Your ticket includes the meeting point and trip information</small></span></div>
+      </div>
+      <button className="primary-button confirmation-cta" onClick={onViewTicket}>Open my ticket <Ticket size={18}/></button>
+      <small className="confirmation-note">Keep your ticket available on your phone for check-in.</small>
     </div>
   );
 }
