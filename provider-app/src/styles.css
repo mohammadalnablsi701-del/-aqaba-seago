@@ -239,3 +239,8 @@ nav{
 .auth-method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px}
 .auth-method-tabs button{border:1px solid #d9e5ec;background:#f7fafc;color:#526774;border-radius:10px;padding:9px 12px;font-weight:800;font-size:11px}
 .auth-method-tabs button.active{background:#123f59;color:#fff;border-color:#123f59}
+
+.country-phone-field{display:grid;grid-template-columns:minmax(145px,.95fr) 1.35fr;gap:8px;align-items:center}
+.country-phone-field select,.country-phone-field input{width:100%;height:48px;border:1px solid #d8e4ea;border-radius:12px;padding:0 12px;background:#fff;color:#183a50;font-size:16px}
+.country-phone-field select{padding-right:6px}
+@media(max-width:430px){.country-phone-field{grid-template-columns:1fr 1.12fr}.country-phone-field select{font-size:14px}}
