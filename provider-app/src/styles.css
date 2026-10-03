@@ -230,3 +230,7 @@ nav{
 .audit-row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;background:#f8fafb;border:1px solid #e7edf2;border-radius:12px;padding:10px}
 .audit-row>div{display:flex;flex-direction:column;gap:3px;min-width:0}.audit-row b{font-size:11px;color:#173d53}.audit-row span{font-size:9px;color:#7a8b98}.audit-row time{font-size:9px;color:#8a99a5;white-space:nowrap}
 @media(max-width:650px){.audit-row{flex-direction:column}.audit-row time{white-space:normal}}
+
+.auth-method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px}
+.auth-method-tabs button{border:1px solid #d9e5ec;background:#f7fafc;color:#526774;border-radius:10px;padding:9px 12px;font-weight:800;font-size:11px}
+.auth-method-tabs button.active{background:#123f59;color:#fff;border-color:#123f59}
