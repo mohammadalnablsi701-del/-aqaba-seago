@@ -171,10 +171,19 @@ export async function runPilotE2EOnce({port}) {
     if(!bookingNotice||bookingNotice.data?.screen!=="bookings") throw new Error("Provider booking notification is not actionable");
     step("provider-booking-notification-actionable");
 
+    const customerNotifications=await api(base,"/api/notifications",{token:customerToken});
+    const customerNotice=customerNotifications.items?.find(n=>String(n.bookingId)===String(payment.bookingId)&&n.type==="booking_confirmed");
+    if(!customerNotice||customerNotice.data?.screen!=="tickets") throw new Error("Customer booking notification is not actionable");
+    step("customer-booking-notification-actionable");
+
     const tickets=await api(base,"/api/bookings",{token:customerToken});
     booking=tickets.find(x=>String(x._id)===String(paid.bookingId));
     if(!booking||booking.status!=="confirmed"||!booking.ticketToken) throw new Error("Confirmed ticket not returned");
     step("ticket-issued");
+
+    const publicValidation=await api(base,`/api/tickets/validate?token=${encodeURIComponent(booking.ticketToken)}`);
+    if(!publicValidation.valid||publicValidation.used) throw new Error("Public ticket validation failed before check-in");
+    step("customer-ticket-valid");
 
     const inspected=await api(base,"/api/tickets/inspect",{method:"POST",token:providerToken,body:{token:booking.ticketToken}});
     if(!inspected.valid||Number(inspected.guests)!==3) throw new Error("Provider ticket inspection failed");
@@ -183,6 +192,10 @@ export async function runPilotE2EOnce({port}) {
     const checked=await api(base,"/api/tickets/check-in",{method:"POST",token:providerToken,body:{token:booking.ticketToken}});
     if(!checked.ok||Number(checked.guests)!==3) throw new Error("Provider check-in failed");
     step("ticket-checked-in");
+
+    const usedValidation=await api(base,`/api/tickets/validate?token=${encodeURIComponent(booking.ticketToken)}`);
+    if(usedValidation.valid||!usedValidation.used) throw new Error("Customer ticket did not become used after check-in");
+    step("customer-ticket-used");
 
     let duplicateRejected=false;
     try{
