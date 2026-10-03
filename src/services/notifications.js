@@ -102,26 +102,31 @@ function bookingTable(b){
 export async function sendBookingConfirmation(bookingId){
   const b=await loadBooking(bookingId); if(!b) return;
   const ref=String(b._id).slice(-8).toUpperCase();
+  const provider=await Provider.findById(b.providerId?._id||b.providerId);
+  const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
+
   await createInApp({key:`booking-confirmed:customer:${b._id}`,userId:b.customerId?._id,type:"booking_confirmed",title:"Booking confirmed",body:`Your ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} booking SG-${ref} is confirmed.`,bookingId:b._id,data:{screen:"tickets"}});
-  await sendEmail({
+  if(owner?._id){
+    await createInApp({key:`booking-confirmed:provider:${b._id}`,userId:owner._id,type:"new_booking",title:"New booking",body:`New confirmed booking SG-${ref} for ${b.tripId?.titleEn||b.tripId?.titleAr||"your trip"}.`,bookingId:b._id,data:{screen:"bookings"}});
+  }
+
+  sendEmail({
     key:`booking-confirmed:customer:${b._id}`,
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
     subject:`SeaGo booking confirmed · SG-${ref}`,
     html:shell("Booking confirmed",`<p>Hi ${b.customerId?.name||"there"}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?payment=success" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#fff;text-decoration:none;border-radius:10px">View your ticket</a></p>`)
-  });
+  }).catch(err=>console.error("Customer confirmation email failed",err));
 
-  const provider=await Provider.findById(b.providerId?._id||b.providerId);
-  const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
-  if(owner?._id){await createInApp({key:`booking-confirmed:provider:${b._id}`,userId:owner._id,type:"new_booking",title:"New booking",body:`New confirmed booking SG-${ref} for ${b.tripId?.titleEn||b.tripId?.titleAr||"your trip"}.`,bookingId:b._id,data:{screen:"bookings"}});}
   if(owner?.email){
-    await sendEmail({
+    sendEmail({
       key:`booking-confirmed:provider:${b._id}`,
       bookingId:b._id,type:"booking_confirmed_provider",to:owner.email,
       subject:`New SeaGo booking · SG-${ref}`,
       html:shell("New booking received",`<p>A new confirmed booking was received for ${provider.businessName}.</p>${bookingTable(b)}`)
-    });
+    }).catch(err=>console.error("Provider confirmation email failed",err));
   }
 }
+
 
 export async function sendCancellationNotice(bookingId){
   const b=await loadBooking(bookingId); if(!b) return;
