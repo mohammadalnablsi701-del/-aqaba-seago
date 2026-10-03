@@ -51,7 +51,7 @@ async function complete(status){
   const j=await r.json();
   if(r.ok && status==='paid'){
     msg.textContent='Payment confirmed. Returning to Aqaba SeaGo...';
-    const target='${frontendBaseUrl}/?payment=success&paymentId='+encodeURIComponent(j.bookingId || '');
+    const target='${frontendBaseUrl}/?payment=success&paymentId='+encodeURIComponent(j.paymentId || '');
     setTimeout(()=>{ window.location.href=target; },700);
   } else {
     msg.textContent=j.error || 'Payment was not completed.';
@@ -98,6 +98,7 @@ router.post("/:paymentId/complete", async (req, res, next) => {
     res.json({
       ok: true,
       paymentStatus: result.payment.status,
+      paymentId: result.payment._id,
       bookingId: result.payment.bookingId
     });
   } catch (err) {
