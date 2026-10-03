@@ -24,6 +24,24 @@ async function releaseHold(hold, status = "released") {
   return true;
 }
 
+export async function releaseCheckoutHoldsForDeparture(departureId) {
+  const active = await CheckoutHold.find({ departureId, status: "active" })
+    .select("_id departureId seats")
+    .limit(1000);
+
+  let released = 0;
+  for (const hold of active) {
+    const didRelease = await releaseHold(hold, "released");
+    if (!didRelease) continue;
+    await Payment.updateMany(
+      { holdId: hold._id, status: { $in: ["created", "pending"] } },
+      { $set: { status: "cancelled", failedAt: new Date() } }
+    );
+    released += 1;
+  }
+  return released;
+}
+
 export async function releaseExpiredCheckoutHolds({ limit = 200 } = {}) {
   const now = new Date();
   const expired = await CheckoutHold.find({
@@ -62,6 +80,20 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
   if (hold.status !== "active" || hold.expiresAt <= new Date()) {
     if (hold.status === "active") await releaseHold(hold, "expired");
     throw Object.assign(new Error("Checkout expired"), { statusCode: 409 });
+  }
+
+  const departure = await Departure.findOne({
+    _id: hold.departureId,
+    status: "scheduled",
+    startsAt: { $gt: new Date() }
+  }).select("_id");
+  if (!departure) {
+    await releaseHold(hold, "released");
+    await Payment.updateMany(
+      { holdId: hold._id, status: { $in: ["created", "pending"] } },
+      { $set: { status: "cancelled", failedAt: new Date() } }
+    );
+    throw Object.assign(new Error("Departure is no longer available"), { statusCode: 409 });
   }
 
   let payment = await Payment.findOne({ holdId: hold._id });
@@ -115,7 +147,15 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   if (!amountMatches || !currencyMatches) {
     payment.status = "needs_review";
   } else if (event.status === "paid") {
-    if (hold.status === "active" && hold.expiresAt > new Date()) {
+    const departure = await Departure.findOne({
+      _id: hold.departureId,
+      status: "scheduled",
+      startsAt: { $gt: new Date() }
+    }).select("_id");
+    if (!departure) {
+      if (hold.status === "active") await releaseHold(hold, "released");
+      payment.status = "needs_review";
+    } else if (hold.status === "active" && hold.expiresAt > new Date()) {
       const booking = await Booking.create({
         customerId: hold.customerId,
         providerId: hold.providerId,
