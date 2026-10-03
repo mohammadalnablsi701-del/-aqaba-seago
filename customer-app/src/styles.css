@@ -450,3 +450,10 @@
 .ticket-cancellation--failed b{color:#a44b3f}
 .ticket-status--refunded{background:#eaf8f3;color:#08745f}
 .ticket-status--expired{background:#f2f4f6;color:#697886}
+
+.policy-link-list{display:grid;gap:8px;margin-top:14px}
+.policy-link-list button{width:100%;border:1px solid var(--line);border-radius:13px;background:white;padding:12px;display:grid;grid-template-columns:1fr 18px;gap:8px;align-items:center;text-align:left}
+.policy-link-list button>span{display:flex;flex-direction:column;gap:2px}
+.policy-link-list b{font-size:11px;color:var(--ink)}
+.policy-link-list small{font-size:9px;color:var(--muted)}
+.legal-copy p{margin-top:7px}
