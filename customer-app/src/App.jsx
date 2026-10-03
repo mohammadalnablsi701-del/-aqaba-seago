@@ -200,23 +200,61 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
 
 function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading, searchSummary }) {
   const [filter,setFilter]=useState("All Trips");
+  const [sort,setSort]=useState("recommended");
+
   const shown=useMemo(()=>{
-    if(filter==="All Trips") return tripList;
-    const token=filter.replace(/s$/,"").toLowerCase();
-    return tripList.filter(t =>
-      t.category.toLowerCase().includes(token) ||
-      t.title.toLowerCase().includes(token)
-    );
-  },[filter,tripList]);
+    let rows=filter==="All Trips" ? [...tripList] : tripList.filter(t=>{
+      const token=filter.replace(/s$/,"").toLowerCase();
+      return t.category.toLowerCase().includes(token) || t.title.toLowerCase().includes(token);
+    });
+
+    if(sort==="price-low") rows.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
+    if(sort==="price-high") rows.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
+    if(sort==="duration") rows.sort((a,b)=>{
+      const am=Number(a.raw?.durationMinutes||parseInt(a.duration)||9999);
+      const bm=Number(b.raw?.durationMinutes||parseInt(b.duration)||9999);
+      return am-bm;
+    });
+    return rows;
+  },[filter,sort,tripList]);
 
   return (
-    <div className="screen standard-screen">
-      <header className="standard-header"><BrandLogo compact/><div><span>{searchSummary||"DISCOVER AQABA"}</span><h1>Sea Experiences</h1></div></header>
-      <div className="category-row">{categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{c}</button>)}</div>
-      {loading ? <LoadingState label="Loading sea experiences"/> :
+    <div className="screen standard-screen trips-screen">
+      <header className="standard-header trips-header">
+        <BrandLogo compact/>
+        <div>
+          <span>{searchSummary||"DISCOVER AQABA"}</span>
+          <h1>Sea Experiences</h1>
+          <p>Verified Red Sea trips, clear pricing and live availability.</p>
+        </div>
+      </header>
+
+      <section className="trips-toolbar">
+        <div className="category-row category-row--premium">
+          {categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{c}</button>)}
+        </div>
+        <div className="sort-row">
+          <div><span>{shown.length}</span><small>{shown.length===1?"experience":"experiences"}</small></div>
+          <label>Sort
+            <select value={sort} onChange={e=>setSort(e.target.value)}>
+              <option value="recommended">Recommended</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="duration">Shortest first</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      {loading ? <LoadingState label="Finding the best sea experiences..."/> :
         shown.length
-          ? <div className="trip-grid">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
-          : <div className="empty-state"><Search size={44}/><h2>No matching trips</h2><p>There are no trips with enough available seats for the selected date and filters. Try another date, trip type, or guest count.</p></div>}
+          ? <div className="trip-grid trip-grid--premium">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
+          : <div className="empty-state trips-empty">
+              <div className="trips-empty__icon"><Search size={28}/></div>
+              <h2>No sea trips match this search</h2>
+              <p>Try another date or category. SeaGo will show only experiences that match your current search.</p>
+              <button onClick={()=>{setFilter("All Trips");setSort("recommended");}}>Show all experiences</button>
+            </div>}
     </div>
   );
 }
