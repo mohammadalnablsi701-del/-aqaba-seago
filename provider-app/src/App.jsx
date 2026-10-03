@@ -40,6 +40,23 @@ const COUNTRY_CODES=[
 ["VU","🇻🇺 Vanuatu","+678"],["VA","🇻🇦 Vatican City","+39"],["VE","🇻🇪 Venezuela","+58"],["VN","🇻🇳 Vietnam","+84"],["VG","🇻🇬 British Virgin Islands","+1284"],["VI","🇻🇮 U.S. Virgin Islands","+1340"],
 ["WF","🇼🇫 Wallis & Futuna","+681"],["YE","🇾🇪 Yemen","+967"],["ZM","🇿🇲 Zambia","+260"],["ZW","🇿🇼 Zimbabwe","+263"]
 ];
+const PHONE_PLACEHOLDERS={
+  "+962":"7X XXX XXXX","+966":"5X XXX XXXX","+971":"5X XXX XXXX","+20":"1X XXXX XXXX",
+  "+970":"5X XXX XXXX","+964":"7XX XXX XXXX","+965":"5XXX XXXX","+974":"3XXX XXXX",
+  "+973":"3XXX XXXX","+968":"9XXX XXXX","+961":"XX XXX XXX","+963":"9XX XXX XXX",
+  "+90":"5XX XXX XXXX","+1":"(XXX) XXX-XXXX","+44":"7XXX XXXXXX","+49":"1XX XXXXXXXX",
+  "+33":"X XX XX XX XX","+39":"3XX XXX XXXX","+34":"6XX XXX XXX","+31":"6 XXXXXXXX",
+  "+32":"4XX XX XX XX","+46":"7X XXX XX XX","+47":"4XX XX XXX","+45":"XX XX XX XX",
+  "+41":"7X XXX XX XX","+43":"6XX XXXXXXX","+30":"69X XXX XXXX","+357":"9X XXX XXX",
+  "+91":"XXXXX XXXXX","+92":"3XX XXXXXXX","+880":"1XXX XXXXXX","+63":"9XX XXX XXXX",
+  "+62":"8XX XXXX XXXX","+60":"1X XXXX XXXX","+65":"XXXX XXXX","+86":"1XX XXXX XXXX",
+  "+81":"XX XXXX XXXX","+82":"10 XXXX XXXX","+61":"4XX XXX XXX","+64":"2X XXX XXXX",
+  "+7":"9XX XXX XX XX","+380":"XX XXX XXXX","+27":"7X XXX XXXX","+212":"6XX XXX XXX",
+  "+216":"XX XXX XXX","+213":"5XX XX XX XX","+218":"9X XXX XXXX","+249":"9X XXX XXXX"
+};
+function phonePlaceholder(code){
+  return PHONE_PLACEHOLDERS[code]||"Phone number";
+}
 function internationalPhone(value,countryCode="+962"){
   const raw=String(value||"").trim();
   if(!raw)return "";
@@ -67,7 +84,7 @@ function CountryPhoneField({code,setCode,value,onChange,disabled=false,required=
         </div>
       </div>}
     </div>
-    <input inputMode="tel" value={value} onChange={onChange} disabled={disabled} required={required} placeholder={placeholder}/>
+    <input inputMode="tel" value={value} onChange={onChange} disabled={disabled} required={required} placeholder={placeholder==="Phone number"||placeholder==="7X XXX XXXX"||placeholder==="Phone"?phonePlaceholder(code):placeholder}/>
   </div>;
 }
 const CATEGORIES=["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"];
