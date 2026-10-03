@@ -4,6 +4,7 @@ self.addEventListener("push",event=>{
   const title=payload.title||"Aqaba SeaGo";
   const options={
     body:payload.body||"You have a new SeaGo update.",
+    icon:"./apple-touch-icon-v4.png",
     badge:undefined,
     tag:payload.data?.notificationId||payload.data?.screen||"seago",
     data:payload.data||{},
