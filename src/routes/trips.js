@@ -3,6 +3,7 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
+import { auditProviderAction } from "../services/providerAudit.js";
 
 const router = express.Router();
 
@@ -101,6 +102,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       providerId: p._id
     });
 
+    await auditProviderAction({access,user:req.user,action:"trip.create",targetType:"trip",targetId:trip._id,summary:"Created trip "+trip.titleEn,metadata:{active:trip.active,category:trip.category}});
     res.status(201).json(trip);
   } catch (e) { next(e); }
 });
@@ -130,6 +132,7 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
     }
 
     await trip.save();
+    await auditProviderAction({access,user:req.user,action:"trip.update",targetType:"trip",targetId:trip._id,summary:"Updated trip "+trip.titleEn,metadata:{active:trip.active}});
     res.json(trip);
   } catch (e) { next(e); }
 });
