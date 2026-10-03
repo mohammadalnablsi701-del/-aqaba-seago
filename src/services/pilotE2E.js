@@ -97,6 +97,21 @@ export async function runPilotE2EOnce({port}) {
     }});
     step("departure-created",{departureId:departure._id});
 
+    const bulkTimes=[
+      new Date(Date.now()+72*60*60*1000).toISOString(),
+      new Date(Date.now()+96*60*60*1000).toISOString()
+    ];
+    const bulk=await api(base,"/api/departures/bulk",{method:"POST",token:providerToken,body:{
+      tripId:trip._id,startsAtList:bulkTimes,capacity:8
+    }});
+    if(Number(bulk.created)!==2) throw new Error("Bulk departure creation mismatch");
+    step("bulk-departures-created",{created:bulk.created});
+
+    const providerTrips=await api(base,"/api/providers/me/trips",{token:providerToken});
+    const providerTrip=providerTrips.find(x=>String(x._id)===String(trip._id));
+    if(!providerTrip||Number(providerTrip.schedule?.upcomingDepartures)<3) throw new Error("Provider trip schedule summary mismatch");
+    step("provider-trip-schedule-summary",{upcoming:providerTrip.schedule.upcomingDepartures});
+
     const publicTrips=await api(base,"/api/trips");
     if(!publicTrips.some(x=>String(x._id)===String(trip._id))) throw new Error("Trip not visible publicly");
     step("trip-public");
@@ -140,6 +155,11 @@ export async function runPilotE2EOnce({port}) {
     if(payment.status!=="paid"||!payment.bookingId) throw new Error("Payment verification failed");
     step("payment-verified");
 
+    const providerNotifications=await api(base,"/api/notifications",{token:providerToken});
+    const bookingNotice=providerNotifications.items?.find(n=>String(n.bookingId)===String(payment.bookingId));
+    if(!bookingNotice||bookingNotice.data?.screen!=="bookings") throw new Error("Provider booking notification is not actionable");
+    step("provider-booking-notification-actionable");
+
     const tickets=await api(base,"/api/bookings",{token:customerToken});
     booking=tickets.find(x=>String(x._id)===String(paid.bookingId));
     if(!booking||booking.status!=="confirmed"||!booking.ticketToken) throw new Error("Confirmed ticket not returned");
@@ -160,9 +180,34 @@ export async function runPilotE2EOnce({port}) {
     if(!duplicateRejected) throw new Error("Duplicate check-in was not rejected");
     step("duplicate-checkin-rejected");
 
+    const checkout2=await api(base,"/api/payments/checkout",{method:"POST",token:customerToken,
+      headers:{"Idempotency-Key":`pilot-manual-${stamp}`},
+      body:{departureId:departure._id,adults:1,children:0,mealPlan:"without_buffet"}
+    });
+    const paid2=await api(base,`/api/mock-payments/${checkout2.paymentId}/complete`,{
+      method:"POST",body:{status:"paid"}
+    });
+    if(!paid2.bookingId) throw new Error("Second booking was not created");
+    step("manual-checkin-booking-created",{bookingId:paid2.bookingId});
+
+    const providerBookings=await api(base,"/api/providers/me/bookings",{token:providerToken});
+    if(!providerBookings.some(x=>String(x._id)===String(paid2.bookingId))) throw new Error("Provider all-bookings list missing booking");
+    step("provider-all-bookings-visible");
+
+    const manual=await api(base,`/api/providers/me/bookings/${paid2.bookingId}/check-in`,{method:"POST",token:providerToken});
+    if(!manual.ok||Number(manual.guests)!==1) throw new Error("Manual provider check-in failed");
+    step("manual-provider-checkin");
+
+    let manualDuplicateRejected=false;
+    try{
+      await api(base,`/api/providers/me/bookings/${paid2.bookingId}/check-in`,{method:"POST",token:providerToken});
+    }catch(e){ manualDuplicateRejected=e.status===409; }
+    if(!manualDuplicateRejected) throw new Error("Duplicate manual check-in was not rejected");
+    step("duplicate-manual-checkin-rejected");
+
     const depFinal=(await api(base,`/api/departures?tripId=${encodeURIComponent(trip._id)}`))
       .find(x=>String(x.id)===String(departure._id));
-    if(Number(depFinal?.availableSeats)!==3) throw new Error("Booked seats were not retained after payment");
+    if(Number(depFinal?.availableSeats)!==2) throw new Error("Booked seats were not retained after both bookings");
     step("capacity-consistent",{availableSeats:depFinal.availableSeats});
 
     result.ok=true;
@@ -203,7 +248,8 @@ export async function runPilotE2EOnce({port}) {
       if(customerUser) await Payment.deleteMany({customerId:customerUser._id});
       if(customerUser) await CheckoutHold.deleteMany({customerId:customerUser._id});
       if(bookingIds.length) await Booking.deleteMany({_id:{$in:bookingIds}});
-      if(departureId) await Departure.deleteMany({_id:departureId});
+      if(tripId) await Departure.deleteMany({tripId});
+      else if(departureId) await Departure.deleteMany({_id:departureId});
       if(tripId) await Trip.deleteMany({_id:tripId});
       if(providerId) await Provider.deleteMany({_id:providerId});
       if(userIds.length) await User.deleteMany({_id:{$in:userIds}});
