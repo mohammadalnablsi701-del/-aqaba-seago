@@ -7,7 +7,7 @@ import BrandLogo from "./BrandLogo.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
-  createPaymentCheckout, getQuote, hasApi, listBookings, listDepartures, listTrips,
+  createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
   loginCustomer, registerCustomer, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush
 } from "./api.js";
 
@@ -776,23 +776,67 @@ function PoliciesScreen({ onBack }) {
   </div>;
 }
 
-function PaymentReturnScreen({ onViewTicket }) {
-  return (
-    <div className="screen standard-screen confirmation-screen">
-      <div className="confirmation-screen__brand"><BrandLogo /></div>
-      <div className="confirmation-check"><CheckCircle2 size={44}/></div>
-      <span className="confirmation-kicker">BOOKING CONFIRMED</span>
-      <h1>You’re going to the Red Sea.</h1>
-      <p>Your payment was successful. Your booking is confirmed and your QR ticket is ready.</p>
-      <div className="confirmation-card">
-        <div><Ticket size={22}/><span><b>Your digital ticket is ready</b><small>Show the QR ticket at check-in</small></span></div>
-        <div><Bell size={22}/><span><b>We’ll keep you updated</b><small>Trip reminders and important changes appear in Alerts</small></span></div>
-        <div><MapPin size={22}/><span><b>Departure details included</b><small>Your ticket includes the meeting point and trip information</small></span></div>
-      </div>
-      <button className="primary-button confirmation-cta" onClick={onViewTicket}>Open my ticket <Ticket size={18}/></button>
-      <small className="confirmation-note">Keep your ticket available on your phone for check-in.</small>
+function PaymentReturnScreen({ auth, onViewTicket, onReturnHome }) {
+  const params=new URLSearchParams(window.location.search);
+  const paymentId=params.get("paymentId");
+  const gatewayState=params.get("payment");
+  const [state,setState]=useState({loading:Boolean(paymentId&&auth?.token),payment:null,error:""});
+
+  async function verify(){
+    if(!paymentId||!auth?.token){
+      setState({loading:false,payment:null,error:!auth?.token?"Your SeaGo session is required to verify this payment.":"Payment reference is missing."});
+      return;
+    }
+    setState(s=>({...s,loading:true,error:""}));
+    try{
+      const payment=await getPayment(paymentId,auth.token);
+      setState({loading:false,payment,error:""});
+    }catch(e){
+      setState({loading:false,payment:null,error:e.message||"We couldn’t verify this payment yet."});
+    }
+  }
+
+  useEffect(()=>{verify();},[paymentId,auth?.token]);
+
+  const status=String(state.payment?.status||gatewayState||"").toLowerCase();
+  const confirmed=status==="paid"&&Boolean(state.payment?.bookingId);
+  const pending=["pending","processing","success"].includes(status)&&!confirmed;
+  const failed=["failed","cancelled","expired"].includes(status);
+  const review=status==="needs_review";
+
+  if(state.loading) return <div className="screen standard-screen payment-result-screen">
+    <div className="confirmation-screen__brand"><BrandLogo /></div>
+    <div className="payment-result-loader"><LoaderCircle className="spin" size={34}/></div>
+    <span className="confirmation-kicker">VERIFYING PAYMENT</span>
+    <h1>Confirming your booking…</h1>
+    <p>Please keep this page open while SeaGo checks the payment status.</p>
+  </div>;
+
+  if(confirmed) return <div className="screen standard-screen confirmation-screen">
+    <div className="confirmation-screen__brand"><BrandLogo /></div>
+    <div className="confirmation-check"><CheckCircle2 size={44}/></div>
+    <span className="confirmation-kicker">BOOKING CONFIRMED</span>
+    <h1>You’re going to the Red Sea.</h1>
+    <p>Your payment was verified successfully. Your booking is confirmed and your QR ticket is ready.</p>
+    <div className="confirmation-card">
+      <div><Ticket size={22}/><span><b>Your digital ticket is ready</b><small>Show the QR ticket at check-in</small></span></div>
+      <div><Bell size={22}/><span><b>We’ll keep you updated</b><small>Trip reminders and important changes appear in Alerts</small></span></div>
+      <div><MapPin size={22}/><span><b>Departure details included</b><small>Your ticket includes the meeting point and trip information</small></span></div>
     </div>
-  );
+    <button className="primary-button confirmation-cta" onClick={onViewTicket}>Open my ticket <Ticket size={18}/></button>
+    <small className="confirmation-note">Keep your ticket available on your phone for check-in.</small>
+  </div>;
+
+  return <div className="screen standard-screen payment-result-screen">
+    <div className="confirmation-screen__brand"><BrandLogo /></div>
+    <div className={"payment-result-icon "+(failed?"is-failed":review?"is-review":"is-pending")}>{failed?"!":review?"!":"…"}</div>
+    <span className="confirmation-kicker">{failed?"PAYMENT NOT COMPLETED":review?"PAYMENT REVIEW":"PAYMENT STATUS"}</span>
+    <h1>{failed?"Your booking was not confirmed.":review?"We’re checking this payment.":pending?"Payment is still processing.":"We couldn’t confirm the payment yet."}</h1>
+    <p>{failed?"No confirmed booking or QR ticket has been issued. You can return and try again.":review?"Please don’t pay again. SeaGo needs to verify the payment before issuing a ticket.":pending?"Please wait a moment, then check again. Your ticket will appear only after payment is verified.":state.error||"SeaGo could not verify a confirmed payment for this return."}</p>
+    {state.error&&<div className="booking-error">{state.error}</div>}
+    {(pending||review||state.error)&&<button className="primary-button payment-result-action" onClick={verify}>Check payment again</button>}
+    <button className="secondary-button payment-result-action" onClick={onReturnHome}>Return to SeaGo</button>
+  </div>;
 }
 
 function LoadingState({ label }) {
@@ -981,7 +1025,7 @@ export default function App(){
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=trip=>{setDetail(trip);setBooking(false);};
 
-  if(paymentReturn) return <PaymentReturnScreen onViewTicket={viewPaidTicket}/>;
+  if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
   if(detail) return <DetailScreen trip={detail} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={()=>setBooking(true)}/>;
 
