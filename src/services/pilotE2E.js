@@ -80,6 +80,17 @@ export async function runPilotE2EOnce({port}) {
     if(me.status!=="approved") throw new Error("Provider approval not visible");
     step("provider-approved-visible");
 
+    const updatedProvider=await api(base,"/api/providers/me/settings",{method:"PATCH",token:providerToken,body:{
+      phone:"+962790000111",
+      defaultCapacity:24,
+      defaultDepartureTime:"10:30",
+      departureLocation:{name:"Pilot Marina",address:"Aqaba, Jordan",googleMapsUrl:"https://maps.google.com/?q=Aqaba"}
+    }});
+    if(!updatedProvider.settings?.configured||Number(updatedProvider.settings?.defaultCapacity)!==24||updatedProvider.settings?.defaultDepartureTime!=="10:30") throw new Error("Provider settings were not saved");
+    const meWithSettings=await api(base,"/api/providers/me",{token:providerToken});
+    if(Number(meWithSettings.settings?.defaultCapacity)!==24||meWithSettings.settings?.departureLocation?.name!=="Pilot Marina") throw new Error("Provider settings were not persisted");
+    step("provider-settings-persisted");
+
     trip=await api(base,"/api/trips",{method:"POST",token:providerToken,body:{
       titleAr:"رحلة اختبار SeaGo",
       titleEn:"SeaGo Pilot E2E Trip",
