@@ -7,6 +7,7 @@ const schema=new mongoose.Schema({
   approvedAt:Date,
   approvedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User"},
   settings:{
+    configured:{type:Boolean,default:false},
     defaultCapacity:{type:Number,min:1,max:500,default:20},
     defaultDepartureTime:{type:String,trim:true,default:"09:00"},
     departureLocation:{
