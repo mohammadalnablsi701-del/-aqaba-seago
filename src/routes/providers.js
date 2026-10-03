@@ -277,6 +277,7 @@ router.post("/me/team",requireAuth,requireRole("provider"),async(req,res,next)=>
     const user=await User.create({name,email,phone:phone||undefined,passwordHash,role:"provider",isActive:true});
     try{
       const member=await ProviderMember.create({providerId:access.provider._id,userId:user._id,role,isActive:true,createdBy:req.user._id});
+      await auditProviderAction({access,user:req.user,action:"team.add",targetType:"team_member",targetId:member._id,summary:"Added team member "+user.name,metadata:{role}});
       res.status(201).json({id:member._id,userId:user._id,name:user.name,email:user.email,phone:user.phone,role:member.role,isActive:true});
     }catch(e){await User.deleteOne({_id:user._id});throw e;}
   }catch(e){next(e);}
@@ -295,6 +296,7 @@ router.patch("/me/team/:memberId",requireAuth,requireRole("provider"),async(req,
     }
     if(req.body.isActive!==undefined){member.isActive=Boolean(req.body.isActive);if(member.userId){member.userId.isActive=Boolean(req.body.isActive);await member.userId.save();}}
     await member.save();
+    await auditProviderAction({access,user:req.user,action:"team.update",targetType:"team_member",targetId:member._id,summary:"Updated team member "+(member.userId?.name||"account"),metadata:{role:member.role,isActive:member.isActive}});
     res.json({id:member._id,userId:member.userId?._id,name:member.userId?.name,email:member.userId?.email,role:member.role,isActive:member.isActive&&Boolean(member.userId?.isActive)});
   }catch(e){next(e);}
 });
