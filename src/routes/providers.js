@@ -8,6 +8,7 @@ import User from "../models/User.js";
 import ProviderMember from "../models/ProviderMember.js";
 import bcrypt from "bcryptjs";
 import { resolveProviderAccess, requireProviderCapability } from "../services/providerAccess.js";
+import ProviderAuditLog from "../models/ProviderAuditLog.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router=express.Router();
@@ -293,6 +294,15 @@ router.patch("/me/team/:memberId",requireAuth,requireRole("provider"),async(req,
     if(req.body.isActive!==undefined){member.isActive=Boolean(req.body.isActive);if(member.userId){member.userId.isActive=Boolean(req.body.isActive);await member.userId.save();}}
     await member.save();
     res.json({id:member._id,userId:member.userId?._id,name:member.userId?.name,email:member.userId?.email,role:member.role,isActive:member.isActive&&Boolean(member.userId?.isActive)});
+  }catch(e){next(e);}
+});
+
+router.get("/me/audit-log",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const access=await requireProviderCapability(req.user,"manage_team",{approved:false});
+    if(!access)return res.status(403).json({error:"Owner permission required"});
+    const rows=await ProviderAuditLog.find({providerId:access.provider._id}).populate("actorUserId","name email").sort({createdAt:-1}).limit(200);
+    res.json(rows.map(x=>({id:x._id,action:x.action,targetType:x.targetType,targetId:x.targetId,summary:x.summary,metadata:x.metadata,createdAt:x.createdAt,actor:{id:x.actorUserId?._id,name:x.actorUserId?.name,email:x.actorUserId?.email,role:x.actorRole}})));
   }catch(e){next(e);}
 });
 
