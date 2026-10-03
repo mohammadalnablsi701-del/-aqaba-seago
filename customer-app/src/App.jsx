@@ -105,7 +105,7 @@ function ApiNotice({ usingFallback }) {
   );
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch, onOpenMenu }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch, onOpenMenu, onSeeAll }) {
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>new Date().toISOString().slice(0,10));
   const [guests,setGuests]=useState(2);
@@ -165,7 +165,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
       <ApiNotice usingFallback={usingFallback} />
 
       <section className="content-section">
-        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2></div><button>See all</button></div>
+        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
         <div className="trip-strip">
           {tripList.slice(0,3).map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
@@ -761,16 +761,16 @@ function LoadingState({ label }) {
   return <div className="loading-state"><LoaderCircle className="spin"/><span>{label}</span></div>;
 }
 
-function NotificationsScreen({auth}){
+function NotificationsScreen({auth,onUnreadChange}){
   const[data,setData]=useState({unread:0,items:[]});const[loading,setLoading]=useState(Boolean(auth?.token));const[error,setError]=useState("");
   const[push,setPush]=useState({supported:true,permission:"default",subscribed:false});const[pushBusy,setPushBusy]=useState(false);const[pushMsg,setPushMsg]=useState("");
   const standalone=window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
   const isiPhone=/iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  async function load(){if(!auth?.token){setLoading(false);return;}setLoading(true);try{setData(await listNotifications(auth.token));setError("");}catch(e){setError(e.message)}finally{setLoading(false)}}
+  async function load(){if(!auth?.token){setLoading(false);onUnreadChange?.(0);return;}setLoading(true);try{const next=await listNotifications(auth.token);setData(next);onUnreadChange?.(Number(next?.unread||0));setError("");}catch(e){setError(e.message)}finally{setLoading(false)}}
   useEffect(()=>{load();pushNotificationStatus().then(setPush).catch(()=>{})},[auth?.token]);
-  async function open(n){if(!n.readAt){try{await markNotificationRead(n._id,auth.token);setData(d=>({...d,unread:Math.max(0,d.unread-1),items:d.items.map(x=>x._id===n._id?{...x,readAt:new Date().toISOString()}:x)}))}catch{}}}
-  async function readAll(){await markAllNotificationsRead(auth.token);setData(d=>({unread:0,items:d.items.map(x=>({...x,readAt:x.readAt||new Date().toISOString()}))}))}
+  async function open(n){if(!n.readAt){try{await markNotificationRead(n._id,auth.token);setData(d=>{const unread=Math.max(0,d.unread-1);onUnreadChange?.(unread);return {...d,unread,items:d.items.map(x=>x._id===n._id?{...x,readAt:new Date().toISOString()}:x)}})}catch{}}}
+  async function readAll(){await markAllNotificationsRead(auth.token);onUnreadChange?.(0);setData(d=>({unread:0,items:d.items.map(x=>({...x,readAt:x.readAt||new Date().toISOString()}))}))}
   async function enablePush(){setPushBusy(true);setPushMsg("");try{await enablePushNotifications(auth.token);setPush(await pushNotificationStatus());setPushMsg("Push notifications enabled.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
   async function testPush(){setPushBusy(true);setPushMsg("");try{const r=await sendTestPush(auth.token);setPushMsg(r.sent>0?"Test push sent.":"No active push subscription found.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
 
@@ -830,9 +830,9 @@ function SideMenu({ open, onClose, active, setActive }) {
   </div>;
 }
 
-function BottomNav({ active, setActive }) {
+function BottomNav({ active, setActive, unread = 0 }) {
   const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["notifications",Bell,"Alerts"],["profile",UserRound,"Profile"]];
-  return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><Icon size={20}/><span>{label}</span></button>)}</nav>;
+  return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><span className="bottom-nav__icon"><Icon size={20}/>{id==="notifications"&&unread>0&&<em>{unread>9?"9+":unread}</em>}</span><span>{label}</span></button>)}</nav>;
 }
 
 function readStoredAuth() {
@@ -854,6 +854,14 @@ export default function App(){
   const [favourites,setFavourites]=useState(["snorkel-coral"]);
   const [auth,setAuth]=useState(readStoredAuth());
   const [menuOpen,setMenuOpen]=useState(false);
+  const [alertsUnread,setAlertsUnread]=useState(0);
+
+  useEffect(()=>{
+    let ignore=false;
+    if(!auth?.token||!hasApi()){setAlertsUnread(0);return;}
+    listNotifications(auth.token).then(r=>{if(!ignore)setAlertsUnread(Number(r?.unread||0));}).catch(()=>{});
+    return()=>{ignore=true;};
+  },[auth?.token,active]);
 
   useEffect(()=>{
     let ignore=false;
@@ -940,7 +948,7 @@ export default function App(){
       {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
-      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}\n      {active==="notifications"&&<NotificationsScreen auth={auth}/>}
+      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}\n      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
       {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onBack={()=>setActive("profile")}/>}
       {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
@@ -948,6 +956,6 @@ export default function App(){
       {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")}/>}
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
-    <BottomNav active={active} setActive={setActive}/>
+    <BottomNav active={active} setActive={setActive} unread={alertsUnread}/>
   </div>;
 }
