@@ -232,6 +232,7 @@ router.post("/me/bookings/:bookingId/check-in",requireAuth,requireRole("provider
       {new:true}
     );
     if(!claimed)return res.status(409).json({error:"Booking already checked in"});
+    await auditProviderAction({access,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats,method:"manual"}});
     res.json({ok:true,bookingId:claimed._id,checkedInAt:claimed.checkedInAt,guests:claimed.seats});
   }catch(e){next(e);}
 });
