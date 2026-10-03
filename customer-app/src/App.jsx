@@ -774,7 +774,7 @@ function LoadingState({ label }) {
   return <div className="loading-state"><LoaderCircle className="spin"/><span>{label}</span></div>;
 }
 
-function NotificationsScreen({auth,onUnreadChange}){
+function NotificationsScreen({auth,onUnreadChange,onAuthenticated}){
   const[data,setData]=useState({unread:0,items:[]});const[loading,setLoading]=useState(Boolean(auth?.token));const[error,setError]=useState("");
   const[push,setPush]=useState({supported:true,permission:"default",subscribed:false});const[pushBusy,setPushBusy]=useState(false);const[pushMsg,setPushMsg]=useState("");
   const standalone=window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
@@ -787,7 +787,7 @@ function NotificationsScreen({auth,onUnreadChange}){
   async function enablePush(){setPushBusy(true);setPushMsg("");try{await enablePushNotifications(auth.token);setPush(await pushNotificationStatus());setPushMsg("Push notifications enabled.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
   async function testPush(){setPushBusy(true);setPushMsg("");try{const r=await sendTestPush(auth.token);setPushMsg(r.sent>0?"Test push sent.":"No active push subscription found.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
 
-  if(!auth?.token)return <div className="screen standard-screen notification-screen"><header className="standard-header notifications-header"><BrandLogo compact/><div><span>TRIP UPDATES</span><h1>Alerts</h1><p>Booking confirmations, reminders and important changes.</p></div></header><div className="alerts-signin"><div className="alerts-signin__icon"><Bell size={28}/></div><h2>Stay in the loop</h2><p>Sign in to receive booking updates, departure reminders and important SeaGo alerts.</p></div></div>;
+  if(!auth?.token)return <div className="screen standard-screen notification-screen"><header className="standard-header notifications-header"><BrandLogo compact/><div><span>TRIP UPDATES</span><h1>Alerts</h1><p>Booking confirmations, reminders and important changes.</p></div></header><div className="alerts-signin"><div className="alerts-signin__icon"><Bell size={28}/></div><h2>Stay in the loop</h2><p>Sign in to receive booking updates, departure reminders and important SeaGo alerts.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
 
   return <div className="screen standard-screen notification-screen">
     <header className="standard-header notifications-header"><BrandLogo compact/><div><span>TRIP UPDATES</span><h1>Alerts</h1><p>Everything important about your SeaGo trips.</p></div>{data.unread>0&&<button className="mark-all" onClick={readAll}>Read all</button>}</header>
@@ -913,7 +913,7 @@ export default function App(){
             const enoughSeats = Number(d.availableSeats||0) >= Number(guests||1);
             if (!enoughSeats) return false;
             if (!date) return true;
-            const depDate = new Date(d.startsAt).toISOString().slice(0,10);
+            const depDate = localDateInputValue(new Date(d.startsAt));
             return depDate === date;
           });
           return ok ? trip : null;
@@ -949,6 +949,10 @@ export default function App(){
     localStorage.removeItem("seago_auth");
   }
 
+  useEffect(()=>{
+    window.scrollTo(0,0);
+  },[active,detail?.id,booking,paymentReturn]);
+
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=trip=>{setDetail(trip);setBooking(false);};
 
@@ -970,6 +974,6 @@ export default function App(){
       {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")}/>}
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
-    <BottomNav active={active} setActive={setActive} unread={alertsUnread}/>
+    <BottomNav active={["personal-details","trip-preferences","support","policies"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
 }
