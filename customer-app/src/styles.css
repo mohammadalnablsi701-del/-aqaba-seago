@@ -464,3 +464,5 @@
 .trip-live-status.available{background:#eaf8f0;color:#087443}
 .trip-live-status.unavailable{background:#f2f5f7;color:#7b8997}
 .sticky-booking .primary-button:disabled{opacity:.5;box-shadow:none;cursor:not-allowed}
+
+.live-price-loading{display:flex!important;align-items:center;gap:8px!important;justify-content:flex-start!important;color:#7a8b99;font-size:11px;padding:6px 0}
