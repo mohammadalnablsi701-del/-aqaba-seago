@@ -225,26 +225,65 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
   if(!trip) return null;
   return (
     <div className="screen detail-screen">
-      <div className={"detail-hero detail-hero--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(3,31,51,.15),rgba(3,31,51,.28)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
-        <button className="detail-back" onClick={onBack}><ChevronLeft/></button>
-        <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)}><Heart fill={favourite?"currentColor":"none"}/></button>
+      <div className={"detail-hero detail-hero--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(3,31,51,.08),rgba(3,31,51,.34)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
+        <button className="detail-back" onClick={onBack} aria-label="Back"><ChevronLeft/></button>
+        <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)} aria-label="Save trip"><Heart fill={favourite?"currentColor":"none"}/></button>
         <BrandLogo compact/>
-        {!trip.images?.[0]&&<ShipWheel size={88} strokeWidth={1.1}/>}
+        {!trip.images?.[0]&&<div className="detail-hero__fallback"><ShipWheel size={76} strokeWidth={1.15}/><span>{trip.category}</span></div>}
+        <div className="detail-hero__badge"><CheckCircle2 size={14}/> Verified SeaGo experience</div>
       </div>
+
       <div className="detail-body">
         <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
         <h1>{trip.title}</h1>
-        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified SeaGo operator <span>{trip.providerName || "Approved partner"}</span></div>
-        <p className="detail-description">{trip.description}</p><div className="detail-confidence"><div><CheckCircle2 size={18}/><span><b>Instant confirmation</b><small>Ticket issued after payment</small></span></div><div><CheckCircle2 size={18}/><span><b>Clear cancellation policy</b><small>Refund rules shown before payment</small></span></div></div>{trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
-        <div className="feature-grid">
-          <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
-          <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
-          <div><UsersRound/><span><small>Guests</small><b>Live availability</b></span></div>
-          <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
+        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified operator <span>{trip.providerName || "Approved SeaGo partner"}</span></div>
+
+        <div className="detail-price-summary">
+          <div><small>From</small><strong>{trip.price} JOD</strong><span>per adult</span></div>
+          <div><small>Duration</small><strong>{trip.duration}</strong><span>{trip.departureLocation?.name || "Aqaba"}</span></div>
         </div>
-        {trip.buffetEnabled&&<section className="buffet-info"><span>OPEN BUFFET OPTION</span><h2>Available with this trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}{trip.departureLocation?.name&&<section className="departure-location"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}</section>}<section className="included"><span>BOOK WITH CONFIDENCE</span><h2>Everything you need before you go</h2><p>Live availability, verified operator details, departure point, pricing and cancellation terms are shown before checkout.</p></section>
+
+        <section className="detail-section">
+          <span className="detail-section__label">ABOUT THIS EXPERIENCE</span>
+          <p className="detail-description">{trip.description}</p>
+        </section>
+
+        <div className="detail-confidence">
+          <div><CheckCircle2 size={18}/><span><b>Instant confirmation</b><small>Ticket issued after successful payment</small></span></div>
+          <div><CheckCircle2 size={18}/><span><b>Flexible cancellation</b><small>100% refund 24+ hours before departure</small></span></div>
+        </div>
+
+        {trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
+
+        <section className="detail-section">
+          <span className="detail-section__label">TRIP ESSENTIALS</span>
+          <div className="feature-grid">
+            <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
+            <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
+            <div><UsersRound/><span><small>Availability</small><b>Live seats</b></span></div>
+            <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
+          </div>
+        </section>
+
+        {trip.buffetEnabled&&<section className="buffet-info detail-card-section"><span>OPEN BUFFET OPTION</span><h2>Add a meal to your trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}
+
+        {trip.departureLocation?.name&&<section className="departure-location detail-card-section"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps <ChevronRight size={15}/></a>}</section>}
+
+        <section className="included detail-card-section">
+          <span>CANCELLATION POLICY</span>
+          <h2>Know your refund before you book</h2>
+          <div className="policy-grid">
+            <div><b>24+ hrs</b><small>100% refund</small></div>
+            <div><b>12–24 hrs</b><small>50% refund</small></div>
+            <div><b>&lt;12 hrs</b><small>No refund</small></div>
+          </div>
+        </section>
       </div>
-      <div className="sticky-booking"><div><small>From</small><strong>{trip.price} JOD</strong><span>/ person</span></div><button className="primary-button" onClick={onBook}>Book now <ChevronRight size={18}/></button></div>
+
+      <div className="sticky-booking">
+        <div><small>From</small><strong>{trip.price} JOD</strong><span>/ adult</span></div>
+        <button className="primary-button" onClick={onBook}>Check availability <ChevronRight size={18}/></button>
+      </div>
     </div>
   );
 }
