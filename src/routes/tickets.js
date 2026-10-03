@@ -2,6 +2,7 @@ import express from "express";
 import Booking from "../models/Booking.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireProviderCapability } from "../services/providerAccess.js";
 import { verifyTicketToken } from "../services/tickets.js";
 
 const router = express.Router();
@@ -66,7 +67,8 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
     const { booking } = await loadTicket(req.body.token);
 
     if (req.user.role === "provider") {
-      const provider = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
+      const access=await requireProviderCapability(req.user,"checkin");
+      const provider=access?.provider;
       if (!provider || provider._id.toString() !== booking.providerId._id.toString()) {
         return res.status(403).json({ error: "This ticket belongs to another provider" });
       }
@@ -119,22 +121,25 @@ router.post("/check-in", requireAuth, requireRole("provider","admin"), async (re
     }
 
     if (req.user.role === "provider") {
-      const provider = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
+      const access=await requireProviderCapability(req.user,"checkin");
+      const provider=access?.provider;
       if (!provider || provider._id.toString() !== booking.providerId._id.toString()) {
         return res.status(403).json({ error: "This ticket belongs to another provider" });
       }
     }
 
-    booking.checkedInAt = new Date();
-    booking.checkedInBy = req.user._id;
-    booking.checkInCount = Number(booking.checkInCount || 0) + 1;
-    await booking.save();
-
+    const checkedAt=new Date();
+    const claimed=await Booking.findOneAndUpdate(
+      {_id:booking._id,status:"confirmed",checkedInAt:null},
+      {$set:{checkedInAt:checkedAt,checkedInBy:req.user._id},$inc:{checkInCount:1}},
+      {new:true}
+    );
+    if(!claimed)return res.status(409).json({error:"Ticket already checked in"});
     res.json({
-      ok: true,
-      bookingId: booking._id,
-      checkedInAt: booking.checkedInAt,
-      guests: booking.seats
+      ok:true,
+      bookingId:claimed._id,
+      checkedInAt:claimed.checkedInAt,
+      guests:claimed.seats
     });
   } catch (err) { next(err); }
 });
