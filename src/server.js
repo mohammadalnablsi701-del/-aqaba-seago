@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectDb } from "./config/db.js";
 import { createApp } from "./app.js";
 import { seedDemoData } from "./services/demoSeed.js";
+import { cleanupDemoDataOnce } from "./services/demoCleanup.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders, sendTestEmail } from "./services/notifications.js";
 
@@ -23,6 +24,11 @@ if(publicLaunch&&(process.env.PAYMENT_PROVIDER||"mock")==="mock"){
 
 await connectDb(process.env.MONGODB_URI);
 await seedDemoData();
+
+const demoCleanupResult=await cleanupDemoDataOnce();
+if(process.env.CLEANUP_DEMO_ON_START==="true"){
+  console.log("Demo cleanup result",JSON.stringify(demoCleanupResult));
+}
 
 if(process.env.EMAIL_TEST_RECIPIENT){
   await sendTestEmail(process.env.EMAIL_TEST_RECIPIENT);
