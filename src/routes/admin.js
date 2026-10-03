@@ -52,10 +52,14 @@ router.post("/bookings/release-expired",async(_req,res,next)=>{try{const release
 router.get("/readiness",async(_req,res,next)=>{
   try{
     const now=new Date();
-    const [approvedProviders,providersPending,confirmedBookings]=await Promise.all([
+    const [approvedProviders,providersPending,confirmedBookings,bookingTotals]=await Promise.all([
       Provider.find({status:"approved"}).select("_id"),
       Provider.countDocuments({status:"pending"}),
-      Booking.countDocuments({status:"confirmed"})
+      Booking.countDocuments({status:"confirmed"}),
+      Booking.aggregate([
+        {$match:{status:"confirmed"}},
+        {$group:{_id:null,gross:{$sum:{$ifNull:["$pricing.grossAmount",0]}},commission:{$sum:{$ifNull:["$pricing.commissionAmount",0]}},providerNet:{$sum:{$ifNull:["$pricing.providerNetAmount",0]}},seats:{$sum:{$ifNull:["$seats",0]}}}}
+      ])
     ]);
     const approvedProviderIds=approvedProviders.map(p=>p._id);
     const activeTripRows=approvedProviderIds.length
@@ -67,6 +71,11 @@ router.get("/readiness",async(_req,res,next)=>{
       :0;
     const providersApproved=approvedProviders.length;
     const activeTrips=activeTripIds.length;
+    const totals=bookingTotals[0]||{gross:0,commission:0,providerNet:0,seats:0};
+    const upcomingRows=activeTripIds.length
+      ?await Departure.find({tripId:{$in:activeTripIds},status:"scheduled",startsAt:{$gte:now}})
+        .sort({startsAt:1}).limit(6).populate({path:"tripId",select:"titleEn titleAr providerId",populate:{path:"providerId",select:"businessName"}})
+      :[];
 
     const demoProvider=await Provider.findOne({businessName:"Aqaba SeaGo Demo Partner"}).select("_id");
     const demoTripCount=demoProvider?await Trip.countDocuments({providerId:demoProvider._id}):0;
@@ -116,6 +125,22 @@ router.get("/readiness",async(_req,res,next)=>{
         publicBaseUrlConfigured:validPublicBaseUrl
       },
       counts:{providersApproved,providersPending,activeTrips,upcomingDepartures,confirmedBookings},
+      operations:{
+        currency:"JOD",
+        grossSales:Number(totals.gross||0),
+        seaGoCommission:Number(totals.commission||0),
+        providerNet:Number(totals.providerNet||0),
+        confirmedSeats:Number(totals.seats||0),
+        upcoming:upcomingRows.map(d=>({
+          id:d._id,
+          startsAt:d.startsAt,
+          capacity:d.capacity,
+          reservedSeats:d.reservedSeats,
+          availableSeats:Math.max(0,Number(d.capacity||0)-Number(d.reservedSeats||0)),
+          tripTitle:d.tripId?.titleEn||d.tripId?.titleAr||"Trip",
+          providerName:d.tripId?.providerId?.businessName||"Provider"
+        }))
+      },
       demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,activeTripCount:demoActiveTripCount,userCount:demoUserCount},
       checks
     });
