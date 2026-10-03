@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from"react";
-import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound}from"lucide-react";
+import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell}from"lucide-react";
 import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
@@ -11,7 +11,7 @@ function Login({onDone}){
 }
 
 export default function App(){
-  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("commissions");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   useEffect(()=>{
     const expired=()=>{setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setError("Your session expired. Please sign in again.");};
     window.addEventListener("seago:session-expired",expired);
@@ -57,7 +57,7 @@ export default function App(){
       <div className="title"><RotateCcw/><div><small>REFUNDS</small><h1>Cancellations & refunds</h1><p>Track customer and provider cancellations, refund percentages and payment status.</p></div></div>
       <div className="refund-list">{refundRows.length?refundRows.map(r=><RefundRow key={r._id} r={r}/>):<p>No cancellations yet.</p>}</div>
     </>:<>
-      <div className="title"><RotateCcw/><div><small>EMAIL</small><h1>Email notifications</h1><p>Delivery history for confirmations, cancellations and trip reminders.</p></div></div>
+      <div className="title"><Bell/><div><small>EMAIL</small><h1>Email notifications</h1><p>Delivery history for confirmations, cancellations and trip reminders.</p></div></div>
       <div className="notification-list">{notificationRows.length?notificationRows.map(n=><NotificationRow key={n._id} n={n}/>):<p>No email events yet.</p>}</div>
     </>}
   </main></div>
@@ -68,7 +68,8 @@ function ProviderAdminRow({p,token,onSaved}){const[busy,setBusy]=useState(false)
 function TripRow({t,token,onSaved}){
   const[value,setValue]=useState(t.pricing?.commissionType==="percentage"?t.pricing?.commissionValue:0);const[saving,setSaving]=useState(false);const[msg,setMsg]=useState("");
   async function save(){setSaving(true);setMsg("");try{await setCommission(token,t._id,Number(value));setMsg("Saved");await onSaved()}catch(e){setMsg(e.message)}finally{setSaving(false)}}
-  return <div className="trip"><div><h3>{t.titleEn}</h3><p>{t.providerId?.businessName||"Provider"} · {t.pricing?.pricePerPerson} JOD/person</p></div><div className="commission"><label>SeaGo commission<input type="number" min="0" max="100" step="0.1" value={value} onChange={e=>setValue(e.target.value)}/><span>%</span></label><button onClick={save} disabled={saving}><Save size={15}/>{saving?"Saving":"Save"}</button>{msg&&<small>{msg}</small>}</div></div>
+  const adultPrice=Number(t.pricing?.adultPrice??t.pricing?.pricePerPerson??0);
+  return <div className="trip"><div><div className="trip-admin-head"><h3>{t.titleEn||t.titleAr||"Untitled trip"}</h3><span className={t.active?"trip-live":"trip-off"}>{t.active?"Active":"Inactive"}</span></div><p>{t.providerId?.businessName||"Provider"} · {adultPrice.toFixed(2)} JOD/adult</p><small className="trip-provider-state">Provider: {t.providerId?.status||"unknown"}</small></div><div className="commission"><label>SeaGo commission<input type="number" min="0" max="100" step="0.1" value={value} onChange={e=>setValue(e.target.value)}/><span>%</span></label><button onClick={save} disabled={saving}><Save size={15}/>{saving?"Saving":"Save"}</button>{msg&&<small>{msg}</small>}</div></div>
 }
 
 function RefundRow({r}){
