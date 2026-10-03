@@ -141,3 +141,7 @@
 .danger-zone button{border:0;border-radius:10px;background:#b42318;color:#fff;padding:10px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:6px}
 .departure-final-state{border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:4px;margin-top:14px}.departure-final-state.cancelled{background:#fff0ee;color:#b42318}.departure-final-state.completed{background:#eef2f5;color:#526b7c}.departure-final-state span{font-size:11px}
 @media(max-width:560px){.departure-quick-actions{grid-template-columns:1fr}.departure-overview b{font-size:18px}}
+
+.provider-notification.actionable{cursor:pointer}
+.provider-notification.actionable:hover{background:#eef9fd}
+.notification-action-label{margin-top:3px;font-size:10px;color:#0875a8}
