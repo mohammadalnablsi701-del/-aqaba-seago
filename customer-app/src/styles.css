@@ -439,3 +439,14 @@
 .payment-result-icon.is-failed{background:#fff1ef;color:#b54f42}
 .payment-result-icon.is-review{background:#fff8e8;color:#9a6a00}
 .payment-result-action{width:100%;max-width:340px;margin:8px auto 0}
+
+.ticket-cancellation{display:grid;gap:3px}
+.ticket-cancellation small{font-size:9px;line-height:1.4;color:var(--muted)}
+.ticket-cancellation--processed{background:#f1fbf7;border-color:#d8efe6}
+.ticket-cancellation--processed b{color:#08745f}
+.ticket-cancellation--pending{background:#fff9ec;border-color:#f1e2b9}
+.ticket-cancellation--pending b{color:#8c6500}
+.ticket-cancellation--failed{background:#fff3f1;border-color:#efd6d1}
+.ticket-cancellation--failed b{color:#a44b3f}
+.ticket-status--refunded{background:#eaf8f3;color:#08745f}
+.ticket-status--expired{background:#f2f4f6;color:#697886}
