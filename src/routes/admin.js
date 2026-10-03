@@ -1,5 +1,14 @@
 import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
-router.get("/trips",async(_req,res,next)=>{try{const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});res.json(rows);}catch(e){next(e);}});
+router.get("/trips",async(_req,res,next)=>{try{
+  const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});
+  const tripIds=rows.map(t=>t._id);
+  const stats=tripIds.length?await Booking.aggregate([
+    {$match:{tripId:{$in:tripIds},status:"confirmed"}},
+    {$group:{_id:"$tripId",bookings:{$sum:1},seats:{$sum:{$ifNull:["$seats",0]}},gross:{$sum:{$ifNull:["$pricing.grossAmount",0]}},commission:{$sum:{$ifNull:["$pricing.commissionAmount",0]}},providerNet:{$sum:{$ifNull:["$pricing.providerNetAmount",0]}}}}
+  ]):[];
+  const byTrip=new Map(stats.map(s=>[String(s._id),s]));
+  res.json(rows.map(t=>({...t.toObject(),financials:(()=>{const s=byTrip.get(String(t._id))||{};return{confirmedBookings:Number(s.bookings||0),confirmedSeats:Number(s.seats||0),grossSales:Number(s.gross||0),commissionAmount:Number(s.commission||0),providerNetAmount:Number(s.providerNet||0),currency:t.pricing?.currency||"JOD"};})()})));
+}catch(e){next(e);}});
 router.get("/providers",async(_req,res,next)=>{try{
   const rows=await Provider.find({}).populate("ownerUserId","name email phone isActive").sort({createdAt:-1}).limit(300);
   const providerIds=rows.map(x=>x._id);
