@@ -38,3 +38,38 @@ jobs:
       - name: Build customer app
         working-directory: customer-app
         run: npm run build
+
+  provider-app-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install provider app dependencies
+        working-directory: provider-app
+        run: npm install
+      - name: Build provider app
+        working-directory: provider-app
+        run: npm run build
+
+  admin-app-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install admin app dependencies
+        working-directory: admin-app
+        run: npm install
+      - name: Build admin app
+        working-directory: admin-app
+        run: npm run build
+
