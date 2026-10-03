@@ -96,13 +96,10 @@ function HeroScene() {
   );
 }
 
-function ApiNotice({ usingFallback }) {
+function ApiNotice({ usingFallback, apiError }) {
+  if(apiError) return <div className="api-notice api-notice--error">SeaGo can’t load live experiences right now. Please try again shortly.</div>;
   if (!usingFallback) return null;
-  return (
-    <div className="api-notice">
-      Preview mode · live API will replace sample trips automatically when deployed.
-    </div>
-  );
+  return <div className="api-notice">Preview mode · sample trips are shown because no live API is configured.</div>;
 }
 
 function localDateInputValue(date=new Date()) {
@@ -112,7 +109,7 @@ function localDateInputValue(date=new Date()) {
   return `${y}-${m}-${d}`;
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, onSearch, onOpenMenu, onSeeAll }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, onSearch, onOpenMenu, onSeeAll }) {
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -169,7 +166,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
         </div>
       </section>
 
-      <ApiNotice usingFallback={usingFallback} />
+      <ApiNotice usingFallback={usingFallback} apiError={apiError} />
 
       <section className="home-trust-strip" aria-label="SeaGo booking benefits">
         <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
@@ -996,6 +993,7 @@ export default function App(){
   const [tripList,setTripList]=useState(fallbackTrips);
   const [loadingTrips,setLoadingTrips]=useState(hasApi());
   const [usingFallback,setUsingFallback]=useState(!hasApi());
+  const [tripLoadError,setTripLoadError]=useState("");
   const [searchResults,setSearchResults]=useState(null);
   const [searchSummary,setSearchSummary]=useState("");
   const [searchCriteria,setSearchCriteria]=useState(null);
@@ -1049,10 +1047,14 @@ export default function App(){
         if(ignore) return;
         const normalized=rows.map(normalizeTrip);
         setTripList(normalized.length ? normalized : fallbackTrips);
-        setUsingFallback(normalized.length===0);
+        setUsingFallback(false);
+        setTripLoadError("");
       })
       .catch(()=>{
-        if(!ignore){setTripList(fallbackTrips);setUsingFallback(true);}
+        if(!ignore){
+          if(hasApi()){setTripList([]);setUsingFallback(false);setTripLoadError("LIVE_TRIPS_UNAVAILABLE");}
+          else {setTripList(fallbackTrips);setUsingFallback(true);}
+        }
       })
       .finally(()=>{if(!ignore)setLoadingTrips(false);});
     return()=>{ignore=true;};
@@ -1134,7 +1136,7 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
+      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
