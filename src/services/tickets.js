@@ -6,31 +6,40 @@ function secret() {
   return value;
 }
 
+function invalid(message="Invalid ticket") {
+  return Object.assign(new Error(message), { statusCode: 400 });
+}
+
 export function signTicketToken(booking) {
-  const payload = JSON.stringify({
-    v: 1,
-    bookingId: booking._id.toString(),
-    departureId: booking.departureId?._id?.toString?.() || booking.departureId?.toString?.() || "",
-    seats: booking.seats,
-    issuedAt: Math.floor(Date.now() / 1000)
-  });
-  const body = Buffer.from(payload).toString("base64url");
-  const sig = crypto.createHmac("sha256", secret()).update(body).digest("base64url");
-  return body + "." + sig;
+  const bookingId=booking._id.toString();
+  const body="2."+bookingId;
+  const sig=crypto.createHmac("sha256", secret()).update(body).digest().subarray(0,12).toString("base64url");
+  return body+"."+sig;
 }
 
 export function verifyTicketToken(token) {
-  const [body, sig] = String(token || "").split(".");
-  if (!body || !sig) throw Object.assign(new Error("Invalid ticket"), { statusCode: 400 });
+  const value=String(token||"");
+
+  // Compact v2 token: 2.<24-char Mongo booking id>.<96-bit HMAC>
+  if(value.startsWith("2.")){
+    const [version,bookingId,sig]=value.split(".");
+    if(version!=="2"||!/^[a-f0-9]{24}$/i.test(bookingId)||!sig) throw invalid();
+    const body="2."+bookingId;
+    const expected=crypto.createHmac("sha256", secret()).update(body).digest().subarray(0,12).toString("base64url");
+    const a=Buffer.from(sig);
+    const b=Buffer.from(expected);
+    if(a.length!==b.length||!crypto.timingSafeEqual(a,b)) throw invalid("Invalid ticket signature");
+    return {v:2,bookingId};
+  }
+
+  // Legacy v1 support for already-issued QR codes.
+  const [body, sig] = value.split(".");
+  if (!body || !sig) throw invalid();
   const expected = crypto.createHmac("sha256", secret()).update(body).digest("base64url");
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    throw Object.assign(new Error("Invalid ticket signature"), { statusCode: 400 });
-  }
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw invalid("Invalid ticket signature");
   const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-  if (payload.v !== 1 || !payload.bookingId) {
-    throw Object.assign(new Error("Invalid ticket payload"), { statusCode: 400 });
-  }
+  if (payload.v !== 1 || !payload.bookingId) throw invalid("Invalid ticket payload");
   return payload;
 }
