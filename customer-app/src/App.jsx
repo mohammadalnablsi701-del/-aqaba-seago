@@ -397,9 +397,9 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const [children,setChildren]=useState(0);
   const [mealPlan,setMealPlan]=useState("without_buffet");
   const guests=adults+children;
-  const seatLimit=selected?.availableSeats!=null?Number(selected.availableSeats):20;
   const [departures,setDepartures]=useState([]);
   const [selected,setSelected]=useState(null);
+  const seatLimit=selected?.availableSeats!=null?Number(selected.availableSeats):20;
   const [quote,setQuote]=useState(null);
   const [loading,setLoading]=useState(Boolean(trip.apiId && hasApi()));
   const [error,setError]=useState("");
