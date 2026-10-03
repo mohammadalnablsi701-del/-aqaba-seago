@@ -203,3 +203,20 @@ nav{
 .header-actions{display:flex;align-items:center;gap:8px}
 .settings-form .advanced-trip-options{margin-top:2px}
 .settings-form .save-button{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:3}
+
+.provider-onboarding{border-color:#d7e7ef;background:linear-gradient(180deg,#fbfeff,#f5fbfd)}
+.onboarding-progress-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.onboarding-progress-head small{font-size:9px;font-weight:900;letter-spacing:.12em;color:#00a7b5}
+.onboarding-progress-head h2{margin:4px 0 3px}.onboarding-progress-head p{margin:0;color:#718492;font-size:11px}
+.onboarding-progress-head>strong{font-size:20px;color:#0876a9}
+.onboarding-progress{height:7px;border-radius:999px;background:#e3edf2;overflow:hidden;margin:12px 0}
+.onboarding-progress i{display:block;height:100%;background:linear-gradient(90deg,#0288d1,#00b8c8);border-radius:inherit}
+.provider-setup-list{display:grid;gap:8px}
+.provider-setup-step{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;background:#fff;border:1px solid #e4edf2;border-radius:13px;padding:10px}
+.provider-setup-step.done{background:#f2fbf6;border-color:#dcefe4}
+.setup-step-number{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#eef6fb;color:#0a6f9f;font-size:11px;font-weight:900}
+.provider-setup-step.done .setup-step-number{background:#e4f8ed;color:#079455}
+.provider-setup-step>div:nth-child(2){display:flex;flex-direction:column;gap:2px}.provider-setup-step b{font-size:12px;color:#16394e}.provider-setup-step span{font-size:10px;color:#718492;line-height:1.35}
+.provider-setup-step button{border:0;border-radius:9px;background:#0b6f9f;color:#fff;padding:9px 10px;font-size:10px;font-weight:900}
+.provider-setup-step em{font-style:normal;font-size:9px;font-weight:900;color:#087443}
+@media(max-width:560px){.provider-setup-step{grid-template-columns:32px 1fr}.provider-setup-step button,.provider-setup-step em{grid-column:2;justify-self:start}}
