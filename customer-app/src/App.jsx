@@ -347,7 +347,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
 
 function AuthForm({ onAuthenticated }) {
   const [mode,setMode]=useState("login");
-  const [method,setMethod]=useState("phone");
+  const [method,setMethod]=useState("email");
   const [form,setForm]=useState({name:"",email:"",phone:"",password:"",code:""});
   const [otpSent,setOtpSent]=useState(false);
   const [busy,setBusy]=useState(false);
