@@ -117,3 +117,12 @@
 .auth-method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px}
 .auth-method-tabs button{border:1px solid #d9e5ec;background:#f7fafc;color:#526774;border-radius:10px;padding:9px 12px;font-weight:800;font-size:11px}
 .auth-method-tabs button.active{background:#123f59;color:#fff;border-color:#123f59}
+
+.admin-brand{display:flex;align-items:center;gap:8px}
+.admin-brand-mark{width:46px;height:46px;flex:0 0 auto;background:#071F33;border-radius:13px;padding:5px}
+.admin-brand-copy{display:flex;flex-direction:column;line-height:1}
+.admin-brand-copy b{font-size:18px;color:#071F33;letter-spacing:-.35px}
+.admin-brand-copy span{margin-top:5px;font-size:8px;letter-spacing:.2em;color:#8994A1;font-weight:900}
+.admin-brand-login{justify-content:center;margin-bottom:8px}
+.admin-brand-login .admin-brand-mark{width:58px;height:58px;border-radius:16px}
+.admin-brand-login .admin-brand-copy b{font-size:22px}
