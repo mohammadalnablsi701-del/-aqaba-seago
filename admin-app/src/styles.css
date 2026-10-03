@@ -72,3 +72,9 @@
 .controlled-pilot-card h2{margin:4px 0 5px}.controlled-pilot-card p{margin:0;color:#6f8290;font-size:12px;line-height:1.5}
 .controlled-pilot-actions{display:flex;gap:8px;flex-wrap:wrap}.controlled-pilot-actions a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:10px;background:#0b6f9f;color:#fff;padding:10px 12px;font-size:11px;font-weight:800}
 .controlled-pilot-card em{font-style:normal;font-size:10px;font-weight:800;color:#8a5a00}
+
+.admin-tabs{overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.admin-tabs::-webkit-scrollbar{display:none}.admin-tabs button{white-space:nowrap;flex:0 0 auto}
+.trip-admin-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.trip-admin-head h3{margin:0}
+.trip-live,.trip-off{font-size:9px;font-weight:900;text-transform:uppercase;border-radius:999px;padding:5px 7px}.trip-live{background:#e8f8f1;color:#087443}.trip-off{background:#eef2f5;color:#687885}
+.trip-provider-state{display:block;margin-top:5px;color:#8796a2;font-size:10px}
+@media(max-width:650px){header{height:auto;min-height:72px;padding:12px 14px;gap:10px;align-items:flex-start}.admin-head-actions{justify-content:flex-end}.admin-head-actions button{padding:9px 10px}.admin-tabs{margin-left:-4px;margin-right:-4px;padding-left:4px;padding-right:4px}}
