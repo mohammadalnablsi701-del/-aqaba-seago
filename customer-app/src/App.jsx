@@ -755,7 +755,7 @@ function SupportScreen({ navigate, onBack }) {
   </div>;
 }
 
-function PoliciesScreen({ onBack }) {
+function PoliciesScreen({ onBack, navigate }) {
   return <div className="screen standard-screen profile-sub-screen">
     <ProfileSubHeader eyebrow="HELP & INFO" title="Policies" subtitle="Clear rules before and after you book." onBack={onBack}/>
     <section className="policy-page-card">
@@ -774,9 +774,65 @@ function PoliciesScreen({ onBack }) {
       <p>Your booking and QR ticket are created only after successful payment. Seats may be temporarily held during checkout.</p>
     </section>
     <section className="policy-page-card">
-      <span>PRIVACY</span>
-      <h2>Your account stays connected to your trips</h2>
-      <p>SeaGo uses your account details to manage bookings, tickets and trip notifications. A full production privacy policy will be published before public launch.</p>
+      <span>LEGAL & PRIVACY</span>
+      <h2>Review the platform terms</h2>
+      <p>See how SeaGo handles account data, bookings, payments and platform responsibilities.</p>
+      <div className="policy-link-list">
+        <button onClick={()=>navigate("privacy")}><span><b>Privacy notice</b><small>Account, booking and notification data</small></span><ChevronRight size={17}/></button>
+        <button onClick={()=>navigate("terms")}><span><b>Terms of use</b><small>Booking and platform conditions</small></span><ChevronRight size={17}/></button>
+      </div>
+    </section>
+  </div>;
+}
+
+function PrivacyScreen({ onBack }) {
+  return <div className="screen standard-screen profile-sub-screen">
+    <ProfileSubHeader eyebrow="LEGAL" title="Privacy notice" subtitle="How SeaGo uses information needed to provide the service." onBack={onBack}/>
+    <section className="policy-page-card legal-copy">
+      <span>INFORMATION WE USE</span>
+      <h2>Data connected to your SeaGo account</h2>
+      <p>SeaGo may process the account details you provide, booking and payment references, saved trips, notification preferences, and operational records needed to support your bookings.</p>
+    </section>
+    <section className="policy-page-card legal-copy">
+      <span>WHY IT IS USED</span>
+      <h2>Booking, support and trip communication</h2>
+      <p>Information is used to create and manage bookings, issue tickets, communicate important trip changes, support cancellations and refunds, prevent misuse, and operate the platform.</p>
+    </section>
+    <section className="policy-page-card legal-copy">
+      <span>SERVICE PARTNERS</span>
+      <h2>Operators and payment services</h2>
+      <p>Information necessary to fulfil a booking may be shared with the relevant trip operator and payment or infrastructure providers used to deliver the service.</p>
+    </section>
+    <section className="policy-page-card legal-copy">
+      <span>BEFORE PUBLIC LAUNCH</span>
+      <h2>Final legal review required</h2>
+      <p>This in-app notice describes the current product behaviour. The production privacy policy should be reviewed against the final company, payment provider, hosting setup and applicable Jordanian requirements before public launch.</p>
+    </section>
+  </div>;
+}
+
+function TermsScreen({ onBack }) {
+  return <div className="screen standard-screen profile-sub-screen">
+    <ProfileSubHeader eyebrow="LEGAL" title="Terms of use" subtitle="Core conditions for using Aqaba SeaGo." onBack={onBack}/>
+    <section className="policy-page-card legal-copy">
+      <span>BOOKINGS</span>
+      <h2>A booking is confirmed after successful payment</h2>
+      <p>A selected departure is not a confirmed booking until payment has been verified and SeaGo has issued the booking record and ticket.</p>
+    </section>
+    <section className="policy-page-card legal-copy">
+      <span>OPERATORS</span>
+      <h2>Experiences are delivered by participating providers</h2>
+      <p>Trip descriptions, schedules, meeting points and operational details are provided for the booked experience. Provider-side changes may require customer notification, rescheduling, cancellation or refund handling.</p>
+    </section>
+    <section className="policy-page-card legal-copy">
+      <span>CANCELLATIONS</span>
+      <h2>The displayed cancellation policy applies</h2>
+      <p>The current customer policy shown before booking is 100% refund at least 24 hours before departure, 50% from 12 to 24 hours, and no refund with less than 12 hours. Operator cancellation is handled separately under the platform policy.</p>
+    </section>
+    <section className="policy-page-card legal-copy">
+      <span>BEFORE PUBLIC LAUNCH</span>
+      <h2>Final legal review required</h2>
+      <p>These terms reflect the current product flow and are not a substitute for final production terms reviewed for the operating entity, provider agreements, payment gateway and applicable Jordanian law.</p>
     </section>
   </div>;
 }
@@ -1087,9 +1143,11 @@ export default function App(){
       {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onBack={()=>setActive("profile")}/>}
       {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
       {active==="support"&&<SupportScreen navigate={setActive} onBack={()=>setActive("profile")}/>}
-      {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")}/>}
+      {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")} navigate={setActive}/>} 
+      {active==="privacy"&&<PrivacyScreen onBack={()=>setActive("policies")}/>} 
+      {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>}
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
-    <BottomNav active={["personal-details","trip-preferences","support","policies"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
+    <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
 }
