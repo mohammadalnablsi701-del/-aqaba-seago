@@ -4,7 +4,15 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f8fb",
-  "theme_color": "#082f49",
-  "description": "Aqaba SeaGo provider dashboard."
+  "background_color": "#071F33",
+  "theme_color": "#071F33",
+  "description": "Aqaba SeaGo provider dashboard.",
+  "icons": [
+    {
+      "src": "./app-provider.svg?v=identity-v1",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
