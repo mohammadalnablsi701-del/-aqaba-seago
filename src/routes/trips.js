@@ -5,6 +5,45 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
+const CATEGORIES=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
+
+function cleanText(value,max=160){
+  return String(value??"").trim().replace(/\s+/g," ").slice(0,max);
+}
+function validHttpUrl(value){
+  if(!value) return true;
+  try{
+    const u=new URL(String(value));
+    return u.protocol==="http:"||u.protocol==="https:";
+  }catch{return false;}
+}
+function validateTripPayload(body,{partial=false}={}){
+  const errors=[];
+  const titleAr=cleanText(body.titleAr,120);
+  const titleEn=cleanText(body.titleEn,120);
+  const category=body.category;
+  const duration=Number(body.durationMinutes);
+  if(!partial||body.titleAr!==undefined){if(titleAr.length<2)errors.push("Arabic title is required");}
+  if(!partial||body.titleEn!==undefined){if(titleEn.length<2)errors.push("English title is required");}
+  if(!partial||body.category!==undefined){if(!CATEGORIES.has(category))errors.push("Invalid category");}
+  if(!partial||body.durationMinutes!==undefined){if(!Number.isFinite(duration)||duration<15||duration>1440)errors.push("Duration must be between 15 and 1440 minutes");}
+  const p=body.pricing||{};
+  for(const [key,label] of [["adultPrice","Adult price"],["childPrice","Child price"],["buffetAdultPrice","Buffet adult price"],["buffetChildPrice","Buffet child price"]]){
+    if(p[key]!==undefined){
+      const n=Number(p[key]);
+      if(!Number.isFinite(n)||n<0||n>10000)errors.push(label+" is invalid");
+    }
+  }
+  if(p.buffetEnabled===true){
+    if(!Number.isFinite(Number(p.buffetAdultPrice))||Number(p.buffetAdultPrice)<=0)errors.push("Buffet adult price is required when buffet is enabled");
+    if(!Number.isFinite(Number(p.buffetChildPrice))||Number(p.buffetChildPrice)<0)errors.push("Buffet child price is invalid");
+  }
+  if(body.departureLocation?.googleMapsUrl&&!validHttpUrl(body.departureLocation.googleMapsUrl))errors.push("Google Maps URL is invalid");
+  if(Array.isArray(body.images)&&body.images.length>10)errors.push("A maximum of 10 trip images is allowed");
+  return errors;
+}
+
+
 function sanitizeImages(input){
   if(!Array.isArray(input)) return [];
   return input.slice(0,10).map(x=>{
@@ -43,15 +82,17 @@ function serverPricing(input = {}, existing = null) {
 
 router.post("/", requireAuth, requireRole("provider"), async (req, res, next) => {
   try {
+    const errors=validateTripPayload(req.body);
+    if(errors.length)return res.status(400).json({error:errors[0],errors});
     const p = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
     if (!p) return res.status(403).json({ error: "Approved provider profile required" });
 
     const trip = await Trip.create({
-      titleAr: req.body.titleAr,
-      titleEn: req.body.titleEn,
+      titleAr: cleanText(req.body.titleAr,120),
+      titleEn: cleanText(req.body.titleEn,120),
       category: req.body.category,
       durationMinutes: req.body.durationMinutes,
-      departureLocation: req.body.departureLocation,
+      departureLocation: req.body.departureLocation ? {...req.body.departureLocation,name:cleanText(req.body.departureLocation.name,120),address:cleanText(req.body.departureLocation.address,220),googleMapsUrl:cleanText(req.body.departureLocation.googleMapsUrl,500)} : undefined,
       images: sanitizeImages(req.body.images),
       active: req.body.active !== false,
       pricing: serverPricing(req.body.pricing),
@@ -64,6 +105,8 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
 
 router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, next) => {
   try {
+    const errors=validateTripPayload(req.body,{partial:true});
+    if(errors.length)return res.status(400).json({error:errors[0],errors});
     const p = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
     if (!p) return res.status(403).json({ error: "Approved provider profile required" });
 
@@ -71,7 +114,12 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
     if (!trip) return res.status(404).json({ error: "Trip not found" });
 
     for (const key of ["titleAr","titleEn","category","durationMinutes","departureLocation","images","active"]) {
-      if (req.body[key] !== undefined) trip[key] = key==="images" ? sanitizeImages(req.body[key]) : req.body[key];
+      if (req.body[key] !== undefined) {
+        if(key==="images") trip[key]=sanitizeImages(req.body[key]);
+        else if(key==="titleAr"||key==="titleEn") trip[key]=cleanText(req.body[key],120);
+        else if(key==="departureLocation") trip[key]={...req.body[key],name:cleanText(req.body[key]?.name,120),address:cleanText(req.body[key]?.address,220),googleMapsUrl:cleanText(req.body[key]?.googleMapsUrl,500)};
+        else trip[key]=req.body[key];
+      }
     }
 
     if (req.body.pricing) {
