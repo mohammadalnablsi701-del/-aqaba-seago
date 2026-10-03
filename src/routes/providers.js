@@ -8,9 +8,20 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router=express.Router();
 
+function cleanText(value,max=120){
+  return String(value??"").trim().replace(/\s+/g," ").slice(0,max);
+}
+function cleanPhone(value){
+  return String(value??"").trim().replace(/[^\d+\-() ]/g,"").slice(0,30);
+}
+
 router.post("/",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const p=await Provider.create({ownerUserId:req.user._id,businessName:req.body.businessName,phone:req.body.phone});
+    const businessName=cleanText(req.body.businessName,120);
+    const phone=cleanPhone(req.body.phone);
+    if(businessName.length<2)return res.status(400).json({error:"Business name is required"});
+    if(phone&&phone.replace(/\D/g,"").length<7)return res.status(400).json({error:"Enter a valid phone number"});
+    const p=await Provider.create({ownerUserId:req.user._id,businessName,phone:phone||undefined});
     res.status(201).json(p);
   }catch(e){
     if(e?.code===11000)return res.status(409).json({error:"Provider profile already exists"});
