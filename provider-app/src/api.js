@@ -31,6 +31,7 @@ export const createDeparturesBulk=(token,data)=>req("/api/departures/bulk",{toke
 export const updateDeparture=(token,id,data)=>req("/api/departures/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
 
 export const bookingDetail=(token,id)=>req("/api/providers/me/bookings/"+id,{token});
+export const manualCheckInBooking=(token,id)=>req("/api/providers/me/bookings/"+id+"/check-in",{token,method:"POST"});
 
 export const providerStats=(token,date)=>req("/api/providers/me/stats?date="+encodeURIComponent(date),{token});
 
