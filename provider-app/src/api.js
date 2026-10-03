@@ -59,3 +59,6 @@ export const providerAuditLog=token=>req("/api/providers/me/audit-log",{token});
 
 export const requestPhoneOtp=(phone,role,mode)=>req("/api/auth/otp/request",{method:"POST",body:JSON.stringify({phone,role,mode})});
 export const verifyPhoneOtp=(data)=>req("/api/auth/otp/verify",{method:"POST",body:JSON.stringify(data)});
+
+export const googleAuthConfig=()=>req("/api/auth/google/config");
+export const googleSignIn=(credential,role="provider")=>req("/api/auth/google",{method:"POST",body:JSON.stringify({credential,role})});
