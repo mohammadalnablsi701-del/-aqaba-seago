@@ -74,10 +74,12 @@ export async function listBookings(token) {
 }
 
 export async function createPaymentCheckout({ departureId, adults, children = 0, mealPlan = "without_buffet", token }) {
+  const key = globalThis.crypto?.randomUUID?.() ||
+    `checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return request("/api/payments/checkout", {
     method: "POST",
     token,
-    headers: { "Idempotency-Key": crypto.randomUUID() },
+    headers: { "Idempotency-Key": key },
     body: JSON.stringify({ departureId, adults, children, mealPlan })
   });
 }
