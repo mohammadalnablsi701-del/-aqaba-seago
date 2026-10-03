@@ -42,7 +42,20 @@ router.get("/me/trips",requireAuth,requireRole("provider"),async(req,res,next)=>
     const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
     if(!provider)return res.status(403).json({error:"Approved provider profile required"});
     const trips=await Trip.find({providerId:provider._id}).sort({createdAt:-1});
-    res.json(trips);
+    const tripIds=trips.map(t=>t._id);
+    const now=new Date();
+    const upcoming=tripIds.length?await Departure.find({tripId:{$in:tripIds},status:"scheduled",startsAt:{$gte:now}}).sort({startsAt:1}).select("tripId startsAt reservedSeats capacity"):[];
+    const byTrip=new Map();
+    for(const d of upcoming){
+      const key=String(d.tripId);
+      const row=byTrip.get(key)||{upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0};
+      row.upcomingDepartures+=1;
+      row.nextDepartureAt ||= d.startsAt;
+      row.reservedSeatsUpcoming+=Number(d.reservedSeats||0);
+      row.capacityUpcoming+=Number(d.capacity||0);
+      byTrip.set(key,row);
+    }
+    res.json(trips.map(t=>({...t.toObject(),schedule:byTrip.get(String(t._id))||{upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0}})));
   }catch(e){next(e);}
 });
 
