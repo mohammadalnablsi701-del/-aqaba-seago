@@ -11,7 +11,7 @@ const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");async 
     throw e;
   }
   return j;
-}export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});export const trips=token=>req("/api/admin/trips",{token});export const setCommission=(token,id,percentage)=>req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({percentage})});export const refunds=token=>req("/api/admin/refunds",{token});export const notifications=token=>req("/api/admin/notifications",{token});
+}export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});export const providers=token=>req("/api/admin/providers",{token});export const approveProvider=(token,id)=>req("/api/admin/providers/"+id+"/approve",{token,method:"PATCH"});export const trips=token=>req("/api/admin/trips",{token});export const setCommission=(token,id,percentage)=>req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({percentage})});export const refunds=token=>req("/api/admin/refunds",{token});export const notifications=token=>req("/api/admin/notifications",{token});
 export const readiness=token=>req("/api/admin/readiness",{token});
 export const demoCleanupPreview=token=>req("/api/admin/demo-cleanup-preview",{token});
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
