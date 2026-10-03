@@ -289,6 +289,13 @@ export async function runPilotE2EOnce({port}) {
     if(Number(depFinal?.availableSeats)!==2) throw new Error("Booked seats were not retained after both bookings");
     step("capacity-consistent",{availableSeats:depFinal.availableSeats});
 
+    const auditRows=await api(base,"/api/providers/me/audit-log",{token:providerToken});
+    const hasTeamAdd=auditRows.some(x=>x.action==="team.add"&&x.actor?.role==="owner");
+    const hasManagerDeparture=auditRows.some(x=>x.action==="departure.create"&&x.actor?.role==="manager");
+    const hasTeamCheckin=auditRows.some(x=>x.action==="booking.checkin"&&["manager","checkin"].includes(x.actor?.role));
+    if(!hasTeamAdd||!hasManagerDeparture||!hasTeamCheckin)throw new Error("Provider audit log is missing expected multi-user actions");
+    step("provider-audit-log-verified",{entries:auditRows.length});
+
     result.ok=true;
     result.summary={
       providerApproved:true,
@@ -302,7 +309,8 @@ export async function runPilotE2EOnce({port}) {
       checkedIn:true,
       duplicateCheckInBlocked:true,
       providerTeam:true,
-      concurrentTeamCheckInAtomic:true
+      concurrentTeamCheckInAtomic:true,
+      providerAuditLog:true
     };
     return result;
   }finally{
