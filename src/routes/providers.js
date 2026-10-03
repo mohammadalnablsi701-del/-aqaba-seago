@@ -4,6 +4,10 @@ import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import Payment from "../models/Payment.js";
+import User from "../models/User.js";
+import ProviderMember from "../models/ProviderMember.js";
+import bcrypt from "bcryptjs";
+import { resolveProviderAccess, requireProviderCapability } from "../services/providerAccess.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router=express.Router();
@@ -31,8 +35,9 @@ router.post("/",requireAuth,requireRole("provider"),async(req,res,next)=>{
 
 router.patch("/me/settings",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id});
-    if(!provider)return res.status(404).json({error:"Provider profile not found"});
+    const access=await requireProviderCapability(req.user,"manage_settings",{approved:false});
+    const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Provider settings permission required"});
     const phone=cleanPhone(req.body.phone);
     const defaultCapacity=Number(req.body.defaultCapacity);
     const defaultDepartureTime=cleanText(req.body.defaultDepartureTime,5);
@@ -58,16 +63,17 @@ router.patch("/me/settings",requireAuth,requireRole("provider"),async(req,res,ne
 
 router.get("/me",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id});
+    const access=await resolveProviderAccess(req.user,{approved:false});
+    const provider=access?.provider;
     if(!provider)return res.status(404).json({error:"Provider profile not found"});
-    res.json(provider);
+    res.json({...provider.toObject(),accessRole:access.accessRole,capabilities:access.capabilities});
   }catch(e){next(e);}
 });
 
 router.get("/me/trips",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await resolveProviderAccess(req.user);const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const trips=await Trip.find({providerId:provider._id}).sort({createdAt:-1});
     const tripIds=trips.map(t=>t._id);
     const now=new Date();
@@ -88,8 +94,8 @@ router.get("/me/trips",requireAuth,requireRole("provider"),async(req,res,next)=>
 
 router.get("/me/departures",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await resolveProviderAccess(req.user);const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const trips=await Trip.find({providerId:provider._id}).select("_id");
     const tripIds=trips.map(t=>t._id);
     const query={tripId:{$in:tripIds}};
@@ -110,8 +116,8 @@ router.get("/me/departures",requireAuth,requireRole("provider"),async(req,res,ne
 
 router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await requireProviderCapability(req.user,"view_bookings");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const query={providerId:provider._id,status:"confirmed"};
     const rows=await Booking.find(query)
       .populate("tripId","titleEn titleAr category")
@@ -131,8 +137,8 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
 
 router.get("/me/departures/:departureId/manifest",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await requireProviderCapability(req.user,"view_bookings");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
 
     const departure=await Departure.findById(req.params.departureId)
       .populate("tripId","titleEn titleAr category durationMinutes departureLocation");
@@ -175,8 +181,8 @@ router.get("/me/departures/:departureId/manifest",requireAuth,requireRole("provi
 
 router.get("/me/stats",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await requireProviderCapability(req.user,"view_finance");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
 
     const trips=await Trip.find({providerId:provider._id}).select("_id");
     const tripIds=trips.map(t=>t._id);
@@ -210,26 +216,27 @@ router.get("/me/stats",requireAuth,requireRole("provider"),async(req,res,next)=>
 
 router.post("/me/bookings/:bookingId/check-in",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
-    const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id})
-      .populate("departureId","status startsAt");
+    const access=await requireProviderCapability(req.user,"checkin");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
+    const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id}).populate("departureId","status startsAt");
     if(!booking)return res.status(404).json({error:"Booking not found"});
     if(booking.status!=="confirmed")return res.status(409).json({error:"Booking is not valid for check-in"});
     if(!booking.departureId||booking.departureId.status!=="scheduled")return res.status(409).json({error:"Departure is not open for check-in"});
-    if(booking.checkedInAt)return res.status(409).json({error:"Booking already checked in",checkedInAt:booking.checkedInAt});
-    booking.checkedInAt=new Date();
-    booking.checkedInBy=req.user._id;
-    booking.checkInCount=Number(booking.checkInCount||0)+1;
-    await booking.save();
-    res.json({ok:true,bookingId:booking._id,checkedInAt:booking.checkedInAt,guests:booking.seats});
+    const checkedAt=new Date();
+    const claimed=await Booking.findOneAndUpdate(
+      {_id:booking._id,providerId:provider._id,status:"confirmed",checkedInAt:null},
+      {$set:{checkedInAt:checkedAt,checkedInBy:req.user._id},$inc:{checkInCount:1}},
+      {new:true}
+    );
+    if(!claimed)return res.status(409).json({error:"Booking already checked in"});
+    res.json({ok:true,bookingId:claimed._id,checkedInAt:claimed.checkedInAt,guests:claimed.seats});
   }catch(e){next(e);}
 });
 
 router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
-    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
-    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const access=await requireProviderCapability(req.user,"view_bookings");const provider=access?.provider;
+    if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id})
       .populate("tripId","titleEn titleAr category durationMinutes departureLocation")
       .populate("departureId","startsAt status capacity reservedSeats")
@@ -241,6 +248,51 @@ router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(r
       bookingReference:"SG-"+String(booking._id).slice(-8).toUpperCase(),
       payment:payment||null
     });
+  }catch(e){next(e);}
+});
+
+router.get("/me/team",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const access=await requireProviderCapability(req.user,"manage_team",{approved:false});
+    if(!access)return res.status(403).json({error:"Owner permission required"});
+    const owner=await User.findById(access.provider.ownerUserId).select("name email phone isActive");
+    const members=await ProviderMember.find({providerId:access.provider._id}).populate("userId","name email phone isActive").sort({createdAt:1});
+    res.json({owner:owner?{id:owner._id,name:owner.name,email:owner.email,phone:owner.phone,isActive:owner.isActive,role:"owner"}:null,members:members.map(m=>({id:m._id,userId:m.userId?._id,name:m.userId?.name,email:m.userId?.email,phone:m.userId?.phone,role:m.role,isActive:m.isActive&&Boolean(m.userId?.isActive)}))});
+  }catch(e){next(e);}
+});
+
+router.post("/me/team",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const access=await requireProviderCapability(req.user,"manage_team",{approved:false});
+    if(!access)return res.status(403).json({error:"Owner permission required"});
+    const name=cleanText(req.body.name,80),email=String(req.body.email||"").trim().toLowerCase(),phone=cleanPhone(req.body.phone),password=String(req.body.password||""),role=String(req.body.role||"staff");
+    if(name.length<2||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:"Valid name and email are required"});
+    if(password.length<8||password.length>128)return res.status(400).json({error:"Password must be 8–128 characters"});
+    if(!["manager","staff","checkin"].includes(role))return res.status(400).json({error:"Invalid team role"});
+    if(await User.exists({email}))return res.status(409).json({error:"Email already registered"});
+    const passwordHash=await bcrypt.hash(password,12);
+    const user=await User.create({name,email,phone:phone||undefined,passwordHash,role:"provider",isActive:true});
+    try{
+      const member=await ProviderMember.create({providerId:access.provider._id,userId:user._id,role,isActive:true,createdBy:req.user._id});
+      res.status(201).json({id:member._id,userId:user._id,name:user.name,email:user.email,phone:user.phone,role:member.role,isActive:true});
+    }catch(e){await User.deleteOne({_id:user._id});throw e;}
+  }catch(e){next(e);}
+});
+
+router.patch("/me/team/:memberId",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const access=await requireProviderCapability(req.user,"manage_team",{approved:false});
+    if(!access)return res.status(403).json({error:"Owner permission required"});
+    const member=await ProviderMember.findOne({_id:req.params.memberId,providerId:access.provider._id}).populate("userId");
+    if(!member)return res.status(404).json({error:"Team member not found"});
+    if(req.body.role!==undefined){
+      const role=String(req.body.role);
+      if(!["manager","staff","checkin"].includes(role))return res.status(400).json({error:"Invalid team role"});
+      member.role=role;
+    }
+    if(req.body.isActive!==undefined){member.isActive=Boolean(req.body.isActive);if(member.userId){member.userId.isActive=Boolean(req.body.isActive);await member.userId.save();}}
+    await member.save();
+    res.json({id:member._id,userId:member.userId?._id,name:member.userId?.name,email:member.userId?.email,role:member.role,isActive:member.isActive&&Boolean(member.userId?.isActive)});
   }catch(e){next(e);}
 });
 
