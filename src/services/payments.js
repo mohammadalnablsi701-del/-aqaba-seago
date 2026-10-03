@@ -190,7 +190,7 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
       payment.bookingId = booking._id;
       payment.status = "paid";
       payment.paidAt = new Date();
-      sendBookingConfirmation(booking._id).catch(err=>console.error("Booking confirmation email failed",err));
+      await sendBookingConfirmation(booking._id);
     } else if (hold.status === "paid" && payment.bookingId) {
       payment.status = "paid";
       payment.paidAt ||= new Date();
