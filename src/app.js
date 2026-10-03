@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import authRoutes from "./routes/auth.js";
 import providerRoutes from "./routes/providers.js";
 import adminRoutes from "./routes/admin.js";
@@ -37,8 +39,32 @@ export function createApp() {
   // Webhooks must receive the untouched request body for signature verification.
   app.use("/api/payments/webhooks", paymentWebhookRoutes);
 
+  app.set("trust proxy", 1);
+  app.disable("x-powered-by");
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false
+  }));
   app.use(cors(buildCorsOptions()));
-  app.use(express.json({ limit: "4mb" }));
+  app.use(express.json({ limit: "1mb" }));
+
+  const apiLimiter=rateLimit({
+    windowMs:15*60*1000,
+    limit:Number(process.env.API_RATE_LIMIT||300),
+    standardHeaders:"draft-8",
+    legacyHeaders:false,
+    message:{error:"Too many requests. Please try again shortly."}
+  });
+  const authLimiter=rateLimit({
+    windowMs:15*60*1000,
+    limit:Number(process.env.AUTH_RATE_LIMIT||25),
+    standardHeaders:"draft-8",
+    legacyHeaders:false,
+    message:{error:"Too many sign-in attempts. Please try again later."}
+  });
+
+  app.use("/api",apiLimiter);
+  app.use("/api/auth",authLimiter);
 
   app.get("/health", (_req, res) =>
     res.json({ ok: true, service: "aqaba-seago-api", version: "0.3.1" })
