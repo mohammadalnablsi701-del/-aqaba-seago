@@ -31,12 +31,17 @@ export async function cleanupDemoDataOnce() {
   ]);
 
   if (bookingCount > 0 || holdCount > 0) {
+    if (tripIds.length) {
+      await Trip.updateMany({ _id: { $in: tripIds } }, { $set: { active: false } });
+    }
     return {
       skipped: true,
+      retired: true,
       reason: "history-exists",
       bookingCount,
       holdCount,
-      providerId: String(provider._id)
+      providerId: String(provider._id),
+      tripsDeactivated: tripIds.length
     };
   }
 
