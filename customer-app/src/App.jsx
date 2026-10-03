@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush
+  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, getCancellationPolicy, cancelBooking, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn
 } from "./api.js";
 
 const COUNTRY_CODES=[
@@ -420,6 +420,40 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
   );
 }
 
+function GoogleSignInButton({role,onAuthenticated}){
+  const host=useRef(null);
+  const[enabled,setEnabled]=useState(null);
+  const[error,setError]=useState("");
+  useEffect(()=>{
+    let cancelled=false;
+    let script=null;
+    async function setup(){
+      try{
+        const cfg=await googleAuthConfig();
+        if(cancelled)return;
+        if(!cfg.enabled||!cfg.clientId){setEnabled(false);return;}
+        setEnabled(true);
+        if(!window.google?.accounts?.id){
+          await new Promise((resolve,reject)=>{
+            const existing=document.querySelector('script[data-seago-google]');
+            if(existing){existing.addEventListener("load",resolve,{once:true});existing.addEventListener("error",reject,{once:true});return;}
+            script=document.createElement("script");script.src="https://accounts.google.com/gsi/client";script.async=true;script.defer=true;script.dataset.seagoGoogle="1";script.onload=resolve;script.onerror=reject;document.head.appendChild(script);
+          });
+        }
+        if(cancelled||!host.current)return;
+        window.google.accounts.id.initialize({client_id:cfg.clientId,callback:async response=>{
+          try{setError("");const result=await googleSignIn(response.credential,role);onAuthenticated(result)}catch(e){setError(e.message||"Google sign-in failed")}
+        }});
+        host.current.innerHTML="";
+        window.google.accounts.id.renderButton(host.current,{theme:"outline",size:"large",shape:"rectangular",text:"continue_with",width:340});
+      }catch(e){if(!cancelled){setEnabled(false);setError("Google sign-in is temporarily unavailable")}}
+    }
+    setup();
+    return()=>{cancelled=true;};
+  },[role,onAuthenticated]);
+  return <div className="google-auth-wrap">{enabled===false?<button type="button" className="google-auth-disabled" disabled><span className="google-g">G</span> Continue with Google</button>:<div ref={host} className="google-auth-host"/>}{error&&<small className="google-auth-error">{error}</small>}</div>;
+}
+
 function AuthForm({ onAuthenticated }) {
   const [mode,setMode]=useState("login");
   const [method,setMethod]=useState("email");
@@ -464,7 +498,7 @@ function AuthForm({ onAuthenticated }) {
         <h2>{mode==="login" ? "Sign in to book" : "Create your account"}</h2>
         <p>{method==="phone"?"Use your mobile number and a one-time code.":"Use your email and password."}</p>
       </div>
-      <div className="auth-method-tabs">
+      <GoogleSignInButton role="customer" onAuthenticated={onAuthenticated}/><div className="auth-divider"><span>or continue with</span></div><div className="auth-method-tabs">
         <button type="button" className={method==="phone"?"active":""} onClick={()=>switchMethod("phone")}>Phone</button>
         <button type="button" className={method==="email"?"active":""} onClick={()=>switchMethod("email")}>Email</button>
       </div>
