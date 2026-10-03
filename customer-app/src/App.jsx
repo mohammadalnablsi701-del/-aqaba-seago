@@ -639,7 +639,8 @@ function TicketsScreen({ auth, onAuthenticated }) {
     const departureLocation=trip.departureLocation||{};
     const departureMapsUrl=departureLocation.googleMapsUrl || (departureLocation.address||departureLocation.name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(departureLocation.address||departureLocation.name)}` : "");
     const ref=String(b._id||"").slice(-8).toUpperCase();
-    const status=String(b.status||"").replace("_"," ");
+    const statusLabels={pending_payment:"Awaiting payment",confirmed:"Confirmed",cancelled:"Cancelled",expired:"Expired",refunded:"Refunded"};
+    const status=statusLabels[b.status]||String(b.status||"").replaceAll("_"," ");
     const qrValue=b.ticketValidationUrl || `AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`;
     return <article className={`ticket-card ticket-card--${b.status}`} key={b._id}>
       <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}</div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
@@ -651,7 +652,11 @@ function TicketsScreen({ auth, onAuthenticated }) {
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
       <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong>{b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={92} level="M" includeMargin={false}/><small>Show at check-in</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
-    <CancelBookingControl booking={b} token={auth.token} onCancelled={()=>setRevision(x=>x+1)}/>{b.cancellation?.cancelledAt&&<div className="ticket-cancellation"><b>Cancelled</b><span>{b.cancellation.refundPercentage||0}% refund · {Number(b.cancellation.refundAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"} · {b.cancellation.refundStatus||"none"}</span></div>}</article>;
+    <CancelBookingControl booking={b} token={auth.token} onCancelled={()=>setRevision(x=>x+1)}/>{b.cancellation?.cancelledAt&&<div className={"ticket-cancellation ticket-cancellation--"+(b.cancellation.refundStatus||"none")}>
+      <b>{b.status==="refunded"||b.cancellation.refundStatus==="processed"?"Refund completed":"Booking cancelled"}</b>
+      <span>{b.cancellation.refundPercentage||0}% refund · {Number(b.cancellation.refundAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</span>
+      <small>{b.cancellation.refundStatus==="pending"?"Refund is being processed.":b.cancellation.refundStatus==="processed"?"Refund marked as processed.":b.cancellation.refundStatus==="failed"?"Refund needs support review.":"No refund is due under this cancellation."}</small>
+    </div>}</article>;
   })}</div>:<div className="empty-state ticket-empty"><Ticket size={48}/><h2>No trips booked yet</h2><p>Once you book a SeaGo experience, your QR ticket and departure details will appear here.</p></div>}</div>;
 }
 
