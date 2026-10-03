@@ -5,7 +5,7 @@ import{login,requestPhoneOtp,verifyPhoneOtp,providers,approveProvider,setProvide
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 
 function Login({onDone}) {
-  const[method,setMethod]=useState("phone");const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[phone,setPhone]=useState("");const[code,setCode]=useState("");const[otpSent,setOtpSent]=useState(false);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
+  const[method,setMethod]=useState("email");const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[phone,setPhone]=useState("");const[code,setCode]=useState("");const[otpSent,setOtpSent]=useState(false);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
   async function submit(e){e.preventDefault();setBusy(true);setError("");try{
     let r;
     if(method==="phone"){
