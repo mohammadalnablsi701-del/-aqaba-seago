@@ -466,3 +466,11 @@
 .sticky-booking .primary-button:disabled{opacity:.5;box-shadow:none;cursor:not-allowed}
 
 .live-price-loading{display:flex!important;align-items:center;gap:8px!important;justify-content:flex-start!important;color:#7a8b99;font-size:11px;padding:6px 0}
+
+.live-departures-section{margin-top:18px}
+.live-departures-loading{display:flex;align-items:center;gap:8px;color:#7a8b99;font-size:11px;padding:12px 0}
+.detail-departure-list{display:grid;gap:8px;margin-top:10px}
+.detail-departure-option{width:100%;border:1px solid var(--line);background:#fff;border-radius:14px;padding:11px 12px;display:grid;grid-template-columns:28px 1fr 20px;align-items:center;gap:8px;text-align:left;color:var(--ink)}
+.detail-departure-option>svg:first-child{color:var(--blue)}.detail-departure-option>svg:last-child{color:#cad8df}
+.detail-departure-option>div{display:flex;flex-direction:column;gap:2px}.detail-departure-option b{font-size:12px}.detail-departure-option span{font-size:10px;color:var(--muted)}
+.detail-departure-option.active{border-color:var(--aqua);background:#f2fcfd}.detail-departure-option.active>svg:last-child{color:var(--lagoon)}
