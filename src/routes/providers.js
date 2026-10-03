@@ -181,6 +181,24 @@ router.get("/me/stats",requireAuth,requireRole("provider"),async(req,res,next)=>
   }catch(e){next(e);}
 });
 
+router.post("/me/bookings/:bookingId/check-in",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
+    if(!provider)return res.status(403).json({error:"Approved provider profile required"});
+    const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id})
+      .populate("departureId","status startsAt");
+    if(!booking)return res.status(404).json({error:"Booking not found"});
+    if(booking.status!=="confirmed")return res.status(409).json({error:"Booking is not valid for check-in"});
+    if(!booking.departureId||booking.departureId.status!=="scheduled")return res.status(409).json({error:"Departure is not open for check-in"});
+    if(booking.checkedInAt)return res.status(409).json({error:"Booking already checked in",checkedInAt:booking.checkedInAt});
+    booking.checkedInAt=new Date();
+    booking.checkedInBy=req.user._id;
+    booking.checkInCount=Number(booking.checkInCount||0)+1;
+    await booking.save();
+    res.json({ok:true,bookingId:booking._id,checkedInAt:booking.checkedInAt,guests:booking.seats});
+  }catch(e){next(e);}
+});
+
 router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
     const provider=await Provider.findOne({ownerUserId:req.user._id,status:"approved"});
