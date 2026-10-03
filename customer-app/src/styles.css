@@ -478,3 +478,7 @@
 .pilot-payment-badge{margin:12px 0 8px;padding:9px 12px;border-radius:999px;text-align:center;font-size:10px;font-weight:900;letter-spacing:.08em}
 .pilot-payment-badge.test{background:#fff4d8;color:#8a5a00;border:1px solid #f0d89a}
 .pilot-payment-badge.live{background:#e9f8ef;color:#087443;border:1px solid #cfead9}
+
+.auth-method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 12px}
+.auth-method-tabs button{border:1px solid #d9e5ec;background:#f7fafc;color:#526774;border-radius:10px;padding:9px 12px;font-weight:800;font-size:11px}
+.auth-method-tabs button.active{background:#123f59;color:#fff;border-color:#123f59}
