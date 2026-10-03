@@ -359,3 +359,21 @@
 .support-faq p{font-size:10px;color:var(--muted);line-height:1.5;margin:8px 0 0}
 .policy-page-card>span{font-size:10px;font-weight:800;letter-spacing:1.6px;color:var(--aqua)}
 .policy-page-card h2{margin-top:6px}
+
+.trips-screen{padding-bottom:112px}
+.trips-header{align-items:flex-start}
+.trips-header>div:nth-child(2){min-width:0}
+.trips-header p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.45}
+.trips-toolbar{padding:6px 0 0}
+.category-row--premium{padding-top:8px}
+.category-row--premium button{box-shadow:0 5px 16px rgba(5,48,87,.04)}
+.sort-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px 4px}
+.sort-row>div{display:flex;align-items:baseline;gap:5px}
+.sort-row>div span{font-family:Poppins;font-size:20px;font-weight:700;color:var(--navy)}
+.sort-row>div small{font-size:10px;color:var(--muted)}
+.sort-row label{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;color:#7a8a9a}
+.sort-row select{border:1px solid var(--line);background:white;color:var(--ink);border-radius:12px;padding:9px 28px 9px 10px;font-size:10px;font-weight:700;max-width:170px}
+.trip-grid--premium{padding-top:10px}
+.trips-empty{padding-top:72px}
+.trips-empty__icon{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;margin:0 auto 12px;background:#eef7fb;color:var(--navy)}
+.trips-empty button{margin-top:12px;border:0;border-radius:12px;background:var(--navy);color:white;padding:11px 14px;font-size:11px;font-weight:800}
