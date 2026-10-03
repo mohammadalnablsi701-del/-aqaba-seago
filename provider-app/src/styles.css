@@ -73,3 +73,26 @@
 .trip-template-grid button span{font-size:10px;color:#7b8f9b}
 .trip-template-grid button.active{border-color:#00a9bc;background:#eaf9fb;color:#075f73}
 @media(max-width:560px){.trip-template-grid{grid-template-columns:1fr 1fr}}
+
+.trip-card-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.trip-card{border:1px solid #e3ebf1;border-radius:18px;overflow:hidden;background:#fff}
+.trip-card-media{position:relative;aspect-ratio:2/1;background:#eef5f8}
+.trip-card-media img{width:100%;height:100%;object-fit:cover;display:block}
+.trip-card-placeholder{height:100%;display:grid;place-items:center;color:#8aa1af}
+.trip-state{position:absolute;left:10px;top:10px;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900;letter-spacing:.07em}
+.trip-state.active{background:#e9fbf2;color:#087443}
+.trip-state.inactive{background:#eef2f5;color:#617382}
+.trip-card-body{padding:14px}
+.trip-card-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.trip-card-title h3{margin:0 0 4px;font-size:17px;color:#16394e}
+.trip-card-title span{font-size:11px;color:#788b98}
+.trip-card-title>b{white-space:nowrap;color:#0876a9;font-size:15px}
+.trip-card-meta{display:grid;gap:6px;margin:12px 0}
+.trip-card-meta span{font-size:11px;color:#657c8b;display:flex;align-items:center;gap:5px}
+.trip-card-actions{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:7px}
+.trip-card-actions button{border:0;border-radius:10px;background:#eef6fb;color:#0a5f91;padding:10px 8px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px}
+.trip-card-actions .primary-action{background:#0b6f9f;color:#fff}
+.empty-trip-state{text-align:center;padding:34px 18px;color:#718492}
+.empty-trip-state svg{color:#9cb2bf}.empty-trip-state h3{margin:8px 0 5px;color:#16394e}.empty-trip-state p{font-size:12px;line-height:1.5}
+.empty-trip-state button{margin-top:10px;border:0;border-radius:11px;background:#0288d1;color:#fff;padding:11px 13px;font-weight:900;display:inline-flex;align-items:center;gap:6px}
+@media(min-width:700px){.trip-card-grid{grid-template-columns:1fr 1fr}}
