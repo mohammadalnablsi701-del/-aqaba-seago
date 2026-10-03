@@ -51,4 +51,32 @@ app.get("/ready",(_req,res)=>{
   });
 });
 
-app.listen(port,()=>console.log(`Aqaba SeaGo API listening on port ${port}`));
+const server=app.listen(port,()=>console.log(`Aqaba SeaGo API listening on port ${port}`));
+
+let shuttingDown=false;
+async function shutdown(signal){
+  if(shuttingDown)return;
+  shuttingDown=true;
+  console.log(`${signal} received. Shutting down Aqaba SeaGo API...`);
+
+  const forceTimer=setTimeout(()=>{
+    console.error("Graceful shutdown timed out");
+    process.exit(1);
+  },10000);
+  forceTimer.unref();
+
+  server.close(async err=>{
+    try{
+      if(err)console.error("HTTP server close failed",err);
+      await mongoose.connection.close();
+      clearTimeout(forceTimer);
+      process.exit(err?1:0);
+    }catch(closeError){
+      console.error("Database close failed",closeError);
+      process.exit(1);
+    }
+  });
+}
+
+process.on("SIGTERM",()=>shutdown("SIGTERM"));
+process.on("SIGINT",()=>shutdown("SIGINT"));
