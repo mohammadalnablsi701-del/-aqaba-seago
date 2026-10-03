@@ -474,3 +474,7 @@
 .detail-departure-option>svg:first-child{color:var(--blue)}.detail-departure-option>svg:last-child{color:#cad8df}
 .detail-departure-option>div{display:flex;flex-direction:column;gap:2px}.detail-departure-option b{font-size:12px}.detail-departure-option span{font-size:10px;color:var(--muted)}
 .detail-departure-option.active{border-color:var(--aqua);background:#f2fcfd}.detail-departure-option.active>svg:last-child{color:var(--lagoon)}
+
+.pilot-payment-badge{margin:12px 0 8px;padding:9px 12px;border-radius:999px;text-align:center;font-size:10px;font-weight:900;letter-spacing:.08em}
+.pilot-payment-badge.test{background:#fff4d8;color:#8a5a00;border:1px solid #f0d89a}
+.pilot-payment-badge.live{background:#e9f8ef;color:#087443;border:1px solid #cfead9}
