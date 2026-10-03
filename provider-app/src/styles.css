@@ -127,3 +127,17 @@
 .manifest-actions .manual-checkin{background:#079455;color:#fff}
 .manifest-actions .manual-checkin:disabled{opacity:.55}
 @media(max-width:560px){.manifest-toolbar{grid-template-columns:1fr}.manifest-actions{grid-template-columns:1fr 1fr 1fr}}
+
+.departure-overview{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:10px 0 14px}
+.departure-overview>div{background:#f7fafc;border:1px solid #e4edf2;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:3px}
+.departure-overview span{font-size:10px;color:#748894}.departure-overview b{font-size:20px;color:#16394e}
+.departure-quick-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.departure-quick-actions button{border:1px solid #d8e5eb;background:#eef6fb;color:#0a5f91;border-radius:10px;padding:10px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:5px}
+.departure-quick-actions button:disabled{opacity:.45}
+.departure-status-actions{display:grid;gap:12px;margin-top:14px}
+.complete-action{border:0;border-radius:11px;background:#e9fbf2;color:#087443;padding:11px 13px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:6px}
+.danger-zone{border:1px solid #f0d3cd;background:#fff9f7;border-radius:14px;padding:13px;display:grid;gap:8px}
+.danger-zone b{color:#9e2f24}.danger-zone span{font-size:11px;color:#7d6e69}.danger-zone textarea{width:100%;border:1px solid #e6d2cc;border-radius:10px;padding:10px}
+.danger-zone button{border:0;border-radius:10px;background:#b42318;color:#fff;padding:10px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:6px}
+.departure-final-state{border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:4px;margin-top:14px}.departure-final-state.cancelled{background:#fff0ee;color:#b42318}.departure-final-state.completed{background:#eef2f5;color:#526b7c}.departure-final-state span{font-size:11px}
+@media(max-width:560px){.departure-quick-actions{grid-template-columns:1fr}.departure-overview b{font-size:18px}}
