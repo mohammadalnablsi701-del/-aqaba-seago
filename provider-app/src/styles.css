@@ -199,3 +199,7 @@ nav{
 @supports not (height:100dvh){
   body,.app,.login,.onboarding-shell,.scanner-screen{min-height:100vh}
 }
+
+.header-actions{display:flex;align-items:center;gap:8px}
+.settings-form .advanced-trip-options{margin-top:2px}
+.settings-form .save-button{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:3}
