@@ -459,3 +459,8 @@
 .legal-copy p{margin-top:7px}
 
 .api-notice--error{background:#fff4f1;border-color:#efd9d4;color:#9f493d}
+
+.trip-live-status{margin-top:10px;border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700}
+.trip-live-status.available{background:#eaf8f0;color:#087443}
+.trip-live-status.unavailable{background:#f2f5f7;color:#7b8997}
+.sticky-booking .primary-button:disabled{opacity:.5;box-shadow:none;cursor:not-allowed}
