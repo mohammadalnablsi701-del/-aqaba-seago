@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Anchor, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Heart, Home,
   Bell, LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
@@ -943,6 +943,35 @@ export default function App(){
   const [auth,setAuth]=useState(readStoredAuth());
   const [menuOpen,setMenuOpen]=useState(false);
   const [alertsUnread,setAlertsUnread]=useState(0);
+  const historyReady=useRef(false);
+  const restoringHistory=useRef(false);
+
+  useEffect(()=>{
+    function restore(event){
+      const nav=event.state?.seago;
+      if(!nav) return;
+      restoringHistory.current=true;
+      setMenuOpen(false);
+      setActive(nav.active||"home");
+      setDetail(nav.detail||null);
+      setBooking(Boolean(nav.booking&&nav.detail));
+      window.setTimeout(()=>{restoringHistory.current=false;},0);
+    }
+    window.addEventListener("popstate",restore);
+    return()=>window.removeEventListener("popstate",restore);
+  },[]);
+
+  useEffect(()=>{
+    if(paymentReturn) return;
+    const snapshot={seago:{active,detail,booking:Boolean(booking&&detail)}};
+    if(!historyReady.current){
+      window.history.replaceState(snapshot,"",window.location.href);
+      historyReady.current=true;
+      return;
+    }
+    if(restoringHistory.current) return;
+    window.history.pushState(snapshot,"",window.location.href);
+  },[active,detail?.id,booking,paymentReturn]);
 
   useEffect(()=>{
     let ignore=false;
