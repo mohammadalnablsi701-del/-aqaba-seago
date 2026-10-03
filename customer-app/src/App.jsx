@@ -39,6 +39,8 @@ function normalizeTrip(raw, index = 0) {
     apiId: raw._id,
     title: raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
+    providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
+    verifiedProvider: true,
     duration: raw.durationMinutes ? `${raw.durationMinutes} min` : "Flexible",
     price: Number(raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     childPrice: Number(raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
@@ -46,7 +48,7 @@ function normalizeTrip(raw, index = 0) {
     buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetDescription: String(raw.pricing?.buffetDescription || ""),
-    images: Array.isArray(raw.images) ? raw.images.map(x=>typeof x==="string"?x:x?.url).filter(Boolean) : [],
+    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : (Array.isArray(raw.images) ? raw.images.map(x=>typeof x==="string"?x:x?.url).filter(Boolean) : []),
     rating: null,
     reviews: null,
     category,
@@ -183,10 +185,14 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
         {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>}
       </div>
       <div className="trip-card__body">
-        {trip.rating ? <div className="rating"><Star size={14} fill="currentColor"/> {trip.rating} <span>({trip.reviews})</span></div> : <div className="rating rating--partner"><CheckCircle2 size={14}/> SeaGo partner</div>}
+        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
         <h3>{trip.title}</h3>
-        <p>{trip.subtitle}</p>
-        <div className="trip-card__meta"><span>{trip.duration}</span><strong>From {trip.price} JOD</strong></div>
+        <p>{trip.providerName || trip.subtitle}</p>
+        <div className="trip-card__facts">
+          <span><CalendarDays size={14}/>{trip.duration}</span>
+          <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
+        </div>
+        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div>
       </div>
     </article>
   );
@@ -228,15 +234,15 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
       <div className="detail-body">
         <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
         <h1>{trip.title}</h1>
-        {trip.rating ? <div className="detail-rating"><Star size={16} fill="currentColor"/> {trip.rating} <span>{trip.reviews} reviews</span></div> : <div className="detail-rating"><CheckCircle2 size={16}/> Approved SeaGo experience</div>}
-        <p className="detail-description">{trip.description}</p>{trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
+        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified SeaGo operator <span>{trip.providerName || "Approved partner"}</span></div>
+        <p className="detail-description">{trip.description}</p><div className="detail-confidence"><div><CheckCircle2 size={18}/><span><b>Instant confirmation</b><small>Ticket issued after payment</small></span></div><div><CheckCircle2 size={18}/><span><b>Clear cancellation policy</b><small>Refund rules shown before payment</small></span></div></div>{trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
         <div className="feature-grid">
           <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
           <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
           <div><UsersRound/><span><small>Guests</small><b>Live availability</b></span></div>
           <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
         </div>
-        {trip.buffetEnabled&&<section className="buffet-info"><span>OPEN BUFFET OPTION</span><h2>Available with this trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}{trip.departureLocation?.name&&<section className="departure-location"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}</section>}<section className="included"><span>WHAT'S INCLUDED</span><h2>Everything for an easy day at sea</h2><p>Experience details are managed by the approved operator and shown through Aqaba SeaGo.</p></section>
+        {trip.buffetEnabled&&<section className="buffet-info"><span>OPEN BUFFET OPTION</span><h2>Available with this trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}{trip.departureLocation?.name&&<section className="departure-location"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}</section>}<section className="included"><span>BOOK WITH CONFIDENCE</span><h2>Everything you need before you go</h2><p>Live availability, verified operator details, departure point, pricing and cancellation terms are shown before checkout.</p></section>
       </div>
       <div className="sticky-booking"><div><small>From</small><strong>{trip.price} JOD</strong><span>/ person</span></div><button className="primary-button" onClick={onBook}>Book now <ChevronRight size={18}/></button></div>
     </div>
