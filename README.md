@@ -72,11 +72,22 @@ npm run dev
 
 API default: `http://localhost:4000`
 
-## Next milestone — v0.4
+## Current milestone — Pilot readiness / production cleanup
 
-- Connect a real payment gateway.
-- Refund/cancellation orchestration.
-- Payment reconciliation/admin views.
-- Scheduled expiry worker.
-- Integration tests against MongoDB.
-- Customer/provider/admin frontends.
+Already in place:
+- Customer, provider and admin frontends.
+- Provider trip/departure management and validation.
+- Admin commission controls, cancellation/refund visibility and notification history.
+- Pilot readiness dashboard with required blockers separated from deferred checks.
+- Guarded demo-data cleanup with preview, exact confirmation phrase and booking/hold safety checks.
+- Session-expiry handling in provider/admin apps.
+- API health/readiness endpoints, Helmet, CORS and rate limiting.
+- Graceful HTTP/MongoDB shutdown for deploys and restarts.
+
+Deferred for now:
+- Real payment gateway activation. The readiness dashboard treats this as deferred for the pilot and the backend still blocks `PUBLIC_LAUNCH=true` while the payment provider is `mock`.
+
+Next production-cleanup work:
+- Expand automated integration coverage for booking, checkout-hold and admin cleanup flows.
+- Add deployment/operations documentation and environment checklist.
+- Final pilot QA with real provider/trip/departure data after demo cleanup.
