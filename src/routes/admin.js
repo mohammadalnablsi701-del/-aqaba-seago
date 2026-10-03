@@ -1,6 +1,19 @@
 import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
 router.get("/trips",async(_req,res,next)=>{try{const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});res.json(rows);}catch(e){next(e);}});
-router.get("/providers",async(_req,res,next)=>{try{const rows=await Provider.find({}).populate("ownerUserId","name email phone isActive").sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
+router.get("/providers",async(_req,res,next)=>{try{
+  const rows=await Provider.find({}).populate("ownerUserId","name email phone isActive").sort({createdAt:-1}).limit(300);
+  const providerIds=rows.map(x=>x._id);
+  const trips=providerIds.length?await Trip.find({providerId:{$in:providerIds}}).select("_id providerId active"): [];
+  const tripIds=trips.map(t=>t._id);
+  const now=new Date();
+  const departures=tripIds.length?await Departure.find({tripId:{$in:tripIds},status:"scheduled",startsAt:{$gte:now}}).select("tripId startsAt reservedSeats capacity").sort({startsAt:1}):[];
+  const tripProvider=new Map(trips.map(t=>[String(t._id),String(t.providerId)]));
+  const byProvider=new Map();
+  for(const p of providerIds)byProvider.set(String(p),{tripCount:0,activeTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0});
+  for(const t of trips){const k=String(t.providerId),s=byProvider.get(k);if(!s)continue;s.tripCount+=1;if(t.active)s.activeTripCount+=1;}
+  for(const d of departures){const k=tripProvider.get(String(d.tripId));const s=byProvider.get(k);if(!s)continue;s.upcomingDepartures+=1;s.reservedSeatsUpcoming+=Number(d.reservedSeats||0);s.capacityUpcoming+=Number(d.capacity||0);if(!s.nextDepartureAt)s.nextDepartureAt=d.startsAt;}
+  res.json(rows.map(p=>({...p.toObject(),operations:byProvider.get(String(p._id))||{tripCount:0,activeTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0},settingsConfigured:Boolean(p.settings?.configured)})));
+}catch(e){next(e);}});
 router.get("/notifications",async(_req,res,next)=>{try{const rows=await NotificationLog.find({}).sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
 router.get("/refunds",async(_req,res,next)=>{try{const rows=await Booking.find({"cancellation.cancelledAt":{$exists:true}}).populate("customerId","name email phone").populate("providerId","businessName").populate("tripId","titleEn titleAr").populate("departureId","startsAt status").sort({"cancellation.cancelledAt":-1}).limit(300);const ids=rows.map(x=>x._id);const payments=await Payment.find({bookingId:{$in:ids}}).select("bookingId status amount currency refundedAmount refundedAt refundReference provider");const byBooking=new Map(payments.map(p=>[String(p.bookingId),p]));res.json(rows.map(b=>({...b.toObject(),bookingReference:"SG-"+String(b._id).slice(-8).toUpperCase(),payment:byBooking.get(String(b._id))||null})));}catch(e){next(e);}});
 router.patch("/trips/:tripId/commission",async(req,res,next)=>{try{const percentage=Number(req.body.percentage);if(!Number.isFinite(percentage)||percentage<0||percentage>100)return res.status(400).json({error:"Commission percentage must be between 0 and 100"});const trip=await Trip.findById(req.params.tripId);if(!trip)return res.status(404).json({error:"Trip not found"});trip.pricing.commissionType="percentage";trip.pricing.commissionValue=percentage;await trip.save();res.json(trip);}catch(e){next(e);}});
