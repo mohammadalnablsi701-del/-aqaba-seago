@@ -70,6 +70,7 @@ router.get("/readiness",async(_req,res,next)=>{
 
     const demoProvider=await Provider.findOne({businessName:"Aqaba SeaGo Demo Partner"}).select("_id");
     const demoTripCount=demoProvider?await Trip.countDocuments({providerId:demoProvider._id}):0;
+    const demoActiveTripCount=demoProvider?await Trip.countDocuments({providerId:demoProvider._id,active:true}):0;
     const demoUserEmails=[process.env.DEMO_PROVIDER_EMAIL,process.env.DEMO_ADMIN_EMAIL].filter(Boolean).map(v=>String(v).trim().toLowerCase());
     const demoUserCount=demoUserEmails.length?await User.countDocuments({email:{$in:demoUserEmails}}):0;
 
@@ -85,7 +86,7 @@ router.get("/readiness",async(_req,res,next)=>{
       {id:"trips",label:"At least one active trip",ok:activeTrips>0},
       {id:"departures",label:"At least one upcoming departure",ok:upcomingDepartures>0},
       {id:"demo-seed",label:"Demo seeding disabled",ok:process.env.SEED_DEMO_DATA!=="true"},
-      {id:"demo-records",label:"No demo provider/trips remain",ok:!demoProvider&&demoTripCount===0},
+      {id:"demo-records",label:"No sellable demo inventory remains",ok:demoActiveTripCount===0},
       {id:"jwt-secret",label:"Strong JWT secret configured",ok:jwtSecret.length>=32&&!/replace-with|changeme|secret/i.test(jwtSecret)},
       {id:"cors",label:"Allowed frontend origins configured",ok:allowedOrigins.length>0},
       {id:"public-url",label:"Public API base URL configured",ok:validPublicBaseUrl},
@@ -113,7 +114,7 @@ router.get("/readiness",async(_req,res,next)=>{
         publicBaseUrlConfigured:validPublicBaseUrl
       },
       counts:{providersApproved,providersPending,activeTrips,upcomingDepartures,confirmedBookings},
-      demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,userCount:demoUserCount},
+      demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,activeTripCount:demoActiveTripCount,userCount:demoUserCount},
       checks
     });
   }catch(e){next(e);}
