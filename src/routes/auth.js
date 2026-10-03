@@ -19,6 +19,42 @@ function validPassword(value){
   return typeof value==="string" && value.length>=8 && value.length<=128;
 }
 
+router.get("/google/config",(req,res)=>{
+  const clientId=String(process.env.GOOGLE_CLIENT_ID||"").trim();
+  res.json({enabled:Boolean(clientId),clientId:clientId||null});
+});
+
+router.post("/google",async(req,res,next)=>{
+  try{
+    const clientId=String(process.env.GOOGLE_CLIENT_ID||"").trim();
+    if(!clientId)return res.status(503).json({error:"Google sign-in is not configured yet"});
+    const credential=String(req.body.credential||"").trim();
+    const role=req.body.role==="provider"?"provider":"customer";
+    if(!credential)return res.status(400).json({error:"Google credential is required"});
+
+    const response=await fetch("https://oauth2.googleapis.com/tokeninfo?id_token="+encodeURIComponent(credential));
+    const profile=await response.json().catch(()=>({}));
+    if(!response.ok||profile.aud!==clientId||profile.email_verified!=="true"||!profile.sub||!profile.email){
+      return res.status(401).json({error:"Google sign-in could not be verified"});
+    }
+
+    const email=cleanEmail(profile.email);
+    const name=cleanText(profile.name||profile.given_name||email.split("@")[0],80);
+    let user=await User.findOne({$or:[{googleSub:String(profile.sub)},{email}]});
+    if(user){
+      if(user.role!==role)return res.status(409).json({error:"This email is already registered for a different SeaGo account type"});
+      if(!user.isActive)return res.status(401).json({error:"Invalid account"});
+      if(!user.googleSub){user.googleSub=String(profile.sub);await user.save();}
+    }else{
+      user=await User.create({name,email,googleSub:String(profile.sub),role,isActive:true});
+    }
+    res.json({user:safe(user),token:sign(user)});
+  }catch(e){
+    if(e?.code===11000)return res.status(409).json({error:"Google account is already linked"});
+    next(e);
+  }
+});
+
 router.post("/register",async(req,res,next)=>{
   try{
     const name=cleanText(req.body.name,80);
