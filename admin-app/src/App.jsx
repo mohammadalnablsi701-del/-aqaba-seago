@@ -1,6 +1,6 @@
 import React,{useEffect,useState}from"react";
-import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel}from"lucide-react";
-import{login,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
+import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound}from"lucide-react";
+import{login,providers,approveProvider,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 
@@ -11,13 +11,13 @@ function Login({onDone}){
 }
 
 export default function App(){
-  const[auth,setAuth]=useState(stored());const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("commissions");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("commissions");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   useEffect(()=>{
-    const expired=()=>{setAuth(null);setRows([]);setRefundRows([]);setNotificationRows([]);setError("Your session expired. Please sign in again.");};
+    const expired=()=>{setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setError("Your session expired. Please sign in again.");};
     window.addEventListener("seago:session-expired",expired);
     return()=>window.removeEventListener("seago:session-expired",expired);
   },[]);
-  async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[t,r,n,rd,dp]=await Promise.all([trips(auth.token),refunds(auth.token),notifications(auth.token),readiness(auth.token),demoCleanupPreview(auth.token)]);setRows(t);setRefundRows(r);setNotificationRows(n);setReady(rd);setDemoPreview(dp)}catch(e){setError(e.message)}finally{setLoading(false)}}
+  async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[p,t,r,n,rd,dp]=await Promise.all([providers(auth.token),trips(auth.token),refunds(auth.token),notifications(auth.token),readiness(auth.token),demoCleanupPreview(auth.token)]);setProviderRows(p);setRows(t);setRefundRows(r);setNotificationRows(n);setReady(rd);setDemoPreview(dp)}catch(e){setError(e.message)}finally{setLoading(false)}}
   useEffect(()=>{load()},[auth?.token]);
   async function runDemoCleanup(){
     if(!demoPreview?.provider?.id&& !demoPreview?.provider?._id){setCleanupMsg("No demo provider found.");return;}
@@ -32,9 +32,9 @@ export default function App(){
     finally{setCleanupBusy(false);}
   }
   if(!auth)return <Login onDone={setAuth}/>;
-  function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setRows([]);setRefundRows([]);setNotificationRows([]);}
+  function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);}
   return <div className="app"><header><div><b>Aqaba SeaGo</b><span>Admin Dashboard</span></div><div className="admin-head-actions"><button onClick={load}><RefreshCw size={16}/> Refresh</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
-    <div className="admin-tabs"><button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}>Pilot readiness</button><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
+    <div className="admin-tabs"><button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}>Pilot readiness</button><button className={tab==="providers"?"active":""} onClick={()=>setTab("providers")}>Providers{providerRows.filter(p=>p.status==="pending").length?` (${providerRows.filter(p=>p.status==="pending").length})`:""}</button><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
     {error&&<div className="error">{error}</div>}
     {loading?<p>Loading...</p>:tab==="readiness"?<>
       <div className="title"><ShipWheel/><div><small>PILOT</small><h1>Pilot readiness</h1><p>Operational checks before inviting the first real provider and customers.</p></div></div>
@@ -46,6 +46,9 @@ export default function App(){
         <div className="readiness-env"><b>Environment</b><span>Public launch: {String(ready.environment.publicLaunch)}</span><span>Demo seed: {String(ready.environment.seedDemoData)}</span><span>Mock checkout: {String(ready.environment.mockCheckout)}</span><span>Payment provider: {ready.environment.paymentProvider}</span></div>
         <div className="demo-preview"><b>Demo cleanup</b><p>The preview below is read-only until you type the exact confirmation phrase.</p><span>Demo provider: {demoPreview?.provider?"Found":"Not found"}</span><span>Demo trips: {demoPreview?.trips?.length||0}</span><span>Demo departures: {demoPreview?.departureCount||0}</span><span>Demo users: {demoPreview?.users?.length||0}</span><span>Bookings linked to demo: {demoPreview?.bookingCount||0}</span><span>Checkout holds linked to demo: {demoPreview?.holdCount||0}</span>{demoPreview?.provider&&<div className="demo-cleanup-control"><small>{demoPreview?.safeToDelete?"Safe to delete demo provider data":"Cleanup blocked until demo seeding is off and demo booking/hold history is zero."}</small><input value={cleanupText} onChange={e=>setCleanupText(e.target.value)} placeholder="Type DELETE DEMO DATA"/><button disabled={!demoPreview?.safeToDelete||cleanupText!=="DELETE DEMO DATA"||cleanupBusy} onClick={runDemoCleanup}>{cleanupBusy?"Deleting demo data...":"Delete demo data"}</button>{cleanupMsg&&<em>{cleanupMsg}</em>}</div>}</div>
       </div>}
+    </>:tab==="providers"?<>
+      <div className="title"><UsersRound/><div><small>PROVIDERS</small><h1>Provider applications</h1><p>Review new SeaGo partners and approve them before they can publish trips.</p></div></div>
+      <div className="provider-admin-list">{providerRows.length?providerRows.map(p=><ProviderAdminRow key={p._id} p={p} token={auth.token} onSaved={load}/>):<p>No provider applications yet.</p>}</div>
     </>:tab==="commissions"?<>
       <div className="title"><Percent/><div><small>COMMISSIONS</small><h1>Trip commission control</h1><p>Only admin can change SeaGo commission. Provider apps cannot edit this value.</p></div></div>
       <div className="list">{rows.map(t=><TripRow key={t._id} t={t} token={auth.token} onSaved={load}/>)}</div>
@@ -58,6 +61,8 @@ export default function App(){
     </>}
   </main></div>
 }
+
+function ProviderAdminRow({p,token,onSaved}){const[busy,setBusy]=useState(false);const[msg,setMsg]=useState("");async function approve(){setBusy(true);setMsg("");try{await approveProvider(token,p._id);setMsg("Approved");await onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}}const u=p.ownerUserId||{};return <div className="provider-admin-row"><div><div className="provider-admin-head"><h3>{p.businessName}</h3><em className={"provider-state "+p.status}>{p.status}</em></div><p>{u.name||"Provider"} · {u.email||"-"}</p><p>{p.phone||u.phone||"No phone"}</p><small>Applied {p.createdAt?new Date(p.createdAt).toLocaleString():"-"}</small></div><div className="provider-admin-actions">{p.status==="pending"&&<button disabled={busy} onClick={approve}>{busy?"Approving...":"Approve provider"}</button>}{p.status==="approved"&&<span>Approved</span>}{msg&&<small>{msg}</small>}</div></div>}
 
 function TripRow({t,token,onSaved}){
   const[value,setValue]=useState(t.pricing?.commissionType==="percentage"?t.pricing?.commissionValue:0);const[saving,setSaving]=useState(false);const[msg,setMsg]=useState("");
