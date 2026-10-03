@@ -104,8 +104,11 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       const nextStatus=req.body.status;
       if(!["scheduled","cancelled","completed"].includes(nextStatus))return res.status(400).json({error:"Invalid departure status"});
       if(nextStatus==="cancelled"&&departure.status!=="cancelled"){
+        departure.status="cancelled";
+        await departure.save();
         await releaseCheckoutHoldsForDeparture(departure._id);
         await cancelDepartureBookings({departureId:departure._id,providerId:provider._id,reason:req.body.cancellationReason||"Departure cancelled by provider"});
+        return res.json(departure);
       }
       departure.status=nextStatus;
     }
