@@ -445,15 +445,16 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     listDepartures(trip.apiId)
       .then(rows=>{
         if(ignore) return;
-        setDepartures(rows);
+        const eligible=rows.filter(x=>x.status==="scheduled"&&Number(x.availableSeats||0)>0&&new Date(x.startsAt)>new Date()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));
+        setDepartures(eligible);
         const wantedDepartureId=initialCriteria?.departureId || "";
         const wantedDate=initialCriteria?.date || "";
-        const exact=rows.find(x=>String(x.id)===String(wantedDepartureId)&&Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
-        const matching=rows.find(x=>{
+        const exact=eligible.find(x=>String(x.id)===String(wantedDepartureId)&&Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
+        const matching=eligible.find(x=>{
           const depDate=localDateInputValue(new Date(x.startsAt));
           return Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1) && (!wantedDate || depDate===wantedDate);
         });
-        const first=exact || matching || rows.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
+        const first=exact || matching || eligible.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
         setSelected(first || null);
       })
       .catch(err=>{ if(!ignore) setError(err.message); })
