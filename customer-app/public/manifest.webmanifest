@@ -9,10 +9,22 @@
   "description": "Book marine trips and sea experiences in Aqaba.",
   "icons": [
     {
-      "src": "./app-customer.svg?v=identity-v1",
+      "src": "./customer-icon-192.png?v=identity-v3",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./customer-icon-512.png?v=identity-v3",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./app-customer.svg?v=identity-v2",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
