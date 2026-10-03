@@ -155,3 +155,47 @@
 .booking-checkin-cta{width:100%;border:0;border-radius:12px;background:#079455;color:#fff;padding:12px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:12px}
 .booking-detail-grid{margin-top:0}.compact-location{margin-top:12px}
 @media(max-width:560px){.detail-actions-grid{grid-template-columns:1fr 1fr}}
+
+/* Mobile/iPhone QA hardening */
+html{-webkit-text-size-adjust:100%}
+body{min-height:100dvh}
+.app,.login,.onboarding-shell,.scanner-screen{min-height:100dvh}
+button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+input,select,textarea{font-size:16px}
+button,.detail-actions-grid a,.booking-quick-actions a,.manifest-actions a{min-height:44px}
+header{
+  height:auto;
+  min-height:72px;
+  padding-top:env(safe-area-inset-top);
+}
+main{
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));
+}
+nav{
+  height:calc(76px + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.login{padding-top:calc(24px + env(safe-area-inset-top));padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.login>.brand{top:calc(30px + env(safe-area-inset-top))}
+.scanner-screen{
+  padding-top:calc(18px + env(safe-area-inset-top));
+  padding-bottom:calc(18px + env(safe-area-inset-bottom));
+}
+.manage-form,.detail-sheet{
+  margin-bottom:calc(12px + env(safe-area-inset-bottom));
+}
+.trip-form-simple .save-button{
+  bottom:calc(12px + env(safe-area-inset-bottom));
+}
+@media(max-width:560px){
+  .trip-form-simple .save-button{bottom:calc(10px + env(safe-area-inset-bottom))}
+  .section-toolbar{flex-wrap:wrap}
+  .section-toolbar .booking-search{width:100%;min-width:100%}
+  .booking-card-main,.manifest-row{align-items:flex-start}
+  .trip-card-actions button{min-height:44px}
+  .today-hero-actions button{min-height:44px}
+  .weekday-picker button{min-height:42px}
+}
+@supports not (height:100dvh){
+  body,.app,.login,.onboarding-shell,.scanner-screen{min-height:100vh}
+}
