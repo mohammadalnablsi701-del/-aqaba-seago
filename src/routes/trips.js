@@ -2,6 +2,7 @@ import express from "express";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireProviderCapability } from "../services/providerAccess.js";
 
 const router = express.Router();
 
@@ -84,8 +85,9 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
   try {
     const errors=validateTripPayload(req.body);
     if(errors.length)return res.status(400).json({error:errors[0],errors});
-    const p = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
-    if (!p) return res.status(403).json({ error: "Approved provider profile required" });
+    const access=await requireProviderCapability(req.user,"manage_trips");
+    const p=access?.provider;
+    if(!p)return res.status(403).json({error:"Trip management permission required"});
 
     const trip = await Trip.create({
       titleAr: cleanText(req.body.titleAr,120),
@@ -107,8 +109,9 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
   try {
     const errors=validateTripPayload(req.body,{partial:true});
     if(errors.length)return res.status(400).json({error:errors[0],errors});
-    const p = await Provider.findOne({ ownerUserId: req.user._id, status: "approved" });
-    if (!p) return res.status(403).json({ error: "Approved provider profile required" });
+    const access=await requireProviderCapability(req.user,"manage_trips");
+    const p=access?.provider;
+    if(!p)return res.status(403).json({error:"Trip management permission required"});
 
     const trip = await Trip.findOne({ _id: req.params.tripId, providerId: p._id });
     if (!trip) return res.status(404).json({ error: "Trip not found" });
