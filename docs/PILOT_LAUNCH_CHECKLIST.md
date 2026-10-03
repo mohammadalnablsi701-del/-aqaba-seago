@@ -153,6 +153,15 @@ Deferred:
 
 The real payment gateway remains deferred for this controlled pilot and must not be interpreted as public-launch readiness.
 
+## Email delivery
+
+Email is not required for the controlled pilot because in-app notifications remain available, but production email delivery is not ready while Resend uses the default testing sender/domain.
+
+Before public launch:
+- Verify a real sending domain in Resend.
+- Set `EMAIL_FROM` to an address on that verified domain.
+- Confirm booking confirmation and cancellation emails reach a non-owner test address.
+
 ## 10. Final go/no-go before inviting pilot users
 
 Proceed with the controlled pilot only when:
