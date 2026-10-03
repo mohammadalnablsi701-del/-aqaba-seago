@@ -90,6 +90,7 @@ router.get("/readiness",async(_req,res,next)=>{
       {id:"cors",label:"Allowed frontend origins configured",ok:allowedOrigins.length>0},
       {id:"public-url",label:"Public API base URL configured",ok:validPublicBaseUrl},
       {id:"mock-secret",label:"Mock webhook secret configured",ok:!mockCheckout||(mockSecret.length>=24&&!/replace-with|changeme/i.test(mockSecret))},
+      {id:"email",label:"Production email sender/domain configured",ok:Boolean(process.env.RESEND_API_KEY)&&Boolean(process.env.EMAIL_FROM)&&!String(process.env.EMAIL_FROM).includes("onboarding@resend.dev"),deferred:true},
       {id:"payment",label:"Real payment gateway configured",ok:(process.env.PAYMENT_PROVIDER||"mock")!=="mock",deferred:true}
     ];
     const blockers=checks.filter(x=>!x.ok&&!x.deferred).map(x=>({id:x.id,label:x.label}));
