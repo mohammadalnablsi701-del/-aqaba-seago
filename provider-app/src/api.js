@@ -1,5 +1,18 @@
 const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");
-async function req(path,{token,...options}={}){const r=await fetch(API+path,{...options,headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{}),...(options.headers||{})}});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"Request failed");return j;}
+async function req(path,{token,...options}={}){
+  const r=await fetch(API+path,{...options,headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{}),...(options.headers||{})}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){
+    if(r.status===401&&token){
+      localStorage.removeItem("seago_provider_auth");
+      window.dispatchEvent(new CustomEvent("seago:session-expired"));
+    }
+    const e=new Error(j.error||"Request failed");
+    e.status=r.status;
+    throw e;
+  }
+  return j;
+}
 export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});
 export const me=token=>req("/api/providers/me",{token});
 export const trips=token=>req("/api/providers/me/trips",{token});
