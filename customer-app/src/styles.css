@@ -412,3 +412,13 @@
   .sticky-booking{padding-bottom:max(13px,env(safe-area-inset-bottom))}
 }
 .alerts-signin + .auth-panel{margin-top:0}
+
+.booking-account-row{display:grid;grid-template-columns:1fr;gap:7px;padding-top:4px}
+.booking-account-row>span{font-size:10px;font-weight:800;letter-spacing:1.2px;color:#7b8b9a}
+.booking-account-row>div{display:grid;grid-template-columns:24px 1fr 18px;align-items:center;gap:8px;border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:#fbfdfe}
+.booking-account-row svg:first-child{color:var(--navy)}
+.booking-account-row svg:last-child{color:#00a889}
+.booking-account-row b{font-size:11px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ticket-error-state{padding:24px 20px;display:grid;gap:12px}
+.ticket-error-state .secondary-button{height:44px}
+.stepper button:disabled{opacity:.35;cursor:not-allowed}
