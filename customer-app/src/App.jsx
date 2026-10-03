@@ -581,9 +581,48 @@ function TicketsScreen({ auth, onAuthenticated }) {
 
 function ProfileScreen({ auth, onAuthenticated, onSignOut }) {
   if(!auth?.token && hasApi()) {
-    return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1></div></header><AuthForm onAuthenticated={onAuthenticated}/></div>;
+    return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1><p className="profile-header-copy">Sign in to manage bookings, tickets and saved trips.</p></div></header><AuthForm onAuthenticated={onAuthenticated}/></div>;
   }
-  return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1></div></header><div className="profile-card"><div className="profile-avatar">{auth?.user?.name?.[0]?.toUpperCase() || "M"}</div><div><h2>{auth?.user?.name || "Welcome aboard"}</h2><p>{auth?.user?.email || "Preview profile. Connect the API to sign in and manage bookings."}</p></div></div><div className="profile-menu"><button><span><Sparkles/> My bookings</span><ChevronRight/></button><button><span><Heart/> Favourites</span><ChevronRight/></button><button><span><UserRound/> Personal details</span><ChevronRight/></button>{auth?.token&&<button onClick={onSignOut}><span><UserRound/> Sign out</span><ChevronRight/></button>}</div></div>;
+
+  const initial=auth?.user?.name?.trim()?.[0]?.toUpperCase() || "M";
+  return <div className="screen standard-screen profile-screen">
+    <header className="standard-header profile-header"><BrandLogo compact/><div><span>YOUR SEAGO</span><h1>Profile</h1><p className="profile-header-copy">Your trips, preferences and account in one place.</p></div></header>
+
+    <section className="profile-hero-card">
+      <div className="profile-avatar profile-avatar--large">{initial}</div>
+      <div className="profile-hero-card__copy">
+        <small>SEAGO MEMBER</small>
+        <h2>{auth?.user?.name || "Welcome aboard"}</h2>
+        <p>{auth?.user?.email || "Preview profile"}</p>
+      </div>
+      <div className="profile-member-badge"><CheckCircle2 size={15}/> Active</div>
+    </section>
+
+    <section className="profile-quick-grid">
+      <button><Ticket size={20}/><span><b>My tickets</b><small>View confirmed bookings</small></span><ChevronRight size={17}/></button>
+      <button><Heart size={20}/><span><b>Saved trips</b><small>Your favourites</small></span><ChevronRight size={17}/></button>
+      <button><Bell size={20}/><span><b>Notifications</b><small>Trip updates & reminders</small></span><ChevronRight size={17}/></button>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section__title"><span>ACCOUNT</span><small>Manage your SeaGo details</small></div>
+      <div className="profile-list">
+        <button><span className="profile-list__icon"><UserRound size={18}/></span><span><b>Personal details</b><small>Name, email and phone</small></span><ChevronRight size={17}/></button>
+        <button><span className="profile-list__icon"><MapPin size={18}/></span><span><b>Trip preferences</b><small>Saved experiences and interests</small></span><ChevronRight size={17}/></button>
+      </div>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section__title"><span>HELP & INFO</span><small>Everything you may need</small></div>
+      <div className="profile-list">
+        <button><span className="profile-list__icon"><Sparkles size={18}/></span><span><b>Help & support</b><small>Get help with a booking</small></span><ChevronRight size={17}/></button>
+        <button><span className="profile-list__icon"><CheckCircle2 size={18}/></span><span><b>Policies</b><small>Cancellation, refunds and privacy</small></span><ChevronRight size={17}/></button>
+      </div>
+    </section>
+
+    {auth?.token&&<button className="profile-signout" onClick={onSignOut}>Sign out</button>}
+    <div className="profile-footer-copy">Aqaba SeaGo · Red Sea experiences</div>
+  </div>;
 }
 
 function PaymentReturnScreen({ onViewTicket }) {
