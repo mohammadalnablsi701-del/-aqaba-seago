@@ -29,6 +29,32 @@ router.post("/",requireAuth,requireRole("provider"),async(req,res,next)=>{
   }
 });
 
+router.patch("/me/settings",requireAuth,requireRole("provider"),async(req,res,next)=>{
+  try{
+    const provider=await Provider.findOne({ownerUserId:req.user._id});
+    if(!provider)return res.status(404).json({error:"Provider profile not found"});
+    const phone=cleanPhone(req.body.phone);
+    const defaultCapacity=Number(req.body.defaultCapacity);
+    const defaultDepartureTime=cleanText(req.body.defaultDepartureTime,5);
+    const location=req.body.departureLocation||{};
+    if(phone&&phone.replace(/\D/g,"").length<7)return res.status(400).json({error:"Enter a valid phone number"});
+    if(!Number.isInteger(defaultCapacity)||defaultCapacity<1||defaultCapacity>500)return res.status(400).json({error:"Default capacity must be between 1 and 500"});
+    if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(defaultDepartureTime))return res.status(400).json({error:"Default departure time must be HH:MM"});
+    provider.phone=phone||undefined;
+    provider.settings={
+      defaultCapacity,
+      defaultDepartureTime,
+      departureLocation:{
+        name:cleanText(location.name,120),
+        address:cleanText(location.address,220),
+        googleMapsUrl:cleanText(location.googleMapsUrl,500)
+      }
+    };
+    await provider.save();
+    res.json(provider);
+  }catch(e){next(e);}
+});
+
 router.get("/me",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
     const provider=await Provider.findOne({ownerUserId:req.user._id});
