@@ -117,3 +117,13 @@
 .booking-quick-actions a,.booking-quick-actions button{border:0;border-radius:9px;background:#eef6fb;color:#0a5f91;text-decoration:none;padding:9px;text-align:center;font-size:10px;font-weight:900}
 .empty-booking-state{text-align:center;padding:30px 15px;color:#7a8d9a}.empty-booking-state h3{margin:8px 0 4px;color:#16394e}.empty-booking-state p{font-size:11px}
 @media(max-width:560px){.section-toolbar .booking-search{width:145px;min-width:0}}
+
+.manifest-toolbar{display:grid;grid-template-columns:1fr minmax(180px,260px);gap:10px;align-items:center;margin:8px 0 10px}
+.manifest-card{border-top:1px solid #edf2f6;padding:10px 0}
+.manifest-card:first-child{border-top:0}
+.manifest-main{border-top:0}
+.manifest-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px}
+.manifest-actions a,.manifest-actions button{border:0;border-radius:9px;background:#eef6fb;color:#0a5f91;text-decoration:none;padding:9px;text-align:center;font-size:10px;font-weight:900}
+.manifest-actions .manual-checkin{background:#079455;color:#fff}
+.manifest-actions .manual-checkin:disabled{opacity:.55}
+@media(max-width:560px){.manifest-toolbar{grid-template-columns:1fr}.manifest-actions{grid-template-columns:1fr 1fr 1fr}}
