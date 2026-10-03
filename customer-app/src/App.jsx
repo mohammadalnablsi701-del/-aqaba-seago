@@ -153,7 +153,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           </label>
           <div className="search-row search-row--control">
             <span className="search-row__icon"><UsersRound size={18}/></span>
-            <span><small>Guests</small><strong>{guests} {guests===1?"Guest":"Guests"}</strong></span>
+            <span><small>Persons</small><strong>{guests} {guests===1?"Person":"Persons"}</strong></span>
             <div className="guest-stepper">
               <button type="button" onClick={()=>setGuests(Math.max(1,guests-1))}>−</button>
               <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
@@ -467,7 +467,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     if(guests>cap){
       setChildren(0);
       setAdults(Math.max(1,Math.min(adults,cap)));
-      setError(`This departure has ${cap} seat${cap===1?"":"s"} available. Guest count was adjusted.`);
+      setError(`This departure has ${cap} seat${cap===1?"":"s"} available. Person count was adjusted.`);
     }
   },[selected?.id]);
 
@@ -506,7 +506,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         checkoutUrl:payment.checkoutUrl
       });
     } catch(err) {
-      if(err.status===409) setError("This departure is no longer available for the selected guests. Please choose another departure or reduce the guest count.");
+      if(err.status===409) setError("This departure is no longer available for the selected persons. Please choose another departure or reduce the person count.");
       else if(err.status===401||err.status===403) setError("AUTH_REQUIRED");
       else setError(err.message || "We couldn’t start secure payment. Please try again.");
     }
@@ -528,7 +528,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         <div className="payment-review-card">
           <div><span>Experience</span><b>{trip.title}</b></div>
           {selected?.startsAt&&<div><span>Departure</span><b>{formatDeparture(selected.startsAt)}</b></div>}
-          <div><span>Guests</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
+          <div><span>Persons</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
           <div><span>Total</span><strong>{quote?Number(total).toFixed(2):"—"} JOD</strong></div>
         </div>
         {success.expiresAt && <div className={"hold-box hold-box--secure "+(holdExpired?"is-expired":"")}><CheckCircle2 size={16}/><span>{holdExpired?<><b>Seat hold expired</b><small>Return to trip details to check availability again.</small></>:<>Seats reserved for <b>{String(holdMinutes).padStart(2,"0")}:{String(holdSeconds).padStart(2,"0")}</b><small>Complete payment before the timer ends.</small></>}</span></div>}
@@ -551,7 +551,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   return (
     <div className="screen standard-screen booking-screen">
       <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><span/></div>
-      <div className="booking-title"><span>BOOKING · STEP 1 OF 2</span><h1>Choose your trip details</h1><p className="booking-subtitle">Review the departure, guests and package before payment.</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"guest":"guests"}</p>}<div className="booking-progress"><i/><i/></div></div>
+      <div className="booking-title"><span>BOOKING · STEP 1 OF 2</span><h1>Choose your trip details</h1><p className="booking-subtitle">Review the departure, persons and package before payment.</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"person":"persons"}</p>}<div className="booking-progress"><i/><i/></div></div>
       <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><p>{trip.duration} · Aqaba</p><div className="booking-verified"><CheckCircle2 size={14}/> Verified operator</div></div></div>
       {trip.departureLocation?.name&&<div className="booking-location-card"><div><MapPin size={20}/><span><small>Departure point</small><strong>{trip.departureLocation.name}</strong>{trip.departureLocation.address&&<em>{trip.departureLocation.address}</em>}</span></div>{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Google Maps <ChevronRight size={16}/></a>}</div>}
 
@@ -568,7 +568,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
             )) : live ? <div className="no-departures">No future departures are available yet.</div> : <div className="preview-departure"><CalendarDays size={18}/> Preview date · live dates appear after API deployment</div>}
           </div>
 
-          <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · GUESTS & PACKAGE</div>
+          <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · PERSONS & PACKAGE</div>
             <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)} disabled={guests>=seatLimit}>+</button></div></label>
             <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
             {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>{trip.buffetDescription||"Buffet included"}</small></button></div>}
@@ -681,7 +681,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
       <div className="ticket-card__details">
         <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
         <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
-        <div><small>Guests</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
+        <div><small>Persons</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
       <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong>{b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={92} level="M" includeMargin={false}/><small>Show at check-in</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
@@ -1151,7 +1151,7 @@ export default function App(){
     }
 
     setSearchResults(candidates);
-    const parts=[tripType!=="All Trips"?tripType:null,date?new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" guests":null].filter(Boolean);
+    const parts=[tripType!=="All Trips"?tripType:null,date?new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" persons":null].filter(Boolean);
     setSearchSummary(parts.length?parts.join(" · "):"DISCOVER AQABA");
     setActive("trips");
   }
