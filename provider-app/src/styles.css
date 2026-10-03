@@ -62,3 +62,6 @@
 .advanced-section-label{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#0b6f9f;padding-top:2px}
 .trip-form-simple .save-button{position:sticky;bottom:88px;z-index:3;box-shadow:0 8px 22px rgba(2,93,135,.18)}
 @media(max-width:560px){.trip-form-simple .save-button{bottom:84px}}
+
+.skip-schedule{width:100%;border:1px solid #d7e3e9;background:#fff;color:#627887;border-radius:13px;padding:12px;font-weight:800}
+.skip-schedule:hover{background:#f7fafc}
