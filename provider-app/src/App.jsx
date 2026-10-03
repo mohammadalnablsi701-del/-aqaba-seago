@@ -86,6 +86,31 @@ function ProviderProfileSetup({token,onCreated}){const[businessName,setBusinessN
 
 function ProviderApprovalStatus({provider,onRefresh,onSignOut}){const status=provider?.status||"pending";const copy=status==="pending"?"Your provider profile was submitted successfully. SeaGo admin approval is required before you can create trips and departures.":status==="rejected"?"Your provider application is currently rejected. Contact SeaGo support before resubmitting.":"Your provider account is suspended. Contact SeaGo support for assistance.";return <div className="onboarding-shell"><div className={"onboarding-card status-"+status}><small>{status.toUpperCase()}</small><h1>{provider?.businessName||"Provider application"}</h1><p>{copy}</p><div className="onboarding-actions"><button onClick={onRefresh}>Check approval status</button><button className="secondary" onClick={onSignOut}>Sign out</button></div></div></div>}
 
+function scanFeedback(kind="scan"){
+  try{
+    if(navigator.vibrate) navigator.vibrate(kind==="success"?[80,45,120]:80);
+  }catch{}
+  try{
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)return;
+    const ctx=new AudioCtx();
+    const tones=kind==="success"?[{f:880,t:0,d:.08},{f:1175,t:.11,d:.12}]:[{f:960,t:0,d:.09}];
+    if(ctx.state==="suspended")ctx.resume().catch(()=>{});
+    const now=ctx.currentTime;
+    tones.forEach(({f,t,d})=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type="sine";osc.frequency.value=f;
+      gain.gain.setValueAtTime(.0001,now+t);
+      gain.gain.exponentialRampToValueAtTime(.16,now+t+.01);
+      gain.gain.exponentialRampToValueAtTime(.0001,now+t+d);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(now+t);osc.stop(now+t+d+.02);
+    });
+    setTimeout(()=>ctx.close().catch(()=>{}),500);
+  }catch{}
+}
+
 function Scanner({token,onClose,onDone}){
 const[result,setResult]=useState(null);
 const[pendingToken,setPendingToken]=useState("");
@@ -127,6 +152,7 @@ useEffect(()=>{
             else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
             if(!t)throw new Error("Invalid SeaGo QR");
             const info=await inspectTicket(token,t);
+            scanFeedback("scan");
             setPendingToken(t);
             setResult({mode:"preview",...info});
             try{await scanner.stop()}catch{}
@@ -158,6 +184,7 @@ useEffect(()=>{
               else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
               if(!t)throw new Error("Invalid SeaGo QR");
               const info=await inspectTicket(token,t);
+              scanFeedback("scan");
               setPendingToken(t);setResult({mode:"preview",...info});
               try{await scanner.stop()}catch{}
             }catch(e){setResult({mode:"error",error:e.message});try{await scanner.stop()}catch{}}
@@ -221,7 +248,7 @@ async function toggleTorch(){
 async function confirm(){
   if(!pendingToken||busy)return;
   setBusy(true);
-  try{const r=await checkIn(token,pendingToken);setResult({mode:"success",...r});onDone?.();}
+  try{const r=await checkIn(token,pendingToken);scanFeedback("success");setResult({mode:"success",...r});onDone?.();}
   catch(e){setResult({mode:"error",error:e.message});}
   finally{setBusy(false);}
 }
