@@ -4,14 +4,14 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0B3D91",
+  "background_color": "#071F33",
+  "theme_color": "#071F33",
   "description": "Book marine trips and sea experiences in Aqaba.",
   "icons": [
     {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "./app-customer.svg?v=identity-v1",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
