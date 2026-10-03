@@ -157,6 +157,9 @@ export async function processUpcomingReminders(){
   for(const row of due){
     const b=await loadBooking(row._id); if(!b) continue;
     await createInApp({key:`departure-reminder-24h:customer:${b._id}`,userId:b.customerId?._id,type:"departure_reminder_24h",title:"Your trip is tomorrow",body:`Reminder: ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} departs ${fmtDate(b.departureId?.startsAt)}.`,bookingId:b._id,data:{screen:"tickets"}});
+    const provider=await Provider.findById(b.providerId?._id||b.providerId);
+    const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("_id"):null;
+    if(owner?._id&&b.departureId?._id){await createInApp({key:`departure-reminder-24h:provider:${b.departureId._id}`,userId:owner._id,type:"provider_departure_reminder_24h",title:"Departure tomorrow",body:`${b.tripId?.titleEn||b.tripId?.titleAr||"Your trip"} departs ${fmtDate(b.departureId?.startsAt)}. Review the passenger manifest.`,data:{screen:"manifest",departureId:String(b.departureId._id)}});}
     const log=await sendEmail({
       key:`departure-reminder-24h:customer:${b._id}`,
       bookingId:b._id,type:"departure_reminder_24h",to:b.customerId?.email,
