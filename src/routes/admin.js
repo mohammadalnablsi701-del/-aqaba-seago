@@ -22,8 +22,24 @@ router.get("/readiness",async(_req,res,next)=>{
     const demoUserEmails=[process.env.DEMO_PROVIDER_EMAIL,process.env.DEMO_ADMIN_EMAIL].filter(Boolean).map(v=>String(v).trim().toLowerCase());
     const demoUserCount=demoUserEmails.length?await User.countDocuments({email:{$in:demoUserEmails}}):0;
 
+    const checks=[
+      {id:"provider",label:"At least one approved provider",ok:providersApproved>0},
+      {id:"trips",label:"At least one active trip",ok:activeTrips>0},
+      {id:"departures",label:"At least one upcoming departure",ok:upcomingDepartures>0},
+      {id:"demo-seed",label:"Demo seeding disabled",ok:process.env.SEED_DEMO_DATA!=="true"},
+      {id:"demo-records",label:"No demo provider/trips remain",ok:!demoProvider&&demoTripCount===0},
+      {id:"payment",label:"Real payment gateway configured",ok:(process.env.PAYMENT_PROVIDER||"mock")!=="mock",deferred:true}
+    ];
+    const blockers=checks.filter(x=>!x.ok&&!x.deferred).map(x=>({id:x.id,label:x.label}));
+    const deferredChecks=checks.filter(x=>x.deferred&&!x.ok).map(x=>({id:x.id,label:x.label}));
+    const pilotReady=blockers.length===0;
+
     res.json({
       generatedAt:new Date(),
+      pilotReady,
+      status:pilotReady?"ready":"blocked",
+      blockers,
+      deferredChecks,
       environment:{
         nodeEnv:process.env.NODE_ENV||"development",
         publicLaunch:process.env.PUBLIC_LAUNCH==="true",
@@ -33,14 +49,7 @@ router.get("/readiness",async(_req,res,next)=>{
       },
       counts:{providersApproved,providersPending,activeTrips,upcomingDepartures,confirmedBookings},
       demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,userCount:demoUserCount},
-      checks:[
-        {id:"provider",label:"At least one approved provider",ok:providersApproved>0},
-        {id:"trips",label:"At least one active trip",ok:activeTrips>0},
-        {id:"departures",label:"At least one upcoming departure",ok:upcomingDepartures>0},
-        {id:"demo-seed",label:"Demo seeding disabled",ok:process.env.SEED_DEMO_DATA!=="true"},
-        {id:"demo-records",label:"No demo provider/trips remain",ok:!demoProvider&&demoTripCount===0},
-        {id:"payment",label:"Real payment gateway configured",ok:(process.env.PAYMENT_PROVIDER||"mock")!=="mock",deferred:true}
-      ]
+      checks
     });
   }catch(e){next(e);}
 });
