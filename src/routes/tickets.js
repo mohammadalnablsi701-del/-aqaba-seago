@@ -77,8 +77,9 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
     const departure = booking.departureId || {};
     const customer = booking.customerId || {};
 
+    const departureUsable=departure.status==="scheduled";
     res.json({
-      valid: booking.status === "confirmed" && !booking.checkedInAt,
+      valid: booking.status === "confirmed" && departureUsable && !booking.checkedInAt,
       status: booking.status,
       used: Boolean(booking.checkedInAt),
       checkedInAt: booking.checkedInAt || null,
@@ -105,6 +106,9 @@ router.post("/check-in", requireAuth, requireRole("provider","admin"), async (re
 
     if (booking.status !== "confirmed") {
       return res.status(409).json({ error: "Ticket is not valid for check-in" });
+    }
+    if (!booking.departureId || booking.departureId.status !== "scheduled") {
+      return res.status(409).json({ error: "Departure is not open for check-in" });
     }
     if (booking.checkedInAt) {
       return res.status(409).json({
