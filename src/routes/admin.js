@@ -1,4 +1,4 @@
-import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import{releaseExpiredCheckoutHolds}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
 router.get("/trips",async(_req,res,next)=>{try{const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});res.json(rows);}catch(e){next(e);}});
 router.get("/providers",async(_req,res,next)=>{try{const rows=await Provider.find({}).populate("ownerUserId","name email phone isActive").sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
 router.get("/notifications",async(_req,res,next)=>{try{const rows=await NotificationLog.find({}).sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
@@ -32,6 +32,18 @@ router.patch("/providers/:providerId/status",async(req,res,next)=>{
       p.approvedBy=undefined;
     }
     await p.save();
+
+    if(["suspended","rejected"].includes(nextStatus)){
+      const trips=await Trip.find({providerId:p._id}).select("_id");
+      const tripIds=trips.map(t=>t._id);
+      if(tripIds.length){
+        const departures=await Departure.find({tripId:{$in:tripIds},status:"scheduled"}).select("_id");
+        for(const d of departures){
+          await releaseCheckoutHoldsForDeparture(d._id);
+        }
+      }
+    }
+
     res.json(p);
   }catch(e){next(e);}
 });
