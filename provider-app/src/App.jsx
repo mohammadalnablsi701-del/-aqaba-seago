@@ -120,7 +120,92 @@ function dateOnly(d){const x=new Date(d);return x.getFullYear()+"-"+String(x.get
 function tomorrowLocal(hour){const d=new Date();d.setDate(d.getDate()+1);return dateOnly(d)+"T"+(hour||"09:00")}
 function resizeTripImage(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(new Error("Could not read image"));reader.onload=()=>{const img=new Image();img.onerror=()=>reject(new Error("Invalid image"));img.onload=()=>{const max=1100;const scale=Math.min(1,max/Math.max(img.width,img.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);let q=.78;let data=canvas.toDataURL("image/jpeg",q);while(data.length>180000&&q>.4){q-=.08;data=canvas.toDataURL("image/jpeg",q)}resolve(data)};img.src=reader.result};reader.readAsDataURL(file)})}
 
-function GoogleSignInButton({role,onDone}){const host=useRef(null);const[enabled,setEnabled]=useState(null);const[error,setError]=useState("");useEffect(()=>{let cancelled=false;async function setup(){try{const cfg=await googleAuthConfig();if(cancelled)return;if(!cfg.enabled||!cfg.clientId){setEnabled(false);return;}setEnabled(true);if(!window.google?.accounts?.id){await new Promise((resolve,reject)=>{const existing=document.querySelector('script[data-seago-google]');if(existing){existing.addEventListener("load",resolve,{once:true});existing.addEventListener("error",reject,{once:true});return;}const s=document.createElement("script");s.src="https://accounts.google.com/gsi/client";s.async=true;s.defer=true;s.dataset.seagoGoogle="1";s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});}if(cancelled||!host.current)return;window.google.accounts.id.initialize({client_id:cfg.clientId,callback:async response=>{try{setError("");const result=await googleSignIn(response.credential,role);if(result.user?.role!==role)throw new Error("Provider account required");localStorage.setItem("seago_provider_auth",JSON.stringify(result));onDone(result)}catch(e){setError(e.message||"Google sign-in failed")}});host.current.innerHTML="";window.google.accounts.id.renderButton(host.current,{theme:"outline",size:"large",shape:"rectangular",text:"continue_with",width:340});}catch(e){if(!cancelled){setEnabled(false);setError("Google sign-in is temporarily unavailable")}}}setup();return()=>{cancelled=true}},[role,onDone]);return <div className="google-auth-wrap">{enabled===false?<button type="button" className="google-auth-disabled" disabled><span className="google-g">G</span> Continue with Google</button>:<div ref={host} className="google-auth-host"/>}{error&&<small className="google-auth-error">{error}</small>}</div>}
+function GoogleSignInButton({role,onDone}){
+  const host=useRef(null);
+  const[enabled,setEnabled]=useState(null);
+  const[error,setError]=useState("");
+
+  useEffect(()=>{
+    let cancelled=false;
+
+    async function ensureGoogleScript(){
+      if(window.google?.accounts?.id)return;
+      const existing=document.querySelector('script[data-seago-google]');
+      if(existing){
+        await new Promise((resolve,reject)=>{
+          if(window.google?.accounts?.id)return resolve();
+          existing.addEventListener("load",resolve,{once:true});
+          existing.addEventListener("error",reject,{once:true});
+        });
+        return;
+      }
+      await new Promise((resolve,reject)=>{
+        const script=document.createElement("script");
+        script.src="https://accounts.google.com/gsi/client";
+        script.async=true;
+        script.defer=true;
+        script.dataset.seagoGoogle="1";
+        script.onload=resolve;
+        script.onerror=reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    async function setup(){
+      try{
+        const cfg=await googleAuthConfig();
+        if(cancelled)return;
+        if(!cfg.enabled||!cfg.clientId){
+          setEnabled(false);
+          return;
+        }
+        setEnabled(true);
+        await ensureGoogleScript();
+        if(cancelled||!host.current)return;
+
+        window.google.accounts.id.initialize({
+          client_id:cfg.clientId,
+          callback:async response=>{
+            try{
+              setError("");
+              const result=await googleSignIn(response.credential,role);
+              if(result.user?.role!==role)throw new Error("Provider account required");
+              localStorage.setItem("seago_provider_auth",JSON.stringify(result));
+              onDone(result);
+            }catch(e){
+              setError(e.message||"Google sign-in failed");
+            }
+          }
+        });
+
+        host.current.innerHTML="";
+        window.google.accounts.id.renderButton(host.current,{
+          theme:"outline",
+          size:"large",
+          shape:"rectangular",
+          text:"continue_with",
+          width:340
+        });
+      }catch{
+        if(!cancelled){
+          setEnabled(false);
+          setError("Google sign-in is temporarily unavailable");
+        }
+      }
+    }
+
+    setup();
+    return()=>{cancelled=true;};
+  },[role,onDone]);
+
+  return <div className="google-auth-wrap">
+    {enabled===false
+      ?<button type="button" className="google-auth-disabled" disabled><span className="google-g">G</span> Continue with Google</button>
+      :<div ref={host} className="google-auth-host"/>
+    }
+    {error&&<small className="google-auth-error">{error}</small>}
+  </div>;
+}
 
 function Login({onDone}){const[mode,setMode]=useState("signin");const[method,setMethod]=useState("email");const[name,setName]=useState("");const[email,setEmail]=useState("");const[phone,setPhone]=useState("");const[countryCode,setCountryCode]=useState("+962");const[password,setPassword]=useState("");const[code,setCode]=useState("");const[otpSent,setOtpSent]=useState(false);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
 async function submit(e){e.preventDefault();setBusy(true);setError("");try{
