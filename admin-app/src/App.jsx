@@ -1,6 +1,6 @@
 import React,{useEffect,useState}from"react";
 import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound}from"lucide-react";
-import{login,providers,approveProvider,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
+import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 
@@ -62,7 +62,7 @@ export default function App(){
   </main></div>
 }
 
-function ProviderAdminRow({p,token,onSaved}){const[busy,setBusy]=useState(false);const[msg,setMsg]=useState("");async function approve(){setBusy(true);setMsg("");try{await approveProvider(token,p._id);setMsg("Approved");await onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}}const u=p.ownerUserId||{};return <div className="provider-admin-row"><div><div className="provider-admin-head"><h3>{p.businessName}</h3><em className={"provider-state "+p.status}>{p.status}</em></div><p>{u.name||"Provider"} · {u.email||"-"}</p><p>{p.phone||u.phone||"No phone"}</p><small>Applied {p.createdAt?new Date(p.createdAt).toLocaleString():"-"}</small></div><div className="provider-admin-actions">{p.status==="pending"&&<button disabled={busy} onClick={approve}>{busy?"Approving...":"Approve provider"}</button>}{p.status==="approved"&&<span>Approved</span>}{msg&&<small>{msg}</small>}</div></div>}
+function ProviderAdminRow({p,token,onSaved}){const[busy,setBusy]=useState(false);const[msg,setMsg]=useState("");async function approve(){setBusy(true);setMsg("");try{await approveProvider(token,p._id);setMsg("Approved");await onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}}async function change(status){setBusy(true);setMsg("");try{await setProviderStatus(token,p._id,status);setMsg("Updated");await onSaved()}catch(e){setMsg(e.message)}finally{setBusy(false)}}const u=p.ownerUserId||{};return <div className="provider-admin-row"><div><div className="provider-admin-head"><h3>{p.businessName}</h3><em className={"provider-state "+p.status}>{p.status}</em></div><p>{u.name||"Provider"} · {u.email||"-"}</p><p>{p.phone||u.phone||"No phone"}</p><small>Applied {p.createdAt?new Date(p.createdAt).toLocaleString():"-"}</small></div><div className="provider-admin-actions">{p.status==="pending"&&<><button disabled={busy} onClick={approve}>{busy?"Working...":"Approve provider"}</button><button className="danger" disabled={busy} onClick={()=>change("rejected")}>Reject</button></>}{p.status==="approved"&&<button className="danger" disabled={busy} onClick={()=>change("suspended")}>Suspend</button>}{p.status==="suspended"&&<><button disabled={busy} onClick={()=>change("approved")}>Reactivate</button><button className="danger" disabled={busy} onClick={()=>change("rejected")}>Reject</button></>}{p.status==="rejected"&&<button className="secondary" disabled={busy} onClick={()=>change("pending")}>Return to pending</button>}{msg&&<small>{msg}</small>}</div></div>}
 
 function TripRow({t,token,onSaved}){
   const[value,setValue]=useState(t.pricing?.commissionType==="percentage"?t.pricing?.commissionValue:0);const[saving,setSaving]=useState(false);const[msg,setMsg]=useState("");
