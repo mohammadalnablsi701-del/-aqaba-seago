@@ -923,7 +923,13 @@ function readStoredAuth() {
 }
 
 export default function App(){
-  const [active,setActive]=useState(()=>new URLSearchParams(window.location.search).get("open")==="notifications"?"notifications":"home");
+  const [active,setActive]=useState(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("open")==="notifications") return "notifications";
+    if(params.get("payment")) return "home";
+    const saved=sessionStorage.getItem("seago_active_screen");
+    return ["home","trips","tickets","favourites","notifications","profile"].includes(saved)?saved:"home";
+  });
   const [detail,setDetail]=useState(null);
   const [booking,setBooking]=useState(false);
   const [tripList,setTripList]=useState(fallbackTrips);
@@ -932,7 +938,7 @@ export default function App(){
   const [searchResults,setSearchResults]=useState(null);
   const [searchSummary,setSearchSummary]=useState("");
   const [searchCriteria,setSearchCriteria]=useState(null);
-  const [paymentReturn,setPaymentReturn]=useState(()=>new URLSearchParams(window.location.search).get("payment")==="success");
+  const [paymentReturn,setPaymentReturn]=useState(()=>Boolean(new URLSearchParams(window.location.search).get("payment")));
   const [favourites,setFavourites]=useState(()=>{try{return JSON.parse(localStorage.getItem("seago_favourites")||"[\"snorkel-coral\"]")}catch{return ["snorkel-coral"]}});
   const [auth,setAuth]=useState(readStoredAuth());
   const [menuOpen,setMenuOpen]=useState(false);
@@ -1015,12 +1021,19 @@ export default function App(){
 
   function signOut() {
     setAuth(null);
+    setAlertsUnread(0);
     localStorage.removeItem("seago_auth");
   }
 
   useEffect(()=>{
     window.scrollTo(0,0);
   },[active,detail?.id,booking,paymentReturn]);
+
+  useEffect(()=>{
+    if(["home","trips","tickets","favourites","notifications","profile"].includes(active)){
+      sessionStorage.setItem("seago_active_screen",active);
+    }
+  },[active]);
 
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=trip=>{setDetail(trip);setBooking(false);};
@@ -1035,7 +1048,7 @@ export default function App(){
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
-      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread}/>}
+      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
       {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onBack={()=>setActive("profile")}/>}
       {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
