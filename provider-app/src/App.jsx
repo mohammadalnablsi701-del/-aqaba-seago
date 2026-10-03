@@ -1,6 +1,6 @@
-import React,{useEffect,useState}from"react";
-import{Bell,CalendarDays,CheckCircle2,Clock,Home,LogOut,MapPin,Pencil,Plus,QrCode,Settings,ShipWheel,Ticket,UsersRound,XCircle}from"lucide-react";
-import{Html5QrcodeScanner}from"html5-qrcode";
+import React,{useEffect,useRef,useState}from"react";
+import{Bell,CalendarDays,CheckCircle2,Clock,Flashlight,Home,LogOut,MapPin,Pencil,Plus,QrCode,Settings,ShipWheel,Ticket,UsersRound,XCircle}from"lucide-react";
+import{Html5Qrcode}from"html5-qrcode";
 import{login,registerProvider,me,createProviderProfile,updateProviderSettings,trips,departures,bookings,checkIn,inspectTicket,createTrip,updateTrip,createDeparture,createDeparturesBulk,updateDeparture,bookingDetail,manualCheckInBooking,providerStats,departureManifest,uploadTripImage,deleteTripImage,listNotifications,markNotificationRead,markAllNotificationsRead,enablePushNotifications,pushNotificationStatus,sendTestPush,providerTeam,createProviderTeamMember,updateProviderTeamMember,providerAuditLog,requestPhoneOtp,verifyPhoneOtp}from"./api.js";
 
 function whatsappNumber(value){
@@ -86,12 +86,145 @@ function ProviderProfileSetup({token,onCreated}){const[businessName,setBusinessN
 
 function ProviderApprovalStatus({provider,onRefresh,onSignOut}){const status=provider?.status||"pending";const copy=status==="pending"?"Your provider profile was submitted successfully. SeaGo admin approval is required before you can create trips and departures.":status==="rejected"?"Your provider application is currently rejected. Contact SeaGo support before resubmitting.":"Your provider account is suspended. Contact SeaGo support for assistance.";return <div className="onboarding-shell"><div className={"onboarding-card status-"+status}><small>{status.toUpperCase()}</small><h1>{provider?.businessName||"Provider application"}</h1><p>{copy}</p><div className="onboarding-actions"><button onClick={onRefresh}>Check approval status</button><button className="secondary" onClick={onSignOut}>Sign out</button></div></div></div>}
 
-function Scanner({token,onClose,onDone}){const[result,setResult]=useState(null);const[pendingToken,setPendingToken]=useState("");const[busy,setBusy]=useState(false);const[scanCycle,setScanCycle]=useState(0);function scanAgain(){setResult(null);setPendingToken("");setBusy(false);setScanCycle(x=>x+1)}useEffect(()=>{const scanner=new Html5QrcodeScanner("reader",{fps:10,qrbox:{width:240,height:240}},false);scanner.render(async decoded=>{if(busy||result)return;setBusy(true);try{const raw=String(decoded||"").trim();if(raw.startsWith("AQABA-SEAGO|BOOKING:"))throw new Error("Old ticket QR. Refresh the customer ticket page and scan the new secure QR.");let t="";if(raw.startsWith("SG2:"))t=raw.slice(4);else{const u=new URL(raw);t=u.searchParams.get("token")||"";}if(!t)throw new Error("Invalid SeaGo QR");const info=await inspectTicket(token,t);setPendingToken(t);setResult({mode:"preview",...info});scanner.clear().catch(()=>{});}catch(e){setResult({mode:"error",error:e.message});scanner.clear().catch(()=>{});}finally{setBusy(false)}},()=>{});return()=>{scanner.clear().catch(()=>{})}},[scanCycle]);
-async function confirm(){if(!pendingToken||busy)return;setBusy(true);try{const r=await checkIn(token,pendingToken);setResult({mode:"success",...r});onDone?.();}catch(e){setResult({mode:"error",error:e.message});}finally{setBusy(false)}}
-const mode=result?.mode;return <div className="scanner-screen"><div className="scanner-head"><h2>Scan ticket</h2><button onClick={onClose}>×</button></div>{!result&&<div id="reader"></div>}
-{mode==="preview"&&<div className="ticket-preview"><CheckCircle2 size={52}/><small>VALID TICKET</small><h2>{result.trip}</h2><div className="preview-grid"><div><span>Guest</span><b>{result.customer?.name||"Guest"}</b></div><div><span>Booking</span><b>{result.bookingReference}</b></div><div><span>Guests</span><b>{result.adults!==undefined?`${result.adults||0} adult(s) · ${result.children||0} child(ren)`:result.guests}</b></div><div><span>Package</span><b>{result.mealPlan==="with_buffet"?"Open buffet":"Without buffet"}</b></div><div><span>Departure</span><b>{result.departureAt?new Date(result.departureAt).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"TBA"}</b></div></div>{result.customer?.phone&&<p className="contact">{result.customer.phone}</p>}<button className="confirm-checkin" disabled={!result.valid||busy} onClick={confirm}>{busy?"Checking in...":result.used?"Already checked in":"Confirm check-in"}</button><button className="secondary-scan" onClick={scanAgain}>Cancel / scan another</button></div>}
-{mode==="success"&&<div className="scan-result ok"><CheckCircle2 size={56}/><h2>Check-in successful</h2><p>{result.guests} guest(s) checked in</p><button onClick={scanAgain}>Scan another</button></div>}
-{mode==="error"&&<div className="scan-result bad"><XCircle size={56}/><h2>Ticket rejected</h2><p>{result.error}</p><button onClick={scanAgain}>Scan another</button></div>}</div>}
+function Scanner({token,onClose,onDone}){
+const[result,setResult]=useState(null);
+const[pendingToken,setPendingToken]=useState("");
+const[busy,setBusy]=useState(false);
+const[scanCycle,setScanCycle]=useState(0);
+const[cameraError,setCameraError]=useState("");
+const[torchSupported,setTorchSupported]=useState(false);
+const[torchOn,setTorchOn]=useState(false);
+const qrRef=useRef(null);
+const activeRef=useRef(true);
+
+function scanAgain(){
+  setResult(null);setPendingToken("");setBusy(false);setCameraError("");setTorchOn(false);setScanCycle(x=>x+1);
+}
+
+useEffect(()=>{
+  activeRef.current=true;
+  if(result)return;
+  const scanner=new Html5Qrcode("reader",{verbose:false});
+  qrRef.current=scanner;
+  let stopped=false;
+
+  async function boot(){
+    setCameraError("");
+    try{
+      await scanner.start(
+        {facingMode:{exact:"environment"}},
+        {fps:18,qrbox:(w,h)=>{const side=Math.floor(Math.min(w,h)*0.72);return{width:side,height:side}},aspectRatio:1.0,disableFlip:true},
+        async decoded=>{
+          if(!activeRef.current||busy||result)return;
+          activeRef.current=false;
+          setBusy(true);
+          try{
+            const raw=String(decoded||"").trim();
+            if(raw.startsWith("AQABA-SEAGO|BOOKING:"))throw new Error("Old ticket QR. Refresh the customer ticket page and scan the new secure QR.");
+            let t="";
+            if(raw.startsWith("SG2:"))t=raw.slice(4);
+            else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
+            if(!t)throw new Error("Invalid SeaGo QR");
+            const info=await inspectTicket(token,t);
+            setPendingToken(t);
+            setResult({mode:"preview",...info});
+            try{await scanner.stop()}catch{}
+          }catch(e){
+            setResult({mode:"error",error:e.message});
+            try{await scanner.stop()}catch{}
+          }finally{setBusy(false);}
+        },
+        ()=>{}
+      );
+      if(stopped)return;
+      try{
+        const caps=scanner.getRunningTrackCapabilities?.();
+        setTorchSupported(Boolean(caps&&"torch" in caps&&caps.torch));
+      }catch{setTorchSupported(false);}
+    }catch(firstError){
+      try{
+        await scanner.start(
+          {facingMode:"environment"},
+          {fps:18,qrbox:(w,h)=>{const side=Math.floor(Math.min(w,h)*0.72);return{width:side,height:side}},aspectRatio:1.0,disableFlip:true},
+          async decoded=>{
+            if(!activeRef.current||busy||result)return;
+            activeRef.current=false;setBusy(true);
+            try{
+              const raw=String(decoded||"").trim();
+              let t="";
+              if(raw.startsWith("SG2:"))t=raw.slice(4);
+              else if(raw.startsWith("AQABA-SEAGO|BOOKING:"))throw new Error("Old ticket QR. Refresh the customer ticket page and scan the new secure QR.");
+              else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
+              if(!t)throw new Error("Invalid SeaGo QR");
+              const info=await inspectTicket(token,t);
+              setPendingToken(t);setResult({mode:"preview",...info});
+              try{await scanner.stop()}catch{}
+            }catch(e){setResult({mode:"error",error:e.message});try{await scanner.stop()}catch{}}
+            finally{setBusy(false);}
+          },
+          ()=>{}
+        );
+        try{
+          const caps=scanner.getRunningTrackCapabilities?.();
+          setTorchSupported(Boolean(caps&&"torch" in caps&&caps.torch));
+        }catch{setTorchSupported(false);}
+      }catch(e){
+        setCameraError("Could not open the rear camera. Check camera permission and try again.");
+      }
+    }
+  }
+
+  boot();
+  return()=>{
+    stopped=true;activeRef.current=false;setTorchOn(false);setTorchSupported(false);
+    const q=qrRef.current;
+    qrRef.current=null;
+    if(q?.isScanning){q.stop().catch(()=>{})}
+    q?.clear?.().catch?.(()=>{});
+  };
+},[scanCycle,result,token]);
+
+async function toggleTorch(){
+  const scanner=qrRef.current;
+  if(!scanner||!torchSupported)return;
+  const next=!torchOn;
+  try{
+    await scanner.applyVideoConstraints({advanced:[{torch:next}]});
+    setTorchOn(next);
+  }catch{
+    setTorchSupported(false);
+  }
+}
+
+async function confirm(){
+  if(!pendingToken||busy)return;
+  setBusy(true);
+  try{const r=await checkIn(token,pendingToken);setResult({mode:"success",...r});onDone?.();}
+  catch(e){setResult({mode:"error",error:e.message});}
+  finally{setBusy(false);}
+}
+
+const mode=result?.mode;
+return <div className="scanner-screen">
+  <div className="scanner-head">
+    <div><small>REAR CAMERA</small><h2>Scan ticket</h2></div>
+    <div className="scanner-head-actions">
+      {torchSupported&&!result&&<button className={"torch-button "+(torchOn?"active":"")} onClick={toggleTorch} aria-label="Toggle flash"><Flashlight size={19}/></button>}
+      <button onClick={onClose} aria-label="Close scanner">×</button>
+    </div>
+  </div>
+  {!result&&<>
+    <div className="scanner-stage">
+      <div id="reader"></div>
+      <div className="scanner-guide" aria-hidden="true"><i/><i/><i/><i/></div>
+      <div className="scanner-status">{cameraError?cameraError:busy?"Reading ticket...":"Point the rear camera at the SeaGo QR"}</div>
+    </div>
+    {cameraError&&<button className="scanner-retry" onClick={scanAgain}>Try camera again</button>}
+  </>}
+  {mode==="preview"&&<div className="ticket-preview"><CheckCircle2 size={52}/><small>VALID TICKET</small><h2>{result.trip}</h2><div className="preview-grid"><div><span>Guest</span><b>{result.customer?.name||"Guest"}</b></div><div><span>Booking</span><b>{result.bookingReference}</b></div><div><span>Persons</span><b>{result.adults!==undefined?`${result.adults||0} adult(s) · ${result.children||0} child(ren)`:result.guests}</b></div><div><span>Package</span><b>{result.mealPlan==="with_buffet"?"Open buffet":"Without buffet"}</b></div><div><span>Departure</span><b>{result.departureAt?new Date(result.departureAt).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"TBA"}</b></div></div>{result.customer?.phone&&<p className="contact">{result.customer.phone}</p>}<button className="confirm-checkin" disabled={!result.valid||busy} onClick={confirm}>{busy?"Checking in...":result.used?"Already checked in":"Confirm check-in"}</button><button className="secondary-scan" onClick={scanAgain}>Cancel / scan another</button></div>}
+  {mode==="success"&&<div className="scan-result ok"><CheckCircle2 size={56}/><h2>Check-in successful</h2><p>{result.guests} person(s) checked in</p><button onClick={scanAgain}>Scan another</button></div>}
+  {mode==="error"&&<div className="scan-result bad"><XCircle size={56}/><h2>Ticket rejected</h2><p>{result.error}</p><button onClick={scanAgain}>Scan another</button></div>}
+</div>}
 
 function TripForm({token,trip,duplicateFrom,provider,onSaved,onCreated,onCancel}){const providerId=provider?._id;const source=trip||duplicateFrom;const defaults=accountDefaults(provider);const[busy,setBusy]=useState(false);const[error,setError]=useState("");const[showMore,setShowMore]=useState(Boolean(trip||duplicateFrom));const[selectedTemplate,setSelectedTemplate]=useState("");const[form,setForm]=useState(()=>({titleEn:trip?.titleEn||(duplicateFrom?(String(duplicateFrom.titleEn||"")+" Copy"):""),titleAr:trip?.titleAr||(duplicateFrom?String(duplicateFrom.titleAr||duplicateFrom.titleEn||""):""),category:source?.category||defaults.category||"group_boat",durationMinutes:source?.durationMinutes||defaults.durationMinutes||90,adultPrice:source?.pricing?.adultPrice??source?.pricing?.pricePerPerson??defaults.adultPrice??15,childPrice:source?.pricing?.childPrice??source?.pricing?.pricePerPerson??defaults.childPrice??10,buffetEnabled:source?Boolean(source?.pricing?.buffetEnabled):Boolean(defaults.buffetEnabled),buffetAdultPrice:source?.pricing?.buffetAdultPrice??source?.pricing?.adultPrice??source?.pricing?.pricePerPerson??defaults.buffetAdultPrice??20,buffetChildPrice:source?.pricing?.buffetChildPrice??source?.pricing?.childPrice??defaults.buffetChildPrice??12,buffetDescription:source?.pricing?.buffetDescription||defaults.buffetDescription||"",images:Array.isArray(source?.images)?source.images.map(mediaObj):[],imageUrl:"",locationName:source?.departureLocation?.name||defaults.locationName||"",address:source?.departureLocation?.address||defaults.address||"",googleMapsUrl:source?.departureLocation?.googleMapsUrl||defaults.googleMapsUrl||"",active:trip?trip.active!==false:true}));
 function applyTemplate(t){setSelectedTemplate(t.id);setForm(v=>({...v,category:t.category,durationMinutes:t.durationMinutes,adultPrice:t.adultPrice,childPrice:t.childPrice}))}
