@@ -406,3 +406,9 @@
 .bottom-nav button{min-width:0;touch-action:manipulation}
 .bottom-nav button>span:last-child{white-space:nowrap}
 .icon-button,.heart-button,.plain-back,.detail-back,.detail-heart{touch-action:manipulation}
+
+@supports(padding:max(0px)){
+  .bottom-nav{height:auto;min-height:78px;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  .sticky-booking{padding-bottom:max(13px,env(safe-area-inset-bottom))}
+}
+.alerts-signin + .auth-panel{margin-top:0}
