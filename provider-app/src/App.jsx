@@ -94,6 +94,7 @@ const[scanCycle,setScanCycle]=useState(0);
 const[cameraError,setCameraError]=useState("");
 const[torchSupported,setTorchSupported]=useState(false);
 const[torchOn,setTorchOn]=useState(false);
+const[closing,setClosing]=useState(false);
 const qrRef=useRef(null);
 const activeRef=useRef(true);
 
@@ -176,13 +177,34 @@ useEffect(()=>{
 
   boot();
   return()=>{
-    stopped=true;activeRef.current=false;setTorchOn(false);setTorchSupported(false);
+    stopped=true;
+    activeRef.current=false;
     const q=qrRef.current;
     qrRef.current=null;
-    if(q?.isScanning){q.stop().catch(()=>{})}
-    q?.clear?.().catch?.(()=>{});
+    if(q?.isScanning){Promise.resolve(q.stop()).catch(()=>{})}
   };
 },[scanCycle,result,token]);
+
+async function closeScanner(){
+  if(closing)return;
+  setClosing(true);
+  activeRef.current=false;
+  const scanner=qrRef.current;
+  try{
+    if(scanner&&torchOn&&torchSupported){
+      try{await scanner.applyVideoConstraints({advanced:[{torch:false}]});}catch{}
+    }
+    if(scanner?.isScanning){
+      try{await scanner.stop();}catch{}
+    }
+    if(scanner){
+      try{await scanner.clear();}catch{}
+    }
+  }finally{
+    qrRef.current=null;
+    onClose();
+  }
+}
 
 async function toggleTorch(){
   const scanner=qrRef.current;
@@ -210,7 +232,7 @@ return <div className="scanner-screen">
     <div><small>REAR CAMERA</small><h2>Scan ticket</h2></div>
     <div className="scanner-head-actions">
       {torchSupported&&!result&&<button className={"torch-button "+(torchOn?"active":"")} onClick={toggleTorch} aria-label="Toggle flash"><Flashlight size={19}/></button>}
-      <button onClick={onClose} aria-label="Close scanner">×</button>
+      <button onClick={closeScanner} disabled={closing} aria-label="Close scanner">{closing?"…":"×"}</button>
     </div>
   </div>
   {!result&&<>
