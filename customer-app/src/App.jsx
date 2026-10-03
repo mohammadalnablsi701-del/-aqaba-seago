@@ -202,6 +202,11 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
           <span><CalendarDays size={14}/>{trip.duration}</span>
           <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
         </div>
+        {trip.apiId&&<div className={"trip-live-status "+(trip.liveInventory?.nextDepartureAt?"available":"unavailable")}>
+          {trip.liveInventory?.nextDepartureAt
+            ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
+            : <><CalendarDays size={13}/><span>No departures available</span></>}
+        </div>}
         <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">View experience <ChevronRight size={15}/></div>
       </div>
     </article>
@@ -308,7 +313,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
           <div className="feature-grid">
             <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
             <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
-            <div><UsersRound/><span><small>Availability</small><b>Live seats</b></span></div>
+            <div><UsersRound/><span><small>Availability</small><b>{trip.liveInventory?.nextDepartureAt?`${trip.liveInventory.nextAvailableSeats} seats next trip`:"No live departure"}</b></span></div>
             <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
           </div>
         </section>
@@ -330,7 +335,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
 
       <div className="sticky-booking">
         <div><small>From</small><strong>{trip.price} JOD</strong><span>/ adult</span></div>
-        <button className="primary-button" onClick={onBook}>Check availability <ChevronRight size={18}/></button>
+        <button className="primary-button" disabled={Boolean(trip.apiId&&!trip.liveInventory?.nextDepartureAt)} onClick={onBook}>{trip.apiId&&!trip.liveInventory?.nextDepartureAt?"No departures available":"Check availability"} <ChevronRight size={18}/></button>
       </div>
     </div>
   );
@@ -454,7 +459,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   async function confirm() {
     setError("");
     if(!live) {
-      setSuccess({demo:true, id:"DEMO-"+Date.now()});
+      setError("Live booking is unavailable for this experience.");
       return;
     }
     if(!selected) return setError("No available departure selected.");
@@ -1001,7 +1006,7 @@ export default function App(){
   });
   const [detail,setDetail]=useState(null);
   const [booking,setBooking]=useState(false);
-  const [tripList,setTripList]=useState(fallbackTrips);
+  const [tripList,setTripList]=useState(()=>hasApi()?[]:fallbackTrips);
   const [loadingTrips,setLoadingTrips]=useState(hasApi());
   const [usingFallback,setUsingFallback]=useState(!hasApi());
   const [tripLoadError,setTripLoadError]=useState("");
@@ -1054,10 +1059,24 @@ export default function App(){
     let ignore=false;
     if(!hasApi()) return;
     listTrips()
-      .then(rows=>{
+      .then(async rows=>{
         if(ignore) return;
         const normalized=rows.map(normalizeTrip);
-        setTripList(normalized.length ? normalized : fallbackTrips);
+        const enriched=await Promise.all(normalized.map(async trip=>{
+          try{
+            const deps=await listDepartures(trip.apiId);
+            const available=deps.filter(d=>d.status==="scheduled"&&Number(d.availableSeats||0)>0&&new Date(d.startsAt)>new Date()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));
+            const next=available[0]||null;
+            return {...trip,liveInventory:{
+              upcomingCount:available.length,
+              nextDepartureAt:next?.startsAt||null,
+              nextAvailableSeats:next?Number(next.availableSeats||0):0,
+              totalAvailableSeats:available.reduce((s,d)=>s+Number(d.availableSeats||0),0)
+            }};
+          }catch{return {...trip,liveInventory:{upcomingCount:0,nextDepartureAt:null,nextAvailableSeats:0,totalAvailableSeats:0}}}
+        }));
+        if(ignore) return;
+        setTripList(enriched);
         setUsingFallback(false);
         setTripLoadError("");
       })
