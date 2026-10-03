@@ -4,6 +4,7 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
+import { auditProviderAction } from "../services/providerAudit.js";
 import { calculateTieredPricing } from "../services/pricing.js";
 import { releaseExpiredCheckoutHolds, releaseCheckoutHoldsForDeparture } from "../services/payments.js";
 import { cancelDepartureBookings } from "../services/cancellations.js";
@@ -46,6 +47,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       capacity: req.body.capacity
     });
 
+    await auditProviderAction({access,user:req.user,action:"departure.create",targetType:"departure",targetId:departure._id,summary:"Created departure for "+trip.titleEn,metadata:{startsAt:departure.startsAt,capacity:departure.capacity,tripId:trip._id}});
     res.status(201).json(departure);
   } catch (err) {
     next(err);
@@ -79,6 +81,7 @@ router.post("/bulk", requireAuth, requireRole("provider"), async (req,res,next)=
     const existingSet=new Set(existing.map(x=>new Date(x.startsAt).toISOString()));
     const docs=normalized.filter(d=>!existingSet.has(d.toISOString())).map(startsAt=>({tripId:trip._id,startsAt,capacity,status:"scheduled"}));
     const created=docs.length?await Departure.insertMany(docs):[];
+    if(created.length)await auditProviderAction({access,user:req.user,action:"departure.bulk_create",targetType:"trip",targetId:trip._id,summary:"Created "+created.length+" departures for "+trip.titleEn,metadata:{created:created.length,capacity}});
     res.status(201).json({created:created.length,skippedExisting:normalized.length-created.length,items:created});
   }catch(e){next(e);}
 });
@@ -158,11 +161,13 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
         await departure.save();
         await releaseCheckoutHoldsForDeparture(departure._id);
         await cancelDepartureBookings({departureId:departure._id,providerId:provider._id,reason:req.body.cancellationReason||"Departure cancelled by provider"});
+        await auditProviderAction({access,user:req.user,action:"departure.cancel",targetType:"departure",targetId:departure._id,summary:"Cancelled departure for "+trip.titleEn,metadata:{startsAt:departure.startsAt,reason:req.body.cancellationReason||"Departure cancelled by provider"}});
         return res.json(departure);
       }
       departure.status=nextStatus;
     }
     await departure.save();
+    await auditProviderAction({access,user:req.user,action:"departure.update",targetType:"departure",targetId:departure._id,summary:"Updated departure for "+trip.titleEn,metadata:{startsAt:departure.startsAt,capacity:departure.capacity,status:departure.status}});
     res.json(departure);
   }catch(e){next(e);}
 });
