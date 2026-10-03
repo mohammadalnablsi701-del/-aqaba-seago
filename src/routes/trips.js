@@ -133,7 +133,12 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
 
 router.get("/", async (_req, res, next) => {
   try {
-    res.json(await Trip.find({ active: true }).populate("providerId", "businessName"));
+    const approvedProviders = await Provider.find({ status: "approved" }).select("_id");
+    const providerIds = approvedProviders.map(p => p._id);
+    res.json(
+      await Trip.find({ active: true, providerId: { $in: providerIds } })
+        .populate("providerId", "businessName")
+    );
   } catch (e) { next(e); }
 });
 
