@@ -109,7 +109,7 @@ function localDateInputValue(date=new Date()) {
   return `${y}-${m}-${d}`;
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, onSearch, onOpenMenu, onSeeAll }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -159,7 +159,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
               <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
             </div>
           </div>
-          <button className="primary-button" onClick={submitSearch} disabled={searching}>
+          <button className="primary-button" onClick={submitSearch} disabled={searching||loading}>
             {searching?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>}
             {searching?"Searching...":"Search Trips"} <ChevronRight size={18}/>
           </button>
@@ -176,11 +176,11 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 
       <section className="content-section">
         <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2><p>Trusted trips picked for an easy day on the Red Sea.</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
-        <div className="trip-strip">
+        {loading?<LoadingState label="Loading sea experiences..."/>:<div className="trip-strip">
           {tripList.slice(0,3).map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
           ))}
-        </div>
+        </div>}
       </section>
     </div>
   );
@@ -1199,7 +1199,7 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
+      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
