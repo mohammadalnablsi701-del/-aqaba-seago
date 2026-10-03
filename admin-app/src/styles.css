@@ -61,3 +61,6 @@
 .provider-admin-actions span{font-size:11px;font-weight:800;color:#087443}
 .provider-admin-actions small{font-size:10px;color:#657587}
 @media(max-width:650px){.provider-admin-row{flex-direction:column;align-items:flex-start}.provider-admin-actions{align-items:flex-start;width:100%}.provider-admin-actions button{width:100%}}
+
+.provider-admin-actions button.danger{background:#b42318}
+.provider-admin-actions button.secondary{background:#eef2f5;color:#526b7c}
