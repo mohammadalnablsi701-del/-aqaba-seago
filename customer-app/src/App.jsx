@@ -858,9 +858,20 @@ function PaymentReturnScreen({ auth, onViewTicket, onReturnHome }) {
 
   const status=String(state.payment?.status||gatewayState||"").toLowerCase();
   const confirmed=status==="paid"&&Boolean(state.payment?.bookingId);
-  const pending=["pending","processing","success"].includes(status)&&!confirmed;
+  const pending=["pending","processing","success","created"].includes(status)&&!confirmed;
   const failed=["failed","cancelled","expired"].includes(status);
   const review=status==="needs_review";
+
+  useEffect(()=>{
+    if(!pending||!paymentId||!auth?.token)return;
+    let attempts=0;
+    const timer=setInterval(()=>{
+      attempts+=1;
+      verify();
+      if(attempts>=10)clearInterval(timer);
+    },2000);
+    return()=>clearInterval(timer);
+  },[pending,paymentId,auth?.token]);
 
   if(state.loading) return <div className="screen standard-screen payment-result-screen">
     <div className="confirmation-screen__brand"><BrandLogo /></div>
