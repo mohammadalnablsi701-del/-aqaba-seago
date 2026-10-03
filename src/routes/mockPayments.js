@@ -53,6 +53,10 @@ async function complete(status){
     msg.textContent='Payment confirmed. Returning to Aqaba SeaGo...';
     const target='${frontendBaseUrl}/?payment=success&paymentId='+encodeURIComponent(j.paymentId || '');
     setTimeout(()=>{ window.location.href=target; },700);
+  } else if(r.ok) {
+    msg.textContent='Payment was not completed. Returning to Aqaba SeaGo...';
+    const target='${frontendBaseUrl}/?payment='+encodeURIComponent(j.paymentStatus || status || 'failed')+'&paymentId='+encodeURIComponent(j.paymentId || '');
+    setTimeout(()=>{ window.location.href=target; },700);
   } else {
     msg.textContent=j.error || 'Payment was not completed.';
   }
