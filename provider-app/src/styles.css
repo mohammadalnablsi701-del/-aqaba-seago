@@ -41,3 +41,16 @@
 .onboarding-actions button.secondary{background:#edf3f6;color:#526b7c}
 .status-pending{border-color:#f0dfad}.status-pending>small{color:#946400}
 .status-rejected,.status-suspended{border-color:#f0d3cd}.status-rejected>small,.status-suspended>small{color:#b42318}
+
+.form-hint{margin:4px 0 0;color:#708492;font-size:12px;line-height:1.45}
+.trip-actions .primary-action{background:#0b6f9f;color:#fff}
+.schedule-form{max-width:680px}
+.schedule-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.schedule-tabs button{border:1px solid #d8e4ea;background:#f7fafc;color:#526b7c;border-radius:12px;padding:11px;font-weight:800}
+.schedule-tabs button.active{background:#0b6f9f;color:#fff;border-color:#0b6f9f}
+.weekday-picker{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.weekday-picker button{border:1px solid #d9e5eb;background:#fff;color:#667d8d;border-radius:10px;padding:8px 4px;font-size:10px;font-weight:800}
+.weekday-picker button.active{background:#e8f7fb;color:#05718a;border-color:#9cdce6}
+.schedule-preview{background:#f1f8fb;border:1px solid #dcecf2;color:#42677c;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:800}
+.success-note{background:#eaf8f0;color:#087443;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:800}
+@media(max-width:560px){.weekday-picker{grid-template-columns:repeat(4,1fr)}}
