@@ -407,6 +407,8 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     }
   }
 
+  const total=quote?.pricing?.grossAmount ?? trip.price*guests;
+
   if(success) {
     return (
       <div className="screen standard-screen payment-handoff">
@@ -436,8 +438,6 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
       </div>
     );
   }
-
-  const total=quote?.pricing?.grossAmount ?? trip.price*guests;
 
   return (
     <div className="screen standard-screen booking-screen">
