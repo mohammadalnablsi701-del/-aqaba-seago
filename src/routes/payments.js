@@ -22,6 +22,16 @@ router.post("/checkout", requireAuth, requireRole("customer"), async (req, res, 
     if (seats < 1) return res.status(400).json({ error: "At least one guest is required" });
 
     let hold = await CheckoutHold.findOne({ customerId: req.user._id, idempotencyKey: key });
+    if (hold) {
+      const sameRequest =
+        String(hold.departureId) === String(req.body.departureId || "") &&
+        Number(hold.adults || 0) === adults &&
+        Number(hold.children || 0) === children &&
+        String(hold.mealPlan || "without_buffet") === mealPlan;
+      if (!sameRequest) {
+        return res.status(409).json({ error: "Idempotency-Key already used for a different checkout" });
+      }
+    }
     if (!hold) {
       const departure = await Departure.findOneAndUpdate(
         { _id: req.body.departureId, status: "scheduled", startsAt: { $gte: new Date() },
