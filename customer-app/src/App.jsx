@@ -213,7 +213,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
   );
 }
 
-function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading, searchSummary }) {
+function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
   const [filter,setFilter]=useState("All Trips");
   const [sort,setSort]=useState("recommended");
 
@@ -268,7 +268,7 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
               <div className="trips-empty__icon"><Search size={28}/></div>
               <h2>No sea trips match this search</h2>
               <p>Try another date or category. SeaGo will show only experiences that match your current search.</p>
-              <button onClick={()=>{setFilter("All Trips");setSort("recommended");}}>Show all experiences</button>
+              <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>Show all experiences</button>
             </div>}
     </div>
   );
@@ -1139,8 +1139,9 @@ export default function App(){
         try {
           const deps = await listDepartures(trip.apiId);
           const ok = deps.some(d => {
+            const live = d.status==="scheduled" && new Date(d.startsAt)>new Date();
             const enoughSeats = Number(d.availableSeats||0) >= Number(guests||1);
-            if (!enoughSeats) return false;
+            if (!live || !enoughSeats) return false;
             if (!date) return true;
             const depDate = localDateInputValue(new Date(d.startsAt));
             return depDate === date;
@@ -1199,7 +1200,7 @@ export default function App(){
   return <div className="app-shell">
     <main>
       {active==="home"&&<HomeScreen tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
-      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary}/>}
+      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
       {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>}
