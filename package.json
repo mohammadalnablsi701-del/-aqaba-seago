@@ -20,5 +20,8 @@
     "web-push": "^3.6.7",
     "helmet": "^8.1.0",
     "express-rate-limit": "^8.1.0"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
