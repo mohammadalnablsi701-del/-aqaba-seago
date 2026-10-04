@@ -43,7 +43,7 @@ router.post("/checkout", requireAuth, requireRole("customer"), async (req, res, 
         const trip = await Trip.findById(departure.tripId);
         if (!trip || !trip.active) throw new Error("Trip unavailable");
         const pricing = calculateTieredPricing({ pricing: trip.pricing, adults, children, mealPlan });
-        const minutes = Number(process.env.BOOKING_HOLD_MINUTES || 10);
+        const minutes = Number(process.env.BOOKING_HOLD_MINUTES || 5);
         hold = await CheckoutHold.create({
           customerId: req.user._id, providerId: trip.providerId, tripId: trip._id,
           departureId: departure._id, seats, adults, children, mealPlan, pricing, idempotencyKey: key,
