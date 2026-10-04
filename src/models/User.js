@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 const schema=new mongoose.Schema({
   name:{type:String,required:true,trim:true},
-  email:{type:String,lowercase:true,trim:true,sparse:true},
+  email:{type:String,lowercase:true,trim:true},
   phone:{type:String,trim:true},
   phoneNormalized:{type:String,trim:true,index:true,sparse:true},
   passwordHash:{type:String},
-  googleSub:{type:String,trim:true,sparse:true},
+  googleSub:{type:String,trim:true},
   role:{type:String,enum:["customer","provider","admin"],default:"customer",index:true},
   isActive:{type:Boolean,default:true}
 },{timestamps:true});
