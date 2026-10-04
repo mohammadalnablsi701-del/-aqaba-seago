@@ -95,6 +95,7 @@ router.get("/", async (req, res, next) => {
     const activeTripIds=activeTrips.map(t=>t._id);
     const query = {
       status: "scheduled",
+      salesClosed: { $ne: true },
       startsAt: { $gte: new Date() },
       tripId: { $in: activeTripIds }
     };
@@ -118,7 +119,8 @@ router.get("/", async (req, res, next) => {
         capacity: d.capacity,
         reservedSeats: d.reservedSeats,
         availableSeats: Math.max(0, d.capacity - d.reservedSeats),
-        status: d.status
+        status: d.status,
+        salesClosed:Boolean(d.salesClosed)
       }))
     );
   } catch (err) {
@@ -151,6 +153,11 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       }
       departure.startsAt=nextStartsAt;
     }
+    if(req.body.salesClosed!==undefined){
+      if(departure.status!=="scheduled")return res.status(409).json({error:"Only scheduled departures can change sales availability"});
+      departure.salesClosed=Boolean(req.body.salesClosed);
+      if(departure.salesClosed)await releaseCheckoutHoldsForDeparture(departure._id);
+    }
     if(req.body.status!==undefined){
       const nextStatus=req.body.status;
       if(!["scheduled","cancelled","completed"].includes(nextStatus))return res.status(400).json({error:"Invalid departure status"});
@@ -176,7 +183,8 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
     const updateSet={
       capacity:departure.capacity,
       startsAt:departure.startsAt,
-      status:departure.status
+      status:departure.status,
+      salesClosed:Boolean(departure.salesClosed)
     };
     const updated=await Departure.findOneAndUpdate(
       {_id:departure._id,reservedSeats:originalReservedSeats,status:originalStatus},
@@ -204,7 +212,7 @@ router.get("/:departureId/quote", async (req, res, next) => {
     const seats = adults + children;
     const departure = await Departure.findById(req.params.departureId);
 
-    if (!departure || departure.status !== "scheduled" || departure.startsAt <= new Date()) {
+    if (!departure || departure.status !== "scheduled" || departure.salesClosed === true || departure.startsAt <= new Date()) {
       return res.status(404).json({ error: "Departure not found" });
     }
 
