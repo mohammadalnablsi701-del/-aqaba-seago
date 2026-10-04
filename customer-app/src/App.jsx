@@ -266,16 +266,18 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 }
 
 function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
+  const {t,category,isArabic}=useLanguage();
+  const displayTitle=isArabic?(trip.titleAr||trip.titleEn||trip.title):(trip.titleEn||trip.titleAr||trip.title);
   return (
     <article className="trip-card" onClick={() => onSelectTrip(trip)}>
       <div className={"trip-card__visual trip-card__visual--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(4,34,55,.08),rgba(4,34,55,.18)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
-        <span className="trip-card__badge">{trip.category}</span>
+        <span className="trip-card__badge">{category(trip.category)}</span>
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
         {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>}
       </div>
       <div className="trip-card__body">
-        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
-        <h3>{trip.title}</h3>
+        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> {t("trip.verified")}</span><small>العقبة · Aqaba</small></div>
+        <h3>{displayTitle}</h3>
         <p>{trip.providerName || trip.subtitle}</p>
         <div className="trip-card__facts">
           <span><CalendarDays size={14}/>{trip.duration}</span>
@@ -283,10 +285,10 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
         </div>
         {trip.apiId&&<div className={"trip-live-status "+(trip.liveInventory?.nextDepartureAt?"available":"unavailable")}>
           {trip.liveInventory?.nextDepartureAt
-            ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
-            : <><CalendarDays size={13}/><span>No departures available</span></>}
+            ? <><Clock size={13}/><span>{t("trip.next")} {new Date(trip.liveInventory.nextDepartureAt).toLocaleString(isArabic?"ar-JO":"en-GB",{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} {t("trip.seats")}</span></>
+            : <><CalendarDays size={13}/><span>{t("trip.noDepartures")}</span></>}
         </div>}
-        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">View experience <ChevronRight size={15}/></div>
+        <div className="trip-card__price"><span>{t("trip.from")}</span><strong>{trip.price} JOD</strong><small>{t("trip.perAdult")}</small></div><div className="trip-card__cta">{t("trip.view")} <ChevronRight size={15}/></div>
       </div>
     </article>
   );
@@ -1154,28 +1156,31 @@ function NotificationsScreen({auth,onUnreadChange,onAuthenticated}){
 }
 
 function SideMenu({ open, onClose, active, setActive }) {
+  const {t,toggleLanguage}=useLanguage();
   const items=[
-    ["home",Home,"Home"],
-    ["trips",ShipWheel,"Sea Experiences"],
-    ["tickets",Ticket,"My Tickets"],
-    ["favourites",Heart,"Favourites"],
-    ["notifications",Bell,"Alerts"],
-    ["profile",UserRound,"Profile"]
+    ["home",Home,t("menu.home")],
+    ["trips",ShipWheel,t("menu.experiences")],
+    ["tickets",Ticket,t("menu.tickets")],
+    ["favourites",Heart,t("menu.favourites")],
+    ["notifications",Bell,t("menu.alerts")],
+    ["profile",UserRound,t("menu.profile")]
   ];
   if(!open) return null;
   return <div className="side-menu-layer">
     <button className="side-menu-backdrop" aria-label="Close menu" onClick={onClose}/>
     <aside className="side-menu" aria-label="Main menu">
       <div className="side-menu__head"><BrandLogo/><button className="side-menu__close" onClick={onClose} aria-label="Close menu">×</button></div>
-      <div className="side-menu__eyebrow">EXPLORE AQABA</div>
+      <div className="side-menu__eyebrow">{t("menu.eyebrow")}</div>
       <nav>{items.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>{setActive(id);onClose();}}><Icon size={20}/><span>{label}</span><ChevronRight size={17}/></button>)}</nav>
-      <div className="side-menu__footer">Aqaba SeaGo · Red Sea experiences</div>
+      <button className="side-menu__language" onClick={toggleLanguage}><span>{t("menu.language")}</span><b>{t("menu.switch")}</b></button>
+      <div className="side-menu__footer">{t("menu.footer")}</div>
     </aside>
   </div>;
 }
 
 function BottomNav({ active, setActive, unread = 0 }) {
-  const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["notifications",Bell,"Alerts"],["profile",UserRound,"Profile"]];
+  const {t}=useLanguage();
+  const nav=[["home",Home,t("nav.home")],["trips",ShipWheel,t("nav.trips")],["tickets",Ticket,t("nav.tickets")],["notifications",Bell,t("nav.alerts")],["profile",UserRound,t("nav.profile")]];
   return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><span className="bottom-nav__icon"><Icon size={20}/>{id==="notifications"&&unread>0&&<em>{unread>9?"9+":unread}</em>}</span><span>{label}</span></button>)}</nav>;
 }
 
