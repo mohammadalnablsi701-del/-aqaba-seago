@@ -560,6 +560,42 @@ function AuthForm({ onAuthenticated }) {
     </div>
   );
 }
+function RequiredPhoneCapture({auth,onAuthenticated,onSaved}) {
+  const [countryCode,setCountryCode]=useState("+962");
+  const [phone,setPhone]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+
+  async function savePhone(){
+    if(busy)return;
+    const normalized=internationalPhone(phone,countryCode);
+    if(!normalized){
+      setError("Enter a valid phone number.");
+      return;
+    }
+    setBusy(true);setError("");
+    try{
+      const result=await saveAccountPhone(normalized,auth.token);
+      onAuthenticated(result);
+      onSaved?.();
+    }catch(e){
+      setError(e.message||"Could not save phone number.");
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  return <div className="booking-form">
+    <div className="booking-form__section-title">CONTACT NUMBER · REQUIRED FOR TICKET</div>
+    <CountryPhoneField code={countryCode} setCode={setCountryCode} value={phone} onChange={e=>setPhone(e.target.value)} disabled={busy} required placeholder="Phone number"/>
+    {error&&<div className="booking-error">{error}</div>}
+    <button type="button" className="secondary-button" onClick={savePhone} disabled={busy||!phone.trim()}>
+      {busy?<><LoaderCircle className="spin" size={16}/> Saving...</>:<>Save phone number <ChevronRight size={16}/></>}
+    </button>
+    <p className="booking-note">This number will appear on your SeaGo ticket and be available to the operator for this booking.</p>
+  </div>;
+}
+
 function formatDeparture(value) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("en", {
@@ -645,6 +681,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     if(!selected) return setError("No available departure selected.");
     if(guests<1) return setError("Add at least one adult or child.");
     if(!auth?.token) return setError("AUTH_REQUIRED");
+    if(!(auth?.user?.phoneNormalized||auth?.user?.phone)) return setError("Add your phone number before continuing to payment.");
     if(!quote)return setError("Please wait for the current price before continuing.");
 
     const fingerprint=[selected.id,adults,children,mealPlan].join("|");
@@ -746,12 +783,14 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
             <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
             {trip.buffetEnabled&&<div className="meal-options"><span>Buffet</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>No buffet</b><small>Base trip price</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Add open buffet</b><small>{buffetAdultAddOn===buffetChildAddOn?`+${buffetAdultAddOn.toFixed(2)} JOD per person`:`Adult +${buffetAdultAddOn.toFixed(2)} · Child +${buffetChildAddOn.toFixed(2)} JOD`}</small></button></div>}
             <div className="booking-account-row"><span>Account</span><div><UserRound size={18}/><b>{auth?.user?.email || "Sign in during booking"}</b><CheckCircle2 size={16}/></div></div>
+            {(auth?.user?.phoneNormalized||auth?.user?.phone)&&<div className="booking-account-row"><span>Phone on ticket</span><div><b dir="ltr">{auth?.user?.phoneNormalized||auth?.user?.phone}</b><CheckCircle2 size={16}/></div></div>}
           </div>
+          {auth?.token&&!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated}/>} 
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
           <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quote?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {baseAdultPrice.toFixed(2)}</span><b>{(baseAdultPrice*adults).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {baseChildPrice.toFixed(2)}</span><b>{(baseChildPrice*children).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&mealPlan==="with_buffet"&&<div><span>Open buffet add-on</span><b>+{buffetAddOnSubtotal.toFixed(2)} JOD</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total||0).toFixed(2)} JOD</strong></div></>:<div className="live-price-loading"><LoaderCircle className="spin" size={16}/><span>{selected?"Fetching current price...":"Choose a departure to see the live price"}</span></div>}</div>
-          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quote))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
+          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quote)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
       )}
@@ -815,7 +854,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
 
   if(error) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="ticket-error-state"><div className="booking-error">{error}</div><button className="secondary-button" onClick={()=>setRevision(x=>x+1)}>Try again</button></div></div>;
 
-  return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>My SeaGo Tickets</h1><p>Everything you need for check-in, all in one place.</p></div></header>{tickets.length?<div className="ticket-list">{tickets.map(b=>{
+  return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>My SeaGo Tickets</h1><p>Everything you need for check-in, all in one place.</p></div></header>{!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated} onSaved={()=>setRevision(x=>x+1)}/>} {tickets.length?<div className="ticket-list">{tickets.map(b=>{
     const trip=b.tripId||{};
     const departure=b.departureId||{};
     const provider=b.providerId||{};
