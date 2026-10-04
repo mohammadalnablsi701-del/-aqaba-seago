@@ -133,18 +133,20 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
     const access=await requireProviderCapability(req.user,"view_bookings");const provider=access?.provider;
     if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const query={providerId:provider._id,status:"confirmed"};
+    if(req.query.date){
+      const start=new Date(req.query.date+"T00:00:00+03:00");
+      const end=new Date(req.query.date+"T23:59:59.999+03:00");
+      const tripIds=await Trip.find({providerId:provider._id}).distinct("_id");
+      const depIds=await Departure.find({tripId:{$in:tripIds},startsAt:{$gte:start,$lte:end}}).distinct("_id");
+      query.departureId={$in:depIds};
+    }
     const rows=await Booking.find(query)
       .populate("tripId","titleEn titleAr category")
       .populate("departureId","startsAt status")
       .populate("customerId","name phone email")
       .sort({createdAt:-1})
       .limit(300);
-    const filtered=req.query.date?rows.filter(b=>{
-      const s=b.departureId?.startsAt;
-      if(!s)return false;
-      return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Amman",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(s))===req.query.date;
-    }):rows;
-    res.json(filtered.map(b=>bookingForAccess(b,access)));
+    res.json(rows.map(b=>bookingForAccess(b,access)));
   }catch(e){next(e);}
 });
 
