@@ -128,3 +128,151 @@
 .admin-brand-login .admin-brand-copy b{font-size:22px}
 
 .support-admin-list{display:grid;gap:12px}.support-admin-row{border:1px solid #dfe8ee;border-radius:16px;background:#fff;padding:14px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start}.support-admin-row h3{margin:4px 0 6px}.support-admin-row p{margin:0 0 8px;white-space:pre-wrap;line-height:1.45}.support-admin-row>div:first-child>small,.support-admin-row>div:first-child>span{color:#718393;font-size:12px}.support-admin-row>div:last-child{display:grid;gap:8px;min-width:150px}.support-admin-row select{height:38px;border:1px solid #dbe5eb;border-radius:10px;background:#fff;padding:0 10px}.support-state{font-style:normal;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.support-state.open{color:#a05d00}.support-state.in_progress{color:#0b6fa4}.support-state.resolved{color:#08745f}.support-state.closed{color:#64748b}@media(max-width:700px){.support-admin-row{grid-template-columns:1fr}.support-admin-row>div:last-child{min-width:0}}
+
+
+/* Admin layout refresh */
+main{
+  max-width:1280px;
+  margin:auto;
+  padding:24px 22px 38px;
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr);
+  gap:22px;
+  align-items:start;
+}
+.admin-tabs{
+  position:sticky;
+  top:92px;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  margin:0;
+  padding:12px;
+  overflow:visible;
+  background:#fff;
+  border:1px solid #e3ebf1;
+  border-radius:18px;
+  box-shadow:0 10px 28px rgba(16,58,82,.06);
+}
+.admin-tabs__label{
+  padding:4px 8px 9px;
+  font-size:10px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#8a9aa6;
+  font-weight:900;
+}
+.admin-tabs button{
+  width:100%;
+  min-height:46px;
+  border:0;
+  border-radius:12px;
+  padding:0 11px;
+  display:grid;
+  grid-template-columns:22px 1fr auto;
+  gap:8px;
+  align-items:center;
+  text-align:left;
+  background:transparent;
+  color:#5b7180;
+  font-weight:800;
+}
+.admin-tabs button:hover{background:#f6fafc}
+.admin-tabs button svg{color:#7d91a0}
+.admin-tabs button span{white-space:nowrap}
+.admin-tabs button em{
+  min-width:22px;
+  height:22px;
+  padding:0 6px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  background:#eef4f7;
+  color:#36576b;
+  font-size:10px;
+  font-style:normal;
+}
+.admin-tabs button.active{
+  background:#0b6fa4;
+  color:#fff;
+}
+.admin-tabs button.active svg{color:#fff}
+.admin-tabs button.active em{background:rgba(255,255,255,.18);color:#fff}
+.admin-content{min-width:0}
+.admin-loading{
+  min-height:240px;
+  border:1px solid #e3ebf1;
+  border-radius:18px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  color:#6d8190;
+  font-weight:700;
+}
+.admin-content>.title{
+  margin-bottom:16px;
+  padding:2px 2px 0;
+}
+.admin-content>.title h1{font-size:26px}
+.admin-content>.title p{max-width:720px;line-height:1.5}
+.ops-overview,
+.controlled-pilot-card,
+.readiness-summary>div,
+.readiness-env,
+.demo-preview,
+.readiness-checks,
+.provider-admin-row,
+.trip,
+.refund-row,
+.support-admin-row,
+.notification-row,
+.email-summary-grid>div{
+  box-shadow:0 8px 24px rgba(16,58,82,.045);
+}
+.ops-overview{padding:20px}
+.readiness-grid{gap:12px}
+.readiness-checks{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.readiness-env,.demo-preview{align-content:start}
+.provider-admin-row,.trip,.refund-row,.support-admin-row{padding:18px}
+.email-summary-grid{gap:12px}
+
+@media(max-width:900px){
+  main{
+    grid-template-columns:1fr;
+    gap:14px;
+    padding:18px 14px 30px;
+  }
+  .admin-tabs{
+    position:static;
+    flex-direction:row;
+    overflow-x:auto;
+    border-radius:14px;
+    padding:8px;
+    gap:6px;
+    box-shadow:none;
+    scrollbar-width:none;
+  }
+  .admin-tabs::-webkit-scrollbar{display:none}
+  .admin-tabs__label{display:none}
+  .admin-tabs button{
+    width:auto;
+    min-width:max-content;
+    grid-template-columns:18px auto auto;
+    padding:0 12px;
+    min-height:42px;
+    border:1px solid #e3ebf1;
+    background:#fff;
+  }
+  .admin-tabs button.active{border-color:#0b6fa4}
+  .readiness-checks{grid-template-columns:1fr}
+}
+
+@media(max-width:650px){
+  .admin-content>.title h1{font-size:23px}
+  .ops-overview{padding:15px}
+  .provider-admin-row,.trip,.refund-row,.support-admin-row{padding:14px}
+}
