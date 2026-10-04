@@ -7,7 +7,6 @@ import { cleanupDemoDataOnce } from "./services/demoCleanup.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders, sendTestEmail } from "./services/notifications.js";
 import { runPilotE2EOnce } from "./services/pilotE2E.js";
-import { releaseCheckoutHoldsForDeparture as releasePilotHolds } from "./services/payments.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -38,11 +37,6 @@ if(process.env.EMAIL_TEST_RECIPIENT){
 }
 
 await releaseExpiredCheckoutHolds({limit:500});
-if(process.env.RELEASE_WHITE_PRINCE_PILOT_HOLD==="true"){
-  const released=await releasePilotHolds("6ac2536a507c0c84ea404b1c");
-  console.log("White Prince pilot holds released",released);
-}
-
 setInterval(()=>{
   releaseExpiredCheckoutHolds({limit:500}).catch(err=>console.error("Expired hold cleanup failed",err));
 },60000).unref();
