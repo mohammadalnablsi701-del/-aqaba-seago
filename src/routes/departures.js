@@ -153,10 +153,10 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       }
       departure.startsAt=nextStartsAt;
     }
+    const closingSales=req.body.salesClosed===true&&!departure.salesClosed;
     if(req.body.salesClosed!==undefined){
       if(departure.status!=="scheduled")return res.status(409).json({error:"Only scheduled departures can change sales availability"});
       departure.salesClosed=Boolean(req.body.salesClosed);
-      if(departure.salesClosed)await releaseCheckoutHoldsForDeparture(departure._id);
     }
     if(req.body.status!==undefined){
       const nextStatus=req.body.status;
@@ -192,8 +192,10 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       {new:true}
     );
     if(!updated)return res.status(409).json({error:"Departure changed while you were editing it. Reload and try again."});
-    await auditProviderAction({access,user:req.user,action:"departure.update",targetType:"departure",targetId:updated._id,summary:"Updated departure for "+trip.titleEn,metadata:{startsAt:updated.startsAt,capacity:updated.capacity,status:updated.status}});
-    res.json(updated);
+    if(closingSales)await releaseCheckoutHoldsForDeparture(updated._id);
+    const finalDeparture=closingSales?await Departure.findById(updated._id):updated;
+    await auditProviderAction({access,user:req.user,action:"departure.update",targetType:"departure",targetId:updated._id,summary:"Updated departure for "+trip.titleEn,metadata:{startsAt:updated.startsAt,capacity:updated.capacity,status:updated.status,salesClosed:Boolean(updated.salesClosed)}});
+    res.json(finalDeparture);
   }catch(e){next(e);}
 });
 
