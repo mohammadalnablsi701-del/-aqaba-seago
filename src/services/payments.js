@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Payment from "../models/Payment.js";
+import PaymentEvent from "../models/PaymentEvent.js";
 import Booking from "../models/Booking.js";
 import CheckoutHold from "../models/CheckoutHold.js";
 import Departure from "../models/Departure.js";
@@ -10,6 +11,14 @@ import { sendBookingConfirmation } from "./notifications.js";
 
 const SUCCESS_TERMINAL_PAYMENT_STATUSES=new Set(["paid","partially_refunded","refunded"]);
 export function isSuccessfulTerminalPaymentStatus(status){return SUCCESS_TERMINAL_PAYMENT_STATUSES.has(String(status||""));}
+
+const FAILURE_TERMINAL_PAYMENT_STATUSES=new Set(["failed","cancelled","expired"]);
+
+async function recordPaymentEvent({providerName,event,payment}){
+  try{
+    await PaymentEvent.create({provider:providerName,eventId:event.eventId,externalPaymentId:event.externalPaymentId,paymentId:payment._id,eventStatus:event.status,amount:event.amount,currency:event.currency,raw:event.raw,processedAt:new Date()});
+  }catch(e){if(e?.code!==11000)throw e;}
+}
 
 async function confirmPaidHoldAtomic({paymentId,event}){
   const session=await mongoose.startSession();
