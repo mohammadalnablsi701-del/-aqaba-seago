@@ -348,7 +348,10 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
   const shown=useMemo(()=>{
     let rows=filter==="All Trips" ? [...tripList] : tripList.filter(t=>{
       const token=filter.replace(/s$/,"").toLowerCase();
-      return t.category.toLowerCase().includes(token) || t.title.toLowerCase().includes(token);
+      const rawCategory=CATEGORY_LABELS[t.raw?.category]||"";
+      return t.category.toLowerCase().includes(token)
+        || rawCategory.toLowerCase().includes(token)
+        || t.title.toLowerCase().includes(token);
     });
 
     if(sort==="price-low") rows.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
