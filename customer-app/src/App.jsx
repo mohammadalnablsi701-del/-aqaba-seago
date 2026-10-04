@@ -681,6 +681,14 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const holdExpired=holdRemaining===0;
   const holdMinutes=holdRemaining!=null?Math.floor(holdRemaining/60000):0;
   const holdSeconds=holdRemaining!=null?Math.floor((holdRemaining%60000)/1000):0;
+  const baseAdultPrice=Number(trip.price||0);
+  const baseChildPrice=Number(trip.childPrice||baseAdultPrice);
+  const buffetAdultAddOn=Math.max(0,Number(trip.buffetAdultPrice||baseAdultPrice)-baseAdultPrice);
+  const buffetChildAddOn=Math.max(0,Number(trip.buffetChildPrice||baseChildPrice)-baseChildPrice);
+  const baseTripSubtotal=baseAdultPrice*adults+baseChildPrice*children;
+  const buffetAddOnSubtotal=mealPlan==="with_buffet"
+    ? buffetAdultAddOn*adults+buffetChildAddOn*children
+    : 0;
   const total=quote?.pricing?.grossAmount ?? null;
 
   if(success) {
@@ -736,13 +744,13 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · PERSONS & PACKAGE</div>
             <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)} disabled={guests>=seatLimit}>+</button></div></label>
             <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
-            {trip.buffetEnabled&&<div className="meal-options"><span>Meal option</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>Trip only</b><small>Without buffet</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Trip + open buffet</b><small>{trip.buffetDescription||"Buffet included"}</small></button></div>}
+            {trip.buffetEnabled&&<div className="meal-options"><span>Buffet</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>No buffet</b><small>Base trip price</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Add open buffet</b><small>{buffetAdultAddOn===buffetChildAddOn?`+${buffetAdultAddOn.toFixed(2)} JOD per person`:`Adult +${buffetAdultAddOn.toFixed(2)} · Child +${buffetChildAddOn.toFixed(2)} JOD`}</small></button></div>}
             <div className="booking-account-row"><span>Account</span><div><UserRound size={18}/><b>{auth?.user?.email || "Sign in during booking"}</b><CheckCircle2 size={16}/></div></div>
           </div>
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quote?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote.pricing?.adultUnitPrice||0).toFixed(2)}</span><b>{Number(quote.pricing?.adultSubtotal||0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote.pricing?.childUnitPrice||0).toFixed(2)}</span><b>{Number(quote.pricing?.childSubtotal||0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total||0).toFixed(2)} JOD</strong></div></>:<div className="live-price-loading"><LoaderCircle className="spin" size={16}/><span>{selected?"Fetching current price...":"Choose a departure to see the live price"}</span></div>}</div>
+          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quote?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {baseAdultPrice.toFixed(2)}</span><b>{(baseAdultPrice*adults).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {baseChildPrice.toFixed(2)}</span><b>{(baseChildPrice*children).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&mealPlan==="with_buffet"&&<div><span>Open buffet add-on</span><b>+{buffetAddOnSubtotal.toFixed(2)} JOD</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total||0).toFixed(2)} JOD</strong></div></>:<div className="live-price-loading"><LoaderCircle className="spin" size={16}/><span>{selected?"Fetching current price...":"Choose a departure to see the live price"}</span></div>}</div>
           <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quote))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
