@@ -100,23 +100,75 @@ const CATEGORY_LABELS = {
   semi_submarine: "Semi Submarine"
 };
 
+function formatDuration(minutes) {
+  const n=Number(minutes||0);
+  if(!n)return "Flexible";
+  if(n%60===0){
+    const h=n/60;
+    return `${h} ${h===1?"hour":"hours"}`;
+  }
+  if(n>60){
+    const h=Math.floor(n/60),m=n%60;
+    return `${h}h ${m}m`;
+  }
+  return `${n} min`;
+}
+
+function tripDisplayProfile(raw) {
+  const provider=String(raw?.providerId?.businessName||"").trim().toLowerCase();
+  const title=String(raw?.titleEn||"").trim();
+
+  if(provider==="fun n sun"){
+    if(title==="White Prince Swimming Cruise"){
+      return {
+        title:"White Prince Swimming Cruise",
+        category:"Yacht Cruise",
+        accent:"reef",
+        description:"Cruise Aqaba aboard White Prince with dedicated time for swimming and the onboard water slide. A simple daytime Red Sea experience built around the yacht and the water.",
+        experienceLabel:"Yacht · Swimming · Water Slide"
+      };
+    }
+    if(title==="White Prince Evening Cruise"){
+      return {
+        title:"White Prince Evening Cruise",
+        category:"Evening Yacht",
+        accent:"sunset",
+        description:"Enjoy Aqaba from the sea aboard White Prince on an evening yacht cruise. A relaxed two-hour experience designed for the cooler evening atmosphere on the Red Sea.",
+        experienceLabel:"Evening Yacht Cruise"
+      };
+    }
+    if(title==="Coral Whisper + White Prince Experience"){
+      return {
+        title:"Coral Whisper + White Prince Experience",
+        category:"Coral + Yacht",
+        accent:"glass",
+        description:"A combined Fun N Sun experience: begin with Coral Whisper for underwater coral viewing, then continue aboard White Prince for the yacht portion of the trip and time on the Red Sea.",
+        experienceLabel:"Coral Viewing · White Prince Yacht"
+      };
+    }
+  }
+  return null;
+}
+
 function normalizeTrip(raw, index = 0) {
   if (!raw?._id) return raw;
-  const category = CATEGORY_LABELS[raw.category] || "Sea Experience";
-  const accent = raw.category === "yacht" || raw.category === "sunset"
+  const profile=tripDisplayProfile(raw);
+  const defaultCategory = CATEGORY_LABELS[raw.category] || "Sea Experience";
+  const category = profile?.category || defaultCategory;
+  const accent = profile?.accent || (raw.category === "yacht" || raw.category === "sunset"
     ? "sunset"
     : raw.category === "snorkeling" || raw.category === "diving"
       ? "reef"
-      : "glass";
+      : "glass");
 
   return {
     id: raw._id,
     apiId: raw._id,
-    title: raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
+    title: profile?.title || raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
     verifiedProvider: true,
-    duration: raw.durationMinutes ? `${raw.durationMinutes} min` : "Flexible",
+    duration: formatDuration(raw.durationMinutes),
     price: Number(raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     childPrice: Number(raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetEnabled: Boolean(raw.pricing?.buffetEnabled),
@@ -128,7 +180,8 @@ function normalizeTrip(raw, index = 0) {
     reviews: null,
     category,
     accent,
-    description: `Discover Aqaba's Red Sea with an approved SeaGo partner. This ${category.toLowerCase()} experience is managed through the Aqaba SeaGo booking platform.`,
+    experienceLabel:profile?.experienceLabel||category,
+    description: profile?.description || `Discover Aqaba's Red Sea with an approved SeaGo partner. This ${defaultCategory.toLowerCase()} experience is managed through the Aqaba SeaGo booking platform.`,
     departureLocation: raw.departureLocation || null,
     source: "api",
     raw,
