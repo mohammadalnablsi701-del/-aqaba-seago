@@ -62,15 +62,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected_api="$(git log -1 --format=%H -- src package.json package-lock.json)"
           expected_pages="$(git log -1 --format=%H -- customer-app provider-app admin-app .github/workflows/pages.yml)"
           for i in {1..24}; do
             api_commit="$(curl -fsS https://aqaba-seago-api.onrender.com/health | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
             page_commit="$(curl -fsS https://mohammadalnablsi701-del.github.io/-aqaba-seago/version.json | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
-            echo "API expected:   $GITHUB_SHA"
+            echo "API expected:   $expected_api"
             echo "API deployed:   $api_commit"
             echo "Pages expected: $expected_pages"
             echo "Pages deployed: $page_commit"
-            if [ "$api_commit" = "$GITHUB_SHA" ] && [ "$page_commit" = "$expected_pages" ]; then
+            if [ "$api_commit" = "$expected_api" ] && [ "$page_commit" = "$expected_pages" ]; then
               exit 0
             fi
             sleep 10
