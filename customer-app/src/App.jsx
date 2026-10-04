@@ -4,6 +4,7 @@ import {
   Bell, LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
+import { useLanguage } from "./i18n.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
@@ -113,6 +114,8 @@ function normalizeTrip(raw, index = 0) {
     id: raw._id,
     apiId: raw._id,
     title: raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
+    titleEn: raw.titleEn || "",
+    titleAr: raw.titleAr || "",
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
     verifiedProvider: true,
@@ -185,6 +188,7 @@ function localDateInputValue(date=new Date()) {
 }
 
 function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
+  const {t,category}=useLanguage();
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -205,30 +209,30 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
         </div>
         <div className="hero__copy">
-          <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
-          <h1>Make Aqaba<br/>Unforgettable</h1>
-          <p>Your next Red Sea memory starts here.</p>
+          <p className="eyebrow">{t("home.hero.eyebrow")}</p>
+          <h1>{t("home.hero.title")}</h1>
+          <p>{t("home.hero.subtitle")}</p>
         </div>
         <div className="search-card">
           <label className="search-row search-row--control">
             <span className="search-row__icon"><Anchor size={18}/></span>
-            <span><small>Trip Type</small>
+            <span><small>{t("home.tripType")}</small>
               <select value={tripType} onChange={e=>setTripType(e.target.value)}>
-                {categories.map(c=><option key={c} value={c}>{c}</option>)}
+                {categories.map(c=><option key={c} value={c}>{category(c)}</option>)}
               </select>
             </span>
             <ChevronRight size={18}/>
           </label>
           <label className="search-row search-row--control">
             <span className="search-row__icon"><CalendarDays size={18}/></span>
-            <span><small>Date</small>
+            <span><small>{t("home.date")}</small>
               <input type="date" value={date} min={localDateInputValue()} onChange={e=>setDate(e.target.value)}/>
             </span>
             <ChevronRight size={18}/>
           </label>
           <div className="search-row search-row--control">
             <span className="search-row__icon"><UsersRound size={18}/></span>
-            <span><small>Persons</small><strong>{guests} {guests===1?"Person":"Persons"}</strong></span>
+            <span><small>{t("home.persons")}</small><strong>{guests} {guests===1?t("home.person"):t("home.persons")}</strong></span>
             <div className="guest-stepper">
               <button type="button" onClick={()=>setGuests(Math.max(1,guests-1))}>−</button>
               <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
@@ -236,7 +240,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           </div>
           <button className="primary-button" onClick={submitSearch} disabled={searching||loading}>
             {(searching||loading)?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>}
-            {loading?"Loading trips...":searching?"Searching...":"Search Trips"} {!loading&&<ChevronRight size={18}/>}
+            {loading?t("home.loading"):searching?t("home.searching"):t("home.search")} {!loading&&<ChevronRight size={18}/>}
           </button>
         </div>
       </section>
@@ -244,13 +248,13 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
       <ApiNotice usingFallback={usingFallback} apiError={apiError} />
 
       <section className="home-trust-strip" aria-label="SeaGo booking benefits">
-        <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
-        <div><CheckCircle2 size={16}/><span><b>Clear pricing</b><small>No hidden fees</small></span></div>
-        <div><Ticket size={16}/><span><b>Instant ticket</b><small>After payment</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>{t("home.verified")}</b><small>{t("home.verifiedSub")}</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>{t("home.pricing")}</b><small>{t("home.pricingSub")}</small></span></div>
+        <div><Ticket size={16}/><span><b>{t("home.ticket")}</b><small>{t("home.ticketSub")}</small></span></div>
       </section>
 
       <section className="content-section">
-        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2><p>Trusted trips picked for an easy day on the Red Sea.</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
+        <div className="section-heading"><div><span>{t("home.curated")}</span><h2>{t("home.popular")}</h2><p>{t("home.popularSub")}</p></div><button onClick={onSeeAll}>{t("home.seeAll")} <ChevronRight size={14}/></button></div>
         {loading?<LoadingState label="Loading sea experiences..."/>:<div className="trip-strip">
           {tripList.slice(0,3).map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
