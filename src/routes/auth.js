@@ -40,13 +40,19 @@ router.post("/google",async(req,res,next)=>{
 
     const email=cleanEmail(profile.email);
     const name=cleanText(profile.name||profile.given_name||email.split("@")[0],80);
-    let user=await User.findOne({$or:[{googleSub:String(profile.sub)},{email}]});
+    const googleSub=String(profile.sub);
+    let user=await User.findOne({googleSub});
     if(user){
-      if(user.role!==role)return res.status(409).json({error:"This email is already registered for a different SeaGo account type"});
+      if(user.role!==role)return res.status(409).json({error:"This Google account is already registered for a different SeaGo account type"});
       if(!user.isActive)return res.status(401).json({error:"Invalid account"});
-      if(!user.googleSub){user.googleSub=String(profile.sub);await user.save();}
     }else{
-      user=await User.create({name,email,googleSub:String(profile.sub),role,isActive:true});
+      const emailOwner=await User.findOne({email});
+      if(emailOwner){
+        return res.status(409).json({
+          error:"An account already uses this email. Sign in with its existing method; automatic Google linking is disabled for security."
+        });
+      }
+      user=await User.create({name,email,googleSub,role,isActive:true});
     }
     res.json({user:safe(user),token:sign(user)});
   }catch(e){
