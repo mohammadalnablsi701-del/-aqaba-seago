@@ -1,28 +1,22 @@
 import React,{useEffect,useState}from"react";
 import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell,LifeBuoy}from"lucide-react";
-import{login,requestPhoneOtp,verifyPhoneOtp,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
+import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function AdminBrand({login=false}){return <div className={"admin-brand"+(login?" admin-brand-login":"")}><svg className="admin-brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#D8DEE6" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="10.5"/>{[0,45,90,135,180,225,270,315].map(a=><line key={a} x1="32" y1="5.5" x2="32" y2="14" transform={`rotate(${a} 32 32)`}/>)}<path d="M25 33c3-4 6 3 9 2 2-.5 3.5-2 5-3"/></g></svg><div className="admin-brand-copy"><b>SeaGo</b><span>AQABA · ADMIN</span></div></div>}
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 
 function Login({onDone}) {
-  const[method,setMethod]=useState("email");const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[phone,setPhone]=useState("");const[code,setCode]=useState("");const[otpSent,setOtpSent]=useState(false);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
+  const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[error,setError]=useState("");const[busy,setBusy]=useState(false);
   async function submit(e){e.preventDefault();setBusy(true);setError("");try{
-    let r;
-    if(method==="phone"){
-      if(!otpSent){await requestPhoneOtp(phone,"admin","login");setOtpSent(true);return;}
-      r=await verifyPhoneOtp({phone,code,role:"admin",mode:"login"});
-    }else{
-      r=await login(email.trim(),password);
-    }
+    const r=await login(email.trim(),password);
     if(r.user?.role!=="admin")throw new Error("Admin account required");
     localStorage.setItem("seago_admin_auth",JSON.stringify(r));onDone(r)
   }catch(e){setError(e.message)}finally{setBusy(false)}}
-  function switchMethod(next){setMethod(next);setOtpSent(false);setCode("");setError("")}
-  return <div className="login"><form onSubmit={submit}><AdminBrand login/><h1>Admin sign in</h1><p>Admin access only</p><div className="auth-method-tabs"><button type="button" className={method==="phone"?"active":""} onClick={()=>switchMethod("phone")}>Phone</button><button type="button" className={method==="email"?"active":""} onClick={()=>switchMethod("email")}>Email</button></div>{method==="phone"?<><input placeholder="+962 7X XXX XXXX" inputMode="tel" value={phone} onChange={e=>setPhone(e.target.value)} disabled={otpSent} required/>{otpSent&&<input placeholder="Verification code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,10))} required/>}</>:<><input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} required/><input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} required/></>}{error&&<div className="error">{error}</div>}<button disabled={busy}>{busy?"Please wait...":method==="phone"?(otpSent?"Verify & sign in":"Send code"):"Sign in"}</button>{method==="phone"&&otpSent&&<button type="button" className="auth-switch" onClick={()=>{setOtpSent(false);setCode("");setError("")}}>Change phone number</button>}</form></div>
+  return <div className="login"><form onSubmit={submit}><AdminBrand login/><h1>Admin sign in</h1><p>Admin access only · email and password</p><input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} required/><input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} required/>{error&&<div className="error">{error}</div>}<button disabled={busy}>{busy?"Please wait...":"Sign in"}</button></form></div>
 }
-export default function App(){
+
+function App(){
   const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[supportRows,setSupportRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   useEffect(()=>{
     const expired=()=>{setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setSupportRows([]);setError("Your session expired. Please sign in again.");};
