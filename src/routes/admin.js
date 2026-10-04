@@ -78,17 +78,25 @@ router.get("/overview",async(req,res,next)=>{
       filters:{from:req.query.from||null,to:req.query.to||null,providerId:providerId||null},
       totals:{...totals,grossSales:roundMoney(totals.grossSales),refunds:roundMoney(totals.refunds),netSales:roundMoney(totals.netSales),seaGoIncome:roundMoney(totals.seaGoIncome),providerNet:roundMoney(totals.providerNet)},
       providers:providersList.map(p=>({id:p._id,businessName:p.businessName,status:p.status})),
-      breakdown:rows.map(r=>({
-        providerId:r._id,
-        providerName:r.providerName,
-        bookings:Number(r.bookings||0),
-        guests:Number(r.guests||0),
-        grossSales:roundMoney(r.grossSales),
-        refunds:roundMoney(r.refunds),
-        netSales:roundMoney(r.netSales),
-        seaGoIncome:roundMoney(r.seaGoIncome),
-        providerNet:roundMoney(r.providerNet)
-      }))
+      breakdown:(()=>{
+        const byId=new Map(rows.map(r=>[String(r._id),r]));
+        const visible=providerId?providersList.filter(p=>String(p._id)===providerId):providersList;
+        return visible.map(p=>{
+          const r=byId.get(String(p._id))||{};
+          return{
+            providerId:p._id,
+            providerName:p.businessName,
+            providerStatus:p.status,
+            bookings:Number(r.bookings||0),
+            guests:Number(r.guests||0),
+            grossSales:roundMoney(r.grossSales),
+            refunds:roundMoney(r.refunds),
+            netSales:roundMoney(r.netSales),
+            seaGoIncome:roundMoney(r.seaGoIncome),
+            providerNet:roundMoney(r.providerNet)
+          };
+        }).sort((a,b)=>b.netSales-a.netSales||a.providerName.localeCompare(b.providerName));
+      })()
     });
   }catch(e){next(e);}
 });
