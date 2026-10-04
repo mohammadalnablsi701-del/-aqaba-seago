@@ -138,5 +138,8 @@ export const verifyAccountPhoneOtp=(phone,code,token)=>request("/api/auth/phone/
 export const requestPhoneOtp=(phone,role,mode)=>request("/api/auth/otp/request",{method:"POST",body:JSON.stringify({phone,role,mode})});
 export const verifyPhoneOtp=(data)=>request("/api/auth/otp/verify",{method:"POST",body:JSON.stringify(data)});
 
+export const createSupportRequest=(data,token)=>request("/api/support",{method:"POST",token,body:JSON.stringify(data)});
+export const listMySupportRequests=token=>request("/api/support/mine",{token});
+
 export const googleAuthConfig=()=>request("/api/auth/google/config");
 export const googleSignIn=(credential,role="customer")=>request("/api/auth/google",{method:"POST",body:JSON.stringify({credential,role})});
