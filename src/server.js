@@ -7,6 +7,7 @@ import { cleanupDemoDataOnce } from "./services/demoCleanup.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders, sendTestEmail } from "./services/notifications.js";
 import { runPilotE2EOnce } from "./services/pilotE2E.js";
+import { resetTestDataOnStart } from "./services/testDataReset.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -25,6 +26,9 @@ if(publicLaunch&&(process.env.PAYMENT_PROVIDER||"mock")==="mock"){
 
 await connectDb(process.env.MONGODB_URI);
 await seedDemoData();
+
+const testResetResult=await resetTestDataOnStart();
+if(testResetResult)console.log("TEST DATA RESET COMPLETE",JSON.stringify(testResetResult));
 
 const demoCleanupResult=await cleanupDemoDataOnce();
 if(process.env.CLEANUP_DEMO_ON_START==="true"){
