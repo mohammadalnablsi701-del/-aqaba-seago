@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn
+  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, requestAccountPhoneOtp, verifyAccountPhoneOtp
 } from "./api.js";
 
 const COUNTRY_CODES=[
@@ -836,8 +836,36 @@ function ProfileSubHeader({ eyebrow, title, subtitle, onBack }) {
   </header>;
 }
 
-function PersonalDetailsScreen({ auth, onBack }) {
+function PersonalDetailsScreen({ auth, onAuthenticated, onBack }) {
   const user=auth?.user||{};
+  const [countryCode,setCountryCode]=useState("+962");
+  const [phone,setPhone]=useState("");
+  const [code,setCode]=useState("");
+  const [otpSent,setOtpSent]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState("");
+  const [error,setError]=useState("");
+
+  async function submitPhone(e){
+    e.preventDefault();
+    if(!auth?.token)return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      const full=internationalPhone(phone,countryCode);
+      if(!otpSent){
+        await requestAccountPhoneOtp(full,auth.token);
+        setOtpSent(true);
+        setMessage("Verification code sent by SMS.");
+      }else{
+        const result=await verifyAccountPhoneOtp(full,code,auth.token);
+        onAuthenticated?.(result);
+        setOtpSent(false);setCode("");setPhone("");
+        setMessage("Phone number verified and saved.");
+      }
+    }catch(e){setError(e.message||"Could not update phone number.");}
+    finally{setBusy(false);}
+  }
+
   return <div className="screen standard-screen profile-sub-screen">
     <ProfileSubHeader eyebrow="ACCOUNT" title="Personal details" subtitle="Your SeaGo account information." onBack={onBack}/>
     <section className="profile-detail-card">
@@ -845,6 +873,15 @@ function PersonalDetailsScreen({ auth, onBack }) {
       <div><span className="profile-detail-icon"><Sparkles size={18}/></span><span><small>Email</small><b>{user.email||"Not provided"}</b></span></div>
       <div><span className="profile-detail-icon"><UserRound size={18}/></span><span><small>Phone</small><b>{user.phone||"Not provided"}</b></span></div>
     </section>
+    {auth?.token&&<form className="phone-update-card" onSubmit={submitPhone}>
+      <div><b>{user.phone?"Change phone number":"Add a phone number"}</b><small>We’ll verify it by SMS before saving it to your SeaGo account.</small></div>
+      {!otpSent?<CountryPhoneField code={countryCode} setCode={setCountryCode} value={phone} onChange={e=>setPhone(e.target.value)} required/>:
+        <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,10))} placeholder="Verification code" required/>}
+      {error&&<div className="form-error">{error}</div>}
+      {message&&<div className="form-success">{message}</div>}
+      <button className="primary-button" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:null}{otpSent?"Verify & save":"Send verification code"}</button>
+      {otpSent&&<button type="button" className="auth-switch" onClick={()=>{setOtpSent(false);setCode("");setMessage("");setError("")}}>Use a different number</button>}
+    </form>}
     <div className="profile-sub-note"><CheckCircle2 size={16}/><span>Your booking confirmations and tickets stay linked to this account.</span></div>
   </div>;
 }
@@ -1294,7 +1331,7 @@ export default function App(){
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
       {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>}
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
-      {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onBack={()=>setActive("profile")}/>}
+      {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onAuthenticated={saveAuth} onBack={()=>setActive("profile")}/>}
       {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
       {active==="support"&&<SupportScreen navigate={setActive} onBack={()=>setActive("profile")}/>}
       {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")} navigate={setActive}/>} 
