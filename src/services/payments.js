@@ -288,6 +288,7 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
     payment.lastEventId = event.eventId;
     payment.rawLastEvent = event.raw;
     await payment.save();
+    await recordPaymentEvent({providerName,event,payment});
     return { duplicate: false, payment };
   }
 
@@ -298,10 +299,12 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
     payment.status = "needs_review";
   } else if (event.status === "paid") {
     const confirmed=await confirmPaidHoldAtomic({paymentId:payment._id,event});
+    const finalPayment=confirmed?.payment||payment;
+    await recordPaymentEvent({providerName,event,payment:finalPayment});
     if(confirmed?.bookingId){
       sendBookingConfirmation(confirmed.bookingId).catch(err=>console.error("Booking confirmation notification failed",err));
     }
-    return {duplicate:false,payment:confirmed?.payment||payment};
+    return {duplicate:false,payment:finalPayment};
   } else if (["failed", "cancelled", "expired"].includes(event.status)) {
     await releaseHold(hold, event.status === "expired" ? "expired" : "released");
     payment.status = event.status;
@@ -313,5 +316,6 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   payment.lastEventId = event.eventId;
   payment.rawLastEvent = event.raw;
   await payment.save();
+  await recordPaymentEvent({providerName,event,payment});
   return { duplicate: false, payment };
 }
