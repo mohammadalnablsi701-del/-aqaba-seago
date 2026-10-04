@@ -123,7 +123,7 @@ router.get("/me/departures",requireAuth,requireRole("provider"),async(req,res,ne
     const rows=await Departure.find(query).populate("tripId","titleEn titleAr category").sort({startsAt:1}).limit(200);
     res.json(rows.map(d=>({
       id:d._id,tripId:d.tripId,startsAt:d.startsAt,capacity:d.capacity,reservedSeats:d.reservedSeats,
-      availableSeats:Math.max(0,d.capacity-d.reservedSeats),status:d.status
+      availableSeats:Math.max(0,d.capacity-d.reservedSeats),status:d.status,salesClosed:Boolean(d.salesClosed)
     })));
   }catch(e){next(e);}
 });
