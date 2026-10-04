@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, requestAccountPhoneOtp, verifyAccountPhoneOtp
+  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, requestAccountPhoneOtp, verifyAccountPhoneOtp, createSupportRequest
 } from "./api.js";
 
 const COUNTRY_CODES=[
@@ -900,17 +900,52 @@ function TripPreferencesScreen({ favourites, navigate, onBack }) {
   </div>;
 }
 
-function SupportScreen({ navigate, onBack }) {
+function SupportScreen({ auth, navigate, onBack }) {
+  const [subject,setSubject]=useState("Booking support");
+  const [message,setMessage]=useState("");
+  const [bookingId,setBookingId]=useState("");
+  const [tickets,setTickets]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const [status,setStatus]=useState("");
+  const [error,setError]=useState("");
+
+  useEffect(()=>{
+    let ignore=false;
+    if(!auth?.token||!hasApi())return;
+    listBookings(auth.token).then(rows=>{if(!ignore)setTickets(Array.isArray(rows)?rows:[])}).catch(()=>{});
+    return()=>{ignore=true;};
+  },[auth?.token]);
+
+  async function submit(e){
+    e.preventDefault();
+    if(!auth?.token)return setError("Sign in first to contact SeaGo support.");
+    setBusy(true);setError("");setStatus("");
+    try{
+      const result=await createSupportRequest({subject,message,bookingId:bookingId||undefined},auth.token);
+      setMessage("");
+      setStatus(`Support request sent${result.bookingReference?" · "+result.bookingReference:""}.`);
+    }catch(e){setError(e.message||"Could not send support request.");}
+    finally{setBusy(false);}
+  }
+
   return <div className="screen standard-screen profile-sub-screen">
-    <ProfileSubHeader eyebrow="HELP & SUPPORT" title="How can we help?" subtitle="Quick answers for your SeaGo trip." onBack={onBack}/>
+    <ProfileSubHeader eyebrow="HELP & SUPPORT" title="How can we help?" subtitle="Send a tracked support request to SeaGo." onBack={onBack}/>
     <section className="support-highlight">
-      <Ticket size={24}/><div><h2>Need help with a booking?</h2><p>Open My Tickets first — your booking reference, operator and departure point are all there.</p></div>
+      <Ticket size={24}/><div><h2>Need help with a booking?</h2><p>Choose the booking below so SeaGo receives the correct reference automatically.</p></div>
       <button onClick={()=>navigate("tickets")}>My tickets <ChevronRight size={16}/></button>
     </section>
+    {auth?.token?<form className="support-request-card" onSubmit={submit}>
+      <label><span>Booking</span><select value={bookingId} onChange={e=>setBookingId(e.target.value)}><option value="">General support</option>{tickets.map(b=><option key={b._id} value={b._id}>SG-{String(b._id).slice(-8).toUpperCase()} · {b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"}</option>)}</select></label>
+      <label><span>Subject</span><input value={subject} onChange={e=>setSubject(e.target.value)} maxLength={120} required/></label>
+      <label><span>Message</span><textarea value={message} onChange={e=>setMessage(e.target.value)} maxLength={2000} rows={5} placeholder="Tell us what you need help with…" required/></label>
+      {error&&<div className="form-error">{error}</div>}
+      {status&&<div className="form-success">{status}</div>}
+      <button className="primary-button" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:null}Send support request</button>
+    </form>:<div className="support-signin-note">Sign in to send a tracked support request.</div>}
     <div className="support-faq">
       <details><summary>Where is my departure point?</summary><p>Open your ticket to see the departure location and the Google Maps shortcut when provided by the operator.</p></details>
       <details><summary>When do I receive my QR ticket?</summary><p>Your QR ticket becomes available after successful payment and confirmed booking creation.</p></details>
-      <details><summary>What if I need to cancel?</summary><p>Contact SeaGo support with the booking reference shown on your ticket to request a cancellation. Refund eligibility depends on the cancellation policy.</p></details>
+      <details><summary>What if I need to cancel?</summary><p>Send a support request linked to the booking. Refund eligibility depends on the cancellation policy.</p></details>
     </div>
   </div>;
 }
@@ -1333,7 +1368,7 @@ export default function App(){
       {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
       {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onAuthenticated={saveAuth} onBack={()=>setActive("profile")}/>}
       {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
-      {active==="support"&&<SupportScreen navigate={setActive} onBack={()=>setActive("profile")}/>}
+      {active==="support"&&<SupportScreen auth={auth} navigate={setActive} onBack={()=>setActive("profile")}/>}
       {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")} navigate={setActive}/>} 
       {active==="privacy"&&<PrivacyScreen onBack={()=>setActive("policies")}/>} 
       {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>}
