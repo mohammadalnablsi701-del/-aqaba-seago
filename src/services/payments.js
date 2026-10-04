@@ -6,6 +6,7 @@ import CheckoutHold from "../models/CheckoutHold.js";
 import Departure from "../models/Departure.js";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
+import User from "../models/User.js";
 import { getPaymentProvider } from "../payments/index.js";
 import { sendBookingConfirmation } from "./notifications.js";
 
@@ -81,11 +82,25 @@ async function confirmPaidHoldAtomic({paymentId,event}){
         return;
       }
 
+      const customer=await User.findById(hold.customerId).session(session).select("name phone phoneNormalized");
+      if(!customer||!(customer.phoneNormalized||customer.phone)){
+        payment.status="needs_review";
+        payment.lastEventId=event.eventId;
+        payment.rawLastEvent=event.raw;
+        await payment.save({session});
+        result={payment,bookingId:null};
+        return;
+      }
+
       const idempotencyKey=`payment:${payment._id}`;
       const booking=await Booking.findOneAndUpdate(
         {customerId:hold.customerId,idempotencyKey},
         {$setOnInsert:{
           customerId:hold.customerId,
+          customerSnapshot:{
+            name:String(customer.name||"").trim(),
+            phone:String(customer.phoneNormalized||customer.phone||"").trim()
+          },
           providerId:hold.providerId,
           tripId:hold.tripId,
           departureId:hold.departureId,
