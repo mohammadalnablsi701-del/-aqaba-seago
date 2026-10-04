@@ -1,7 +1,7 @@
 import express from "express";
 import PushSubscription from "../models/PushSubscription.js";
 import { requireAuth } from "../middleware/auth.js";
-import { getVapidPublicKey, sendPushToUser } from "../services/push.js";
+import { getVapidPublicKey, isAllowedPushEndpoint, sendPushToUser } from "../services/push.js";
 
 const router=express.Router();
 
@@ -15,6 +15,7 @@ router.post("/subscribe",requireAuth,async(req,res,next)=>{
   try{
     const s=req.body?.subscription;
     if(!s?.endpoint||!s?.keys?.p256dh||!s?.keys?.auth)return res.status(400).json({error:"Invalid push subscription"});
+    if(!isAllowedPushEndpoint(s.endpoint))return res.status(400).json({error:"Unsupported push service endpoint"});
     const row=await PushSubscription.findOneAndUpdate(
       {endpoint:String(s.endpoint)},
       {$set:{userId:req.user._id,endpoint:String(s.endpoint),keys:{p256dh:String(s.keys.p256dh),auth:String(s.keys.auth)},userAgent:String(req.get("user-agent")||"").slice(0,500),lastUsedAt:new Date()}},
