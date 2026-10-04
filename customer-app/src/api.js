@@ -14,6 +14,10 @@ async function request(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if(response.status===401&&options.token){
+      localStorage.removeItem("seago_auth");
+      window.dispatchEvent(new CustomEvent("seago:session-expired"));
+    }
     const error = new Error(payload.error || `Request failed: ${response.status}`);
     error.status = response.status;
     throw error;
