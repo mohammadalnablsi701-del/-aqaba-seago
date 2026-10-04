@@ -69,7 +69,7 @@ async function confirmPaidHoldAtomic({paymentId,event}){
         return;
       }
 
-      const departure=await Departure.findOne({_id:hold.departureId,status:"scheduled",startsAt:{$gt:now}}).session(session).select("_id");
+      const departure=await Departure.findOne({_id:hold.departureId,status:"scheduled",salesClosed:{$ne:true},startsAt:{$gt:now}}).session(session).select("_id");
       const trip=await Trip.findOne({_id:hold.tripId,active:true}).session(session).select("_id providerId");
       const provider=trip?await Provider.findOne({_id:trip.providerId,status:"approved"}).session(session).select("_id"):null;
       if(!departure||!trip||!provider){
@@ -210,6 +210,7 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
     Departure.findOne({
       _id: hold.departureId,
       status: "scheduled",
+      salesClosed: { $ne: true },
       startsAt: { $gt: new Date() }
     }).select("_id"),
     holdInventoryIsSellable(hold)
