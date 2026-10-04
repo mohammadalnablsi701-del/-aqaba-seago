@@ -99,7 +99,12 @@ router.get("/", async (req, res, next) => {
       tripId: { $in: activeTripIds }
     };
 
-    if (req.query.tripId) query.tripId = req.query.tripId;
+    if (req.query.tripId) {
+      const requestedTripId=String(req.query.tripId);
+      const allowed=activeTripIds.some(id=>String(id)===requestedTripId);
+      if(!allowed)return res.json([]);
+      query.tripId=req.query.tripId;
+    }
 
     const departures = await Departure.find(query)
       .sort({ startsAt: 1 })
@@ -129,6 +134,8 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
     if(!provider)return res.status(403).json({error:"Departure management permission required"});
     const departure=await Departure.findById(req.params.departureId);
     if(!departure)return res.status(404).json({error:"Departure not found"});
+    const originalReservedSeats=Number(departure.reservedSeats||0);
+    const originalStatus=departure.status;
     const trip=await Trip.findOne({_id:departure.tripId,providerId:provider._id});
     if(!trip)return res.status(403).json({error:"Forbidden"});
     if(req.body.capacity!==undefined){
@@ -166,9 +173,19 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       }
       departure.status=nextStatus;
     }
-    await departure.save();
-    await auditProviderAction({access,user:req.user,action:"departure.update",targetType:"departure",targetId:departure._id,summary:"Updated departure for "+trip.titleEn,metadata:{startsAt:departure.startsAt,capacity:departure.capacity,status:departure.status}});
-    res.json(departure);
+    const updateSet={
+      capacity:departure.capacity,
+      startsAt:departure.startsAt,
+      status:departure.status
+    };
+    const updated=await Departure.findOneAndUpdate(
+      {_id:departure._id,reservedSeats:originalReservedSeats,status:originalStatus},
+      {$set:updateSet},
+      {new:true}
+    );
+    if(!updated)return res.status(409).json({error:"Departure changed while you were editing it. Reload and try again."});
+    await auditProviderAction({access,user:req.user,action:"departure.update",targetType:"departure",targetId:updated._id,summary:"Updated departure for "+trip.titleEn,metadata:{startsAt:updated.startsAt,capacity:updated.capacity,status:updated.status}});
+    res.json(updated);
   }catch(e){next(e);}
 });
 
