@@ -739,6 +739,28 @@ function TicketsScreen({ auth, onAuthenticated }) {
     return()=>{ignore=true;};
   },[auth?.token,revision]);
 
+  useEffect(()=>{
+    if(!hasApi()||!auth?.token)return;
+    let stopped=false;
+    async function refreshSilently(){
+      if(document.visibilityState==="hidden")return;
+      try{
+        const rows=await listBookings(auth.token);
+        if(!stopped)setTickets(Array.isArray(rows)?rows:[]);
+      }catch{}
+    }
+    const timer=window.setInterval(refreshSilently,5000);
+    const onFocus=()=>refreshSilently();
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",onFocus);
+    return()=>{
+      stopped=true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus",onFocus);
+      document.removeEventListener("visibilitychange",onFocus);
+    };
+  },[auth?.token]);
+
   if(hasApi()&&!auth?.token){
     return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="tickets-auth-copy"><Ticket size={38}/><h2>Sign in to view your tickets</h2><p>Your SeaGo bookings stay linked to your account.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
   }
@@ -760,12 +782,14 @@ function TicketsScreen({ auth, onAuthenticated }) {
     const departureLocation=trip.departureLocation||{};
     const departureMapsUrl=departureLocation.googleMapsUrl || (departureLocation.address||departureLocation.name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(departureLocation.address||departureLocation.name)}` : "");
     const ref=String(b._id||"").slice(-8).toUpperCase();
-    const statusLabels={pending_payment:"Awaiting payment",confirmed:"Confirmed",cancelled:"Cancelled",expired:"Expired",refunded:"Refunded"};
-    const status=statusLabels[b.status]||String(b.status||"").replaceAll("_"," ");
+    const used=Boolean(b.checkedInAt);
+    const visualStatus=used?"used":b.status;
+    const statusLabels={pending_payment:"Awaiting payment",confirmed:"Confirmed",used:"USED",cancelled:"Cancelled",expired:"Expired",refunded:"Refunded"};
+    const status=statusLabels[visualStatus]||String(visualStatus||"").replaceAll("_"," ");
     const qrValue=b.ticketToken ? `SG2:${b.ticketToken}` : (b.ticketValidationUrl || `AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`);
-    return <article className={`ticket-card ticket-card--${b.status}`} key={b._id}>
-      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}</div><span className={`ticket-status ticket-status--${b.status}`}>{status}</span></div>
-      {b.status==="confirmed"&&<div className="ticket-ready-banner"><CheckCircle2 size={16}/><span><b>Ready for check-in</b><small>Keep this ticket open when you arrive</small></span></div>}
+    return <article className={`ticket-card ticket-card--${visualStatus}`} key={b._id}>
+      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}</div><span className={`ticket-status ticket-status--${visualStatus}`}>{status}</span></div>
+      {used?<div className="ticket-used-banner"><CheckCircle2 size={16}/><span><b>Ticket used</b><small>Checked in successfully{b.checkedInAt?" · "+new Date(b.checkedInAt).toLocaleString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"}):""}</small></span></div>:b.status==="confirmed"&&<div className="ticket-ready-banner"><CheckCircle2 size={16}/><span><b>Ready for check-in</b><small>Keep this ticket open when you arrive</small></span></div>}
       <div className="ticket-card__details">
         <div style={{minWidth:0}}><small>Customer name</small><strong dir="auto" style={{overflowWrap:"anywhere"}}>{b.customer?.name || auth?.user?.name || "Not provided"}</strong></div>
         <div style={{minWidth:0}}><small>Phone number</small><strong dir="ltr" style={{overflowWrap:"anywhere"}}>{b.customer?.phone || auth?.user?.phoneNormalized || auth?.user?.phone || "Not provided"}</strong></div>
@@ -774,7 +798,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
         <div><small>Persons</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
-      <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong>{b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={108} level="L" includeMargin={true}/><small>Show at check-in</small></div>:<div className="ticket-pending"><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></div>}</div>
+      <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong>{!used&&b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{!used&&b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={108} level="L" includeMargin={true}/><small>Show at check-in</small></div>:<div className={used?"ticket-used-stamp":"ticket-pending"}>{used?<><CheckCircle2 size={28}/><span>USED</span></>:<><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></>}</div>}</div>
     {b.cancellation?.cancelledAt&&<div className={"ticket-cancellation ticket-cancellation--"+(b.cancellation.refundStatus||"none")}>
       <b>{b.status==="refunded"||b.cancellation.refundStatus==="processed"?"Refund completed":"Booking cancelled"}</b>
       <span>{b.cancellation.refundPercentage||0}% refund · {Number(b.cancellation.refundAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</span>
