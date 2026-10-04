@@ -71,6 +71,10 @@ jobs:
           mkdir -p customer-app/dist/admin
           cp -R admin-app/dist/* customer-app/dist/admin/
 
+      - name: Write deployment version
+        run: |
+          printf '{"commit":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -u +%FT%TZ)" > customer-app/dist/version.json
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
