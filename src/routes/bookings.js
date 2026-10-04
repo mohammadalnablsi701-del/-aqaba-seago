@@ -20,7 +20,7 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
       const ticketToken = signTicketToken(row);
       return {
         ...obj,
-        customer: { name: req.user.name || "", phone: req.user.phoneNormalized || req.user.phone || "" },
+        customer: { name: obj.customerSnapshot?.name || req.user.name || "", phone: obj.customerSnapshot?.phone || req.user.phoneNormalized || req.user.phone || "" },
         ticketToken,
         ticketValidationUrl: `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(ticketToken)}`
       };
