@@ -257,12 +257,28 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
     externalPaymentId: event.externalPaymentId
   });
   if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
+  if(await PaymentEvent.exists({provider:providerName,eventId:event.eventId}))return {duplicate:true,payment};
   if (payment.lastEventId === event.eventId) return { duplicate: true, payment };
 
   if(isSuccessfulTerminalPaymentStatus(payment.status)&&event.status!=="paid"){
     payment.lastEventId=event.eventId;
     payment.rawLastEvent=event.raw;
     await payment.save();
+    await recordPaymentEvent({providerName,event,payment});
+    return {duplicate:false,payment};
+  }
+  if(FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)&&event.status!=="paid"){
+    payment.lastEventId=event.eventId;
+    payment.rawLastEvent=event.raw;
+    await payment.save();
+    await recordPaymentEvent({providerName,event,payment});
+    return {duplicate:false,payment};
+  }
+  if(payment.status==="needs_review"){
+    payment.lastEventId=event.eventId;
+    payment.rawLastEvent=event.raw;
+    await payment.save();
+    await recordPaymentEvent({providerName,event,payment});
     return {duplicate:false,payment};
   }
 
