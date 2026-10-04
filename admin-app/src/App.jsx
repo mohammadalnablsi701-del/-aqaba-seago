@@ -1,10 +1,20 @@
 import React,{useEffect,useState}from"react";
 import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell,LifeBuoy,LayoutDashboard,Mail,ReceiptText}from"lucide-react";
-import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
+import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,overview,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function AdminBrand({login=false}){return <div className={"admin-brand"+(login?" admin-brand-login":"")}><svg className="admin-brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#D8DEE6" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="10.5"/>{[0,45,90,135,180,225,270,315].map(a=><line key={a} x1="32" y1="5.5" x2="32" y2="14" transform={`rotate(${a} 32 32)`}/>)}<path d="M25 33c3-4 6 3 9 2 2-.5 3.5-2 5-3"/></g></svg><div className="admin-brand-copy"><b>SeaGo</b><span>AQABA · ADMIN</span></div></div>}
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
+function ymd(date=new Date()){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");return `${y}-${m}-${d}`}
+function rangeForPreset(preset){
+  const today=new Date();
+  if(preset==="all")return{from:"",to:""};
+  if(preset==="today")return{from:ymd(today),to:ymd(today)};
+  if(preset==="month")return{from:ymd(new Date(today.getFullYear(),today.getMonth(),1)),to:ymd(today)};
+  const days=preset==="7d"?7:30;
+  const from=new Date(today);from.setDate(today.getDate()-(days-1));
+  return{from:ymd(from),to:ymd(today)};
+}
 
 function Login({onDone}) {
   const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[error,setError]=useState("");const[busy,setBusy]=useState(false);
@@ -17,7 +27,7 @@ function Login({onDone}) {
 }
 
 export default function App(){
-  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[supportRows,setSupportRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[supportRows,setSupportRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");const[overviewData,setOverviewData]=useState(null);const[overviewLoading,setOverviewLoading]=useState(false);const[overviewError,setOverviewError]=useState("");const[overviewPreset,setOverviewPreset]=useState("month");const[overviewProvider,setOverviewProvider]=useState("");const initialRange=rangeForPreset("month");const[overviewFrom,setOverviewFrom]=useState(initialRange.from);const[overviewTo,setOverviewTo]=useState(initialRange.to);const[overviewRefresh,setOverviewRefresh]=useState(0);
   useEffect(()=>{
     const expired=()=>{setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setSupportRows([]);setError("Your session expired. Please sign in again.");};
     window.addEventListener("seago:session-expired",expired);
@@ -25,6 +35,21 @@ export default function App(){
   },[]);
   async function load(){if(!auth?.token)return;setLoading(true);setError("");try{const[p,t,r,n,s,rd,dp]=await Promise.all([providers(auth.token),trips(auth.token),refunds(auth.token),notifications(auth.token),supportRequests(auth.token),readiness(auth.token),demoCleanupPreview(auth.token)]);setProviderRows(p);setRows(t);setRefundRows(r);setNotificationRows(n);setSupportRows(s);setReady(rd);setDemoPreview(dp)}catch(e){setError(e.message)}finally{setLoading(false)}}
   useEffect(()=>{load()},[auth?.token]);
+  useEffect(()=>{
+    let ignore=false;
+    if(!auth?.token)return;
+    setOverviewLoading(true);setOverviewError("");
+    overview(auth.token,{from:overviewFrom,to:overviewTo,providerId:overviewProvider})
+      .then(r=>{if(!ignore)setOverviewData(r)})
+      .catch(e=>{if(!ignore)setOverviewError(e.message||"Could not load overview")})
+      .finally(()=>{if(!ignore)setOverviewLoading(false)});
+    return()=>{ignore=true};
+  },[auth?.token,overviewFrom,overviewTo,overviewProvider,overviewRefresh]);
+  function applyOverviewPreset(preset){
+    setOverviewPreset(preset);
+    const next=rangeForPreset(preset);
+    setOverviewFrom(next.from);setOverviewTo(next.to);
+  }
   async function runDemoCleanup(){
     if(!demoPreview?.provider?.id&& !demoPreview?.provider?._id){setCleanupMsg("No demo provider found.");return;}
     setCleanupBusy(true);setCleanupMsg("");
@@ -43,7 +68,7 @@ export default function App(){
   const emailFiltered=notificationRows.filter(n=>(emailStatus==="all"||n.status===emailStatus)&&(emailType==="all"||n.type===emailType));
   const emailFailureSamples=notificationRows.filter(n=>n.status==="failed"&&n.error).slice(0,3);
   function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setSupportRows([]);}
-  return <div className="app"><header><AdminBrand/><div className="admin-head-actions"><button onClick={load} disabled={loading}><RefreshCw className={loading?"spin":""} size={16}/> {loading?"Refreshing":"Refresh"}</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
+  return <div className="app"><header><AdminBrand/><div className="admin-head-actions"><button onClick={()=>{load();setOverviewRefresh(v=>v+1)}} disabled={loading}><RefreshCw className={loading?"spin":""} size={16}/> {loading?"Refreshing":"Refresh"}</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
     <aside className="admin-tabs" aria-label="Admin navigation">
       <div className="admin-tabs__label">Workspace</div>
       <button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}><LayoutDashboard size={17}/><span>Overview</span></button>
@@ -56,18 +81,45 @@ export default function App(){
     <section className="admin-content">
     {error&&<div className="error">{error}</div>}
     {loading?<div className="admin-loading"><RefreshCw className="spin" size={18}/> Loading dashboard...</div>:tab==="readiness"?<>
-      <div className="title"><ShipWheel/><div><small>OVERVIEW</small><h1>SeaGo operations</h1><p>Live business health, pilot status and upcoming activity in one place.</p></div></div>
-      {ready&&<section className="ops-overview"><div className="ops-overview-head"><div><small>OPERATIONS OVERVIEW</small><h2>All-time confirmed activity</h2><p className="ops-generated">Updated {ready.generatedAt?new Date(ready.generatedAt).toLocaleString():"just now"}</p></div><span>{ready.operations?.currency||"JOD"}</span></div><div className="ops-metrics"><div><small>Confirmed bookings</small><b>{ready.counts?.confirmedBookings||0}</b></div><div><small>Confirmed sales</small><b>{Number(ready.operations?.grossSales||0).toFixed(2)}</b></div><div><small>SeaGo commission</small><b>{Number(ready.operations?.seaGoCommission||0).toFixed(2)}</b></div><div><small>Provider net</small><b>{Number(ready.operations?.providerNet||0).toFixed(2)}</b></div></div><div className="ops-upcoming"><div className="ops-section-title"><b>Next departures</b><span>{ready.operations?.confirmedSeats||0} confirmed seats</span></div>{ready.operations?.upcoming?.length?ready.operations.upcoming.map(d=><div className="ops-departure" key={d.id}><div><b>{d.tripTitle}</b><span>{d.providerName}</span></div><div><strong>{new Date(d.startsAt).toLocaleString([],{dateStyle:"medium",timeStyle:"short"})}</strong><small>{d.reservedSeats||0}/{d.capacity} booked · {d.availableSeats} left</small></div></div>):<p className="ops-empty">No upcoming departures yet.</p>}</div></section>}
-{ready&&<div className={"controlled-pilot-card "+(ready.controlledPilotReady?"ready":"blocked")}><div><small>CONTROLLED PILOT</small><h2>{ready.controlledPilotReady?"Ready for first real test":"Not ready yet"}</h2><p>{ready.controlledPilotReady?"Use one approved provider and one real customer. Payment remains test-only and no real money is charged.":"Complete the required readiness checks below before inviting a real customer."}</p></div><div className="controlled-pilot-actions"><a href="../provider/" target="_blank" rel="noreferrer">Open Provider App</a><a href="../" target="_blank" rel="noreferrer">Open Customer App</a></div>{ready.environment?.mockCheckout&&<em>Test payment mode · no real charge</em>}</div>}
-{ready&&<div className="readiness-grid">
-        <div className={"pilot-status "+(ready.pilotReady?"ready":"blocked")}><div><b>{ready.pilotReady?"Pilot ready":"Pilot blocked"}</b><span>{ready.pilotReady?"All required pilot checks passed. Deferred items can be completed later.":`${ready.blockers?.length||0} required check${(ready.blockers?.length||0)===1?"":"s"} still need attention.`}</span></div><em>{ready.deferredChecks?.length||0} deferred</em></div>
-        {!ready.pilotReady&&ready.blockers?.length>0&&<div className="pilot-blockers"><b>Before pilot</b>{ready.blockers.map(x=><span key={x.id}>{x.label}</span>)}</div>}
-        <div className="readiness-summary"><div><b>{ready.counts.providersApproved}</b><span>Approved providers</span></div><div><b>{ready.counts.activeTrips}</b><span>Active trips</span></div><div><b>{ready.counts.upcomingDepartures}</b><span>Upcoming departures</span></div><div><b>{ready.counts.confirmedBookings}</b><span>Confirmed bookings</span></div></div>
-        <div className="readiness-checks">{ready.checks.map(x=><div key={x.id} className={"readiness-check "+(x.ok?"ok":x.deferred?"deferred":"bad")}>{x.ok?<CheckCircle2 size={18}/>:<XCircle size={18}/>}<span><b>{x.label}</b>{x.deferred&&!x.ok&&<small>Deferred for now</small>}</span></div>)}</div>
-        <div className="readiness-env"><b>Environment</b><span>Public launch: {String(ready.environment.publicLaunch)}</span><span>Demo seed: {String(ready.environment.seedDemoData)}</span><span>Mock checkout: {String(ready.environment.mockCheckout)}</span><span>Payment provider: {ready.environment.paymentProvider}</span></div>
-        <div className="demo-preview"><b>Demo cleanup</b><p>The preview below is read-only until you type the exact confirmation phrase.</p><span>Demo provider: {demoPreview?.provider?"Found":"Not found"}</span><span>Demo trips: {demoPreview?.trips?.length||0}</span><span>Demo active trips: {ready?.demo?.activeTripCount||0}</span><span>Demo departures: {demoPreview?.departureCount||0}</span><span>Demo users: {demoPreview?.users?.length||0}</span><span>Bookings linked to demo: {demoPreview?.bookingCount||0}</span><span>Checkout holds linked to demo: {demoPreview?.holdCount||0}</span>{demoPreview?.provider&&<div className="demo-cleanup-control"><small>{demoPreview?.safeToDelete?"Safe to delete demo provider data":(ready?.demo?.activeTripCount||0)===0?"Demo history is preserved and all demo trips are inactive. It no longer blocks the pilot.":"Cleanup is blocked because demo booking/hold history exists. Retire demo inventory instead of deleting history."}</small><input value={cleanupText} onChange={e=>setCleanupText(e.target.value)} placeholder="Type DELETE DEMO DATA"/><button disabled={!demoPreview?.safeToDelete||cleanupText!=="DELETE DEMO DATA"||cleanupBusy} onClick={runDemoCleanup}>{cleanupBusy?"Deleting demo data...":"Delete demo data"}</button>{cleanupMsg&&<em>{cleanupMsg}</em>}</div>}</div>
-      </div>}
-    </>:tab==="providers"?<>
+      <div className="title"><LayoutDashboard/><div><small>OVERVIEW</small><h1>Revenue & bookings</h1><p>Financial performance across all providers, with date and company filters.</p></div></div>
+
+      <section className="overview-filter-card">
+        <div className="overview-presets">
+          {[
+            ["today","Today"],["7d","7 days"],["30d","30 days"],["month","This month"],["all","All time"]
+          ].map(([id,label])=><button key={id} className={overviewPreset===id?"active":""} onClick={()=>applyOverviewPreset(id)}>{label}</button>)}
+        </div>
+        <div className="overview-filter-grid">
+          <label><span>Company</span><select value={overviewProvider} onChange={e=>setOverviewProvider(e.target.value)}><option value="">All companies</option>{(overviewData?.providers||providerRows).map(p=><option key={p.id||p._id} value={p.id||p._id}>{p.businessName}</option>)}</select></label>
+          <label><span>From</span><input type="date" value={overviewFrom} onChange={e=>{setOverviewPreset("custom");setOverviewFrom(e.target.value)}}/></label>
+          <label><span>To</span><input type="date" value={overviewTo} onChange={e=>{setOverviewPreset("custom");setOverviewTo(e.target.value)}}/></label>
+        </div>
+      </section>
+
+      {overviewError&&<div className="error">{overviewError}</div>}
+      {overviewLoading&&!overviewData?<div className="admin-loading"><RefreshCw className="spin" size={18}/> Loading financial overview...</div>:<>
+        <section className="overview-kpis">
+          <div className="overview-kpi overview-kpi--primary"><small>SeaGo income</small><b>{Number(overviewData?.totals?.seaGoIncome||0).toFixed(2)} <em>{overviewData?.currency||"JOD"}</em></b><span>After refunds</span></div>
+          <div className="overview-kpi"><small>Bookings</small><b>{overviewData?.totals?.bookings||0}</b><span>Paid bookings</span></div>
+          <div className="overview-kpi"><small>Guests</small><b>{overviewData?.totals?.guests||0}</b><span>Booked seats</span></div>
+          <div className="overview-kpi"><small>Gross sales</small><b>{Number(overviewData?.totals?.grossSales||0).toFixed(2)} <em>{overviewData?.currency||"JOD"}</em></b><span>Before refunds</span></div>
+          <div className="overview-kpi"><small>Refunds</small><b>{Number(overviewData?.totals?.refunds||0).toFixed(2)} <em>{overviewData?.currency||"JOD"}</em></b><span>Returned to customers</span></div>
+          <div className="overview-kpi"><small>Net sales</small><b>{Number(overviewData?.totals?.netSales||0).toFixed(2)} <em>{overviewData?.currency||"JOD"}</em></b><span>Gross minus refunds</span></div>
+          <div className="overview-kpi"><small>Provider net</small><b>{Number(overviewData?.totals?.providerNet||0).toFixed(2)} <em>{overviewData?.currency||"JOD"}</em></b><span>After refunds</span></div>
+        </section>
+
+        <section className="provider-breakdown-card">
+          <div className="provider-breakdown-head"><div><small>COMPANY BREAKDOWN</small><h2>{overviewProvider?"Selected company":"All companies"}</h2></div><span>{overviewFrom&&overviewTo?`${overviewFrom} → ${overviewTo}`:"All time"}</span></div>
+          <div className="provider-breakdown-table">
+            <div className="provider-breakdown-row provider-breakdown-row--head"><span>Company</span><span>Bookings</span><span>Guests</span><span>Gross</span><span>Refunds</span><span>SeaGo</span><span>Provider net</span></div>
+            {(overviewData?.breakdown||[]).length?(overviewData.breakdown.map(r=><div className="provider-breakdown-row" key={r.providerId}>
+              <span className="provider-breakdown-name"><b>{r.providerName}</b><small>{r.providerStatus||""}</small></span>
+              <span>{r.bookings}</span><span>{r.guests}</span><span>{Number(r.grossSales||0).toFixed(2)}</span><span>{Number(r.refunds||0).toFixed(2)}</span><span className="provider-breakdown-income">{Number(r.seaGoIncome||0).toFixed(2)}</span><span>{Number(r.providerNet||0).toFixed(2)}</span>
+            </div>)):<div className="admin-empty"><LayoutDashboard size={28}/><b>No activity in this period</b><span>Try another date range or company.</span></div>}
+          </div>
+        </section>
+      </>}
+    </>    </>:tab==="providers"?<>
       <div className="title"><UsersRound/><div><small>PROVIDERS</small><h1>Provider applications</h1><p>Review new SeaGo partners and approve them before they can publish trips.</p></div></div>
       <div className="provider-admin-list">{providerRows.length?providerRows.map(p=><ProviderAdminRow key={p._id} p={p} token={auth.token} onSaved={load}/>):<div className="admin-empty"><UsersRound size={28}/><b>No providers yet</b><span>New provider applications will appear here.</span></div>}</div>
     </>:tab==="commissions"?<>
