@@ -545,6 +545,8 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const [loading,setLoading]=useState(Boolean(trip.apiId && hasApi()));
   const [error,setError]=useState("");
   const [success,setSuccess]=useState(null);
+  const [submitting,setSubmitting]=useState(false);
+  const checkoutAttempt=useRef({fingerprint:"",key:""});
   const [holdNow,setHoldNow]=useState(Date.now());
   const live = Boolean(trip.apiId && hasApi());
 
@@ -585,6 +587,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   useEffect(()=>{
     let ignore=false;
     if(!live || !selected) { setQuote(null); return; }
+    setQuote(null);
     getQuote(selected.id,adults,children,mealPlan)
       .then(q=>{if(!ignore){setQuote(q);setError("");}})
       .catch(err=>{if(!ignore){setQuote(null);setError(err.message);}});
@@ -599,6 +602,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   },[success?.expiresAt]);
 
   async function confirm() {
+    if(submitting)return;
     setError("");
     if(!live) {
       setError("Live booking is unavailable for this experience.");
@@ -607,19 +611,35 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     if(!selected) return setError("No available departure selected.");
     if(guests<1) return setError("Add at least one adult or child.");
     if(!auth?.token) return setError("AUTH_REQUIRED");
+    if(!quote)return setError("Please wait for the current price before continuing.");
 
+    const fingerprint=[selected.id,adults,children,mealPlan].join("|");
+    if(checkoutAttempt.current.fingerprint!==fingerprint){
+      checkoutAttempt.current={
+        fingerprint,
+        key:globalThis.crypto?.randomUUID?.()||`checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      };
+    }
+    setSubmitting(true);
     try {
-      const payment=await createPaymentCheckout({departureId:selected.id,adults,children,mealPlan,token:auth.token});
+      const payment=await createPaymentCheckout({
+        departureId:selected.id,adults,children,mealPlan,token:auth.token,
+        idempotencyKey:checkoutAttempt.current.key
+      });
       setSuccess({
         expiresAt:payment.expiresAt,
         paymentId:payment.paymentId,
         paymentProvider:payment.provider,
-        checkoutUrl:payment.checkoutUrl
+        checkoutUrl:payment.checkoutUrl,
+        amount:payment.amount,
+        currency:payment.currency||"JOD"
       });
     } catch(err) {
       if(err.status===409) setError("This departure is no longer available for the selected persons. Please choose another departure or reduce the person count.");
       else if(err.status===401||err.status===403) setError("AUTH_REQUIRED");
       else setError(err.message || "We couldn’t start secure payment. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -640,11 +660,11 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           <div><span>Experience</span><b>{trip.title}</b></div>
           {selected?.startsAt&&<div><span>Departure</span><b>{formatDeparture(selected.startsAt)}</b></div>}
           <div><span>Persons</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
-          <div><span>Total</span><strong>{quote?Number(total).toFixed(2):"—"} JOD</strong></div>
+          <div><span>Total</span><strong>{Number(success.amount??total??0).toFixed(2)} {success.currency||"JOD"}</strong></div>
         </div>
         {success.expiresAt && <div className={"hold-box hold-box--secure "+(holdExpired?"is-expired":"")}><CheckCircle2 size={16}/><span>{holdExpired?<><b>Seat hold expired</b><small>Return to trip details to check availability again.</small></>:<>Seats reserved for <b>{String(holdMinutes).padStart(2,"0")}:{String(holdSeconds).padStart(2,"0")}</b><small>Complete payment before the timer ends.</small></>}</span></div>}
         <div className="payment-safety"><span><CheckCircle2 size={15}/> Booking created only after successful payment</span><span><CheckCircle2 size={15}/> QR ticket available immediately after confirmation</span></div>
-        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?"Hold expired":"Pay securely · "+Number(total).toFixed(2)+" JOD"} {!holdExpired&&<ChevronRight size={18}/>}</button>}
+        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?"Hold expired":"Pay securely · "+Number(success.amount??total??0).toFixed(2)+" "+(success.currency||"JOD")} {!holdExpired&&<ChevronRight size={18}/>}</button>}
         <button className="secondary-button payment-back" onClick={onBack}>{holdExpired?"Check availability again":"Back to trip details"}</button>
       </div>
     );
@@ -689,7 +709,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
           <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quote?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {Number(quote.pricing?.adultUnitPrice||0).toFixed(2)}</span><b>{Number(quote.pricing?.adultSubtotal||0).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {Number(quote.pricing?.childUnitPrice||0).toFixed(2)}</span><b>{Number(quote.pricing?.childSubtotal||0).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</b></div>}{mealPlan==="with_buffet"&&trip.buffetDescription&&<div><span>Buffet</span><b>{trip.buffetDescription}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total||0).toFixed(2)} JOD</strong></div></>:<div className="live-price-loading"><LoaderCircle className="spin" size={16}/><span>{selected?"Fetching current price...":"Choose a departure to see the live price"}</span></div>}</div>
-          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={live && (!selected || !quote)}>Continue to secure payment <ChevronRight size={18}/></button>
+          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quote))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
       )}
