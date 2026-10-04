@@ -8,6 +8,7 @@ import { getPaymentProvider } from "../payments/index.js";
 import { sendBookingConfirmation } from "./notifications.js";
 
 const SUCCESS_TERMINAL_PAYMENT_STATUSES=new Set(["paid","partially_refunded","refunded"]);
+export function isSuccessfulTerminalPaymentStatus(status){return SUCCESS_TERMINAL_PAYMENT_STATUSES.has(String(status||""));}
 
 async function findOrCreateConfirmedBooking(hold,payment){
   const idempotencyKey=`payment:${payment._id}`;
@@ -175,7 +176,7 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
   if (payment.lastEventId === event.eventId) return { duplicate: true, payment };
 
-  if(SUCCESS_TERMINAL_PAYMENT_STATUSES.has(payment.status)&&event.status!=="paid"){
+  if(isSuccessfulTerminalPaymentStatus(payment.status)&&event.status!=="paid"){
     payment.lastEventId=event.eventId;
     payment.rawLastEvent=event.raw;
     await payment.save();
