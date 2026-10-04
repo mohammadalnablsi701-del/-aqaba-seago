@@ -8,6 +8,15 @@ import { verifyTicketToken } from "../services/tickets.js";
 
 const router = express.Router();
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 async function loadTicket(token) {
   const payload = verifyTicketToken(token);
   const booking = await Booking.findById(payload.bookingId)
@@ -54,11 +63,11 @@ body{margin:0;font-family:Arial,sans-serif;background:#eef7fb;color:#14324a;disp
 h1{margin:8px 0 20px}.row{padding:10px 0;border-top:1px solid #edf2f6;display:flex;justify-content:space-between;gap:18px}.row span{color:#7b8a99}.row b{text-align:right}
 </style></head>
 <body><div class="card"><small>AQABA SEAGO · TICKET CHECK</small><h1 class="${stateClass}">${headline}</h1>
-<div class="row"><span>Reference</span><b>${response.bookingReference}</b></div>
-<div class="row"><span>Trip</span><b>${response.trip}</b></div>
-<div class="row"><span>Provider</span><b>${response.provider || "-"}</b></div>
-<div class="row"><span>Guests</span><b>${response.guests}</b></div>
-<div class="row"><span>Status</span><b>${used ? "USED" : response.status.toUpperCase()}</b></div>
+<div class="row"><span>Reference</span><b>${escapeHtml(response.bookingReference)}</b></div>
+<div class="row"><span>Trip</span><b>${escapeHtml(response.trip)}</b></div>
+<div class="row"><span>Provider</span><b>${escapeHtml(response.provider || "-")}</b></div>
+<div class="row"><span>Guests</span><b>${escapeHtml(response.guests)}</b></div>
+<div class="row"><span>Status</span><b>${escapeHtml(used ? "USED" : response.status.toUpperCase())}</b></div>
 </div></body></html>`);
   } catch (err) { next(err); }
 });
