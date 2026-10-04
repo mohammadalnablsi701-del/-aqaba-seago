@@ -1215,6 +1215,18 @@ export default function App(){
   const restoringHistory=useRef(false);
 
   useEffect(()=>{
+    const expired=()=>{
+      setAuth(null);
+      setAlertsUnread(0);
+      setBooking(false);
+      setDetail(null);
+      setActive("profile");
+    };
+    window.addEventListener("seago:session-expired",expired);
+    return()=>window.removeEventListener("seago:session-expired",expired);
+  },[]);
+
+  useEffect(()=>{
     function restore(event){
       const nav=event.state?.seago;
       if(!nav) return;
