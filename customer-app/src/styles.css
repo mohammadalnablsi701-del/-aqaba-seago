@@ -533,27 +533,3 @@
 .ticket-used-banner small{font-size:9px;text-transform:none;letter-spacing:0;color:#64748b}
 .ticket-used-stamp{display:grid;place-items:center;gap:4px;min-width:88px;border:1px dashed #94a3b8;border-radius:14px;padding:12px;color:#475569;background:#f8fafc;font-weight:900;letter-spacing:.08em}
 .ticket-used-stamp span{font-size:11px}
-
-
-/* Language / RTL layer. Keep data-heavy values such as phone, email, QR and money LTR. */
-.side-menu__language{margin-top:14px;width:100%;min-height:50px;border:1px solid var(--line);border-radius:14px;background:#f8fbfd;color:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 13px}
-.side-menu__language span{font-size:11px;color:var(--muted);font-weight:700}
-.side-menu__language b{font-size:13px;color:var(--blue)}
-html[dir="rtl"] body{font-family:Tahoma,Arial,Inter,system-ui,sans-serif}
-html[dir="rtl"] .app-shell{direction:rtl}
-html[dir="rtl"] .side-menu{box-shadow:18px 0 50px rgba(5,34,63,.22)}
-html[dir="rtl"] .side-menu nav button,
-html[dir="rtl"] .search-row,
-html[dir="rtl"] .section-heading,
-html[dir="rtl"] .trip-card__body{text-align:right}
-html[dir="rtl"] .side-menu nav button svg:last-child,
-html[dir="rtl"] .search-row>svg,
-html[dir="rtl"] .section-heading button svg,
-html[dir="rtl"] .trip-card__cta svg{transform:rotate(180deg)}
-html[dir="rtl"] .trip-card__price strong{margin-left:0;margin-right:auto}
-html[dir="rtl"] input[type="email"],
-html[dir="rtl"] input[type="tel"],
-html[dir="rtl"] input[type="date"],
-html[dir="rtl"] .ticket-qr,
-html[dir="rtl"] .ticket-used-stamp{direction:ltr;text-align:left}
-html[dir="rtl"] .brand__word{margin-left:0;margin-right:-2px}
