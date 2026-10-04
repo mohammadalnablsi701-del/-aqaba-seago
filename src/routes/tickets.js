@@ -53,6 +53,8 @@ router.get("/validate", async (req, res, next) => {
 
     const headline = !valid ? (departure.status==="cancelled"?"Departure cancelled":"Ticket not valid") : used ? "Ticket already used" : "Valid SeaGo ticket";
     const stateClass = !valid ? "bad" : used ? "warn" : "ok";
+    res.set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+    res.set("X-Content-Type-Options","nosniff");
     res.type("html").send(`<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Aqaba SeaGo Ticket</title>
