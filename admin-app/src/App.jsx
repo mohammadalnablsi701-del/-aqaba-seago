@@ -119,7 +119,7 @@ export default function App(){
           </div>
         </section>
       </>}
-    </>    </>:tab==="providers"?<>
+    </>:tab==="providers"?<>
       <div className="title"><UsersRound/><div><small>PROVIDERS</small><h1>Provider applications</h1><p>Review new SeaGo partners and approve them before they can publish trips.</p></div></div>
       <div className="provider-admin-list">{providerRows.length?providerRows.map(p=><ProviderAdminRow key={p._id} p={p} token={auth.token} onSaved={load}/>):<div className="admin-empty"><UsersRound size={28}/><b>No providers yet</b><span>New provider applications will appear here.</span></div>}</div>
     </>:tab==="commissions"?<>
