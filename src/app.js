@@ -68,7 +68,12 @@ export function createApp() {
   app.use("/api/auth",authLimiter);
 
   app.get("/health", (_req, res) =>
-    res.json({ ok: true, service: "aqaba-seago-api", version: "0.3.1" })
+    res.json({
+      ok:true,
+      service:"aqaba-seago-api",
+      version:"0.3.1",
+      commit:process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null
+    })
   );
 
   app.use("/api/auth", authRoutes);
