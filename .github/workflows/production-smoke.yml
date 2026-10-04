@@ -67,11 +67,19 @@ jobs:
           for i in {1..24}; do
             api_commit="$(curl -fsS https://aqaba-seago-api.onrender.com/health | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
             page_commit="$(curl -fsS https://mohammadalnablsi701-del.github.io/-aqaba-seago/version.json | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
-            echo "API expected:   $expected_api"
+            echo "API required:   $expected_api"
             echo "API deployed:   $api_commit"
-            echo "Pages expected: $expected_pages"
+            echo "Pages required: $expected_pages"
             echo "Pages deployed: $page_commit"
-            if [ "$api_commit" = "$expected_api" ] && [ "$page_commit" = "$expected_pages" ]; then
+            api_ok=false
+            pages_ok=false
+            if [ -n "$api_commit" ] && git cat-file -e "$api_commit^{commit}" 2>/dev/null && git merge-base --is-ancestor "$expected_api" "$api_commit"; then
+              api_ok=true
+            fi
+            if [ -n "$page_commit" ] && git cat-file -e "$page_commit^{commit}" 2>/dev/null && git merge-base --is-ancestor "$expected_pages" "$page_commit"; then
+              pages_ok=true
+            fi
+            if [ "$api_ok" = true ] && [ "$pages_ok" = true ]; then
               exit 0
             fi
             sleep 10
