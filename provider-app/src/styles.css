@@ -345,3 +345,7 @@ nav{
   .trip-card-actions{grid-template-columns:1fr 1fr}
   .trip-card-actions .duplicate-action{grid-column:1/-1;justify-self:start}
 }
+
+.trip-card-actions{grid-template-columns:1fr 1fr}
+.duplicate-inline{margin-top:8px;border:0;background:transparent;color:#7a8b98;padding:4px 2px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:4px}
+.duplicate-inline:hover{color:#0a5f91}
