@@ -1,4 +1,98 @@
-import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+
+function overviewDate(value,end=false){
+  const s=String(value||"").trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+  const d=new Date(s+(end?"T23:59:59.999+03:00":"T00:00:00.000+03:00"));
+  return Number.isNaN(d.getTime())?null:d;
+}
+
+router.get("/overview",async(req,res,next)=>{
+  try{
+    const from=overviewDate(req.query.from,false);
+    const to=overviewDate(req.query.to,true);
+    if(req.query.from&&!from)return res.status(400).json({error:"Invalid from date"});
+    if(req.query.to&&!to)return res.status(400).json({error:"Invalid to date"});
+    if(from&&to&&from>to)return res.status(400).json({error:"From date must be before to date"});
+
+    const providerId=String(req.query.providerId||"").trim();
+    if(providerId&&!/^[a-f0-9]{24}$/i.test(providerId))return res.status(400).json({error:"Invalid provider"});
+    const match={
+      status:{$in:["paid","partially_refunded","refunded"]},
+      bookingId:{$ne:null},
+      paidAt:{$ne:null}
+    };
+    if(from||to){
+      match.paidAt={};
+      if(from)match.paidAt.$gte=from;
+      if(to)match.paidAt.$lte=to;
+    }
+
+    const pipeline=[
+      {$match:match},
+      {$lookup:{from:"bookings",localField:"bookingId",foreignField:"_id",as:"booking"}},
+      {$unwind:"$booking"}
+    ];
+    if(providerId)pipeline.push({$match:{"booking.providerId":new mongoose.Types.ObjectId(providerId)}});
+    pipeline.push(
+      {$lookup:{from:"providers",localField:"booking.providerId",foreignField:"_id",as:"provider"}},
+      {$unwind:{path:"$provider",preserveNullAndEmptyArrays:true}},
+      {$addFields:{
+        retainedAmount:{$max:[0,{$subtract:[{$ifNull:["$amount",0]},{$ifNull:["$refundedAmount",0]}]}]},
+        originalAmount:{$ifNull:["$amount",0]}
+      }},
+      {$addFields:{
+        retainedRatio:{$cond:[{$gt:["$originalAmount",0]},{$divide:["$retainedAmount","$originalAmount"]},0]}
+      }},
+      {$group:{
+        _id:"$booking.providerId",
+        providerName:{$first:{$ifNull:["$provider.businessName","Unknown provider"]}},
+        bookings:{$sum:1},
+        guests:{$sum:{$ifNull:["$booking.seats",0]}},
+        grossSales:{$sum:"$originalAmount"},
+        refunds:{$sum:{$ifNull:["$refundedAmount",0]}},
+        netSales:{$sum:"$retainedAmount"},
+        seaGoIncome:{$sum:{$multiply:[{$ifNull:["$booking.pricing.commissionAmount",0]},"$retainedRatio"]}},
+        providerNet:{$sum:{$multiply:[{$ifNull:["$booking.pricing.providerNetAmount",0]},"$retainedRatio"]}}
+      }},
+      {$sort:{netSales:-1,providerName:1}}
+    );
+
+    const rows=await Payment.aggregate(pipeline);
+    const providersList=await Provider.find({}).select("_id businessName status").sort({businessName:1}).lean();
+    const totals=rows.reduce((a,r)=>{
+      a.bookings+=Number(r.bookings||0);
+      a.guests+=Number(r.guests||0);
+      a.grossSales+=Number(r.grossSales||0);
+      a.refunds+=Number(r.refunds||0);
+      a.netSales+=Number(r.netSales||0);
+      a.seaGoIncome+=Number(r.seaGoIncome||0);
+      a.providerNet+=Number(r.providerNet||0);
+      return a;
+    },{bookings:0,guests:0,grossSales:0,refunds:0,netSales:0,seaGoIncome:0,providerNet:0});
+
+    const roundMoney=n=>Number(Number(n||0).toFixed(2));
+    res.json({
+      generatedAt:new Date(),
+      currency:"JOD",
+      filters:{from:req.query.from||null,to:req.query.to||null,providerId:providerId||null},
+      totals:{...totals,grossSales:roundMoney(totals.grossSales),refunds:roundMoney(totals.refunds),netSales:roundMoney(totals.netSales),seaGoIncome:roundMoney(totals.seaGoIncome),providerNet:roundMoney(totals.providerNet)},
+      providers:providersList.map(p=>({id:p._id,businessName:p.businessName,status:p.status})),
+      breakdown:rows.map(r=>({
+        providerId:r._id,
+        providerName:r.providerName,
+        bookings:Number(r.bookings||0),
+        guests:Number(r.guests||0),
+        grossSales:roundMoney(r.grossSales),
+        refunds:roundMoney(r.refunds),
+        netSales:roundMoney(r.netSales),
+        seaGoIncome:roundMoney(r.seaGoIncome),
+        providerNet:roundMoney(r.providerNet)
+      }))
+    });
+  }catch(e){next(e);}
+});
+
 router.get("/trips",async(_req,res,next)=>{try{
   const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});
   const tripIds=rows.map(t=>t._id);
