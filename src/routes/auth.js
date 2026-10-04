@@ -74,6 +74,8 @@ router.post("/register",async(req,res,next)=>{
     if(!validEmail(email))return res.status(400).json({error:"Enter a valid email address"});
     if(!validPassword(password))return res.status(400).json({error:"Password must be 8–128 characters"});
     if(!["customer","provider"].includes(role))return res.status(400).json({error:"Invalid role"});
+    if(phone && !phoneNormalized)return res.status(400).json({error:"Enter a valid mobile phone number"});
+    if(phoneNormalized && await User.exists({role,phoneNormalized}))return res.status(409).json({error:"Phone already registered"});
 
     const passwordHash=await bcrypt.hash(password,12);
     const user=await User.create({name,email,phone:phone||undefined,phoneNormalized:phoneNormalized||undefined,role,passwordHash});
