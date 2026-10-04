@@ -1,6 +1,24 @@
 import webpush from "web-push";
 import PushSubscription from "../models/PushSubscription.js";
 
+const PUSH_HOSTS = new Set([
+  "fcm.googleapis.com",
+  "updates.push.services.mozilla.com",
+  "push.services.mozilla.com",
+  "web.push.apple.com"
+]);
+
+export function isAllowedPushEndpoint(value){
+  try{
+    const url=new URL(String(value||""));
+    if(url.protocol!=="https:"||url.username||url.password)return false;
+    const host=url.hostname.toLowerCase().replace(/\.$/,"");
+    return PUSH_HOSTS.has(host);
+  }catch{
+    return false;
+  }
+}
+
 function configured(){
   return Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY);
 }
@@ -25,6 +43,11 @@ export async function sendPushToUser(userId,{title,body,data={}}){
   let sent=0,failed=0;
   for(const row of rows){
     try{
+      if(!isAllowedPushEndpoint(row.endpoint)){
+        await PushSubscription.deleteOne({_id:row._id});
+        failed++;
+        continue;
+      }
       await webpush.sendNotification(
         {endpoint:row.endpoint,keys:row.keys},
         JSON.stringify({title,body,data})
