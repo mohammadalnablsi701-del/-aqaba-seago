@@ -5,6 +5,7 @@ import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import CheckoutHold from "../models/CheckoutHold.js";
 import Payment from "../models/Payment.js";
+import PaymentEvent from "../models/PaymentEvent.js";
 import Booking from "../models/Booking.js";
 import InAppNotification from "../models/InAppNotification.js";
 import NotificationLog from "../models/NotificationLog.js";
@@ -333,6 +334,11 @@ export async function runPilotE2EOnce({port}) {
         await InAppNotification.deleteMany({bookingId:{$in:bookingIds}});
       }
       if(userIds.length) await InAppNotification.deleteMany({userId:{$in:userIds}});
+      if(paymentId) await PaymentEvent.deleteMany({paymentId});
+      if(customerUser){
+        const customerPayments=await Payment.find({customerId:customerUser._id}).select("_id");
+        if(customerPayments.length)await PaymentEvent.deleteMany({paymentId:{$in:customerPayments.map(p=>p._id)}});
+      }
       if(paymentId) await Payment.deleteMany({_id:paymentId});
       if(customerUser) await Payment.deleteMany({customerId:customerUser._id});
       if(customerUser) await CheckoutHold.deleteMany({customerId:customerUser._id});
