@@ -10,7 +10,7 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
   try {
     const rows = await Booking.find({ customerId: req.user._id, status: { $in: ["confirmed","cancelled","refunded"] } })
       .populate({ path: "tripId", select: "titleAr titleEn category durationMinutes departureLocation pricing" })
-      .populate({ path: "providerId", select: "businessName" })
+      .populate({ path: "providerId", select: "businessName phone ownerUserId", populate: { path: "ownerUserId", select: "phone phoneNormalized" } })
       .populate({ path: "departureId", select: "startsAt status" })
       .sort({ createdAt: -1 })
       .limit(100);
