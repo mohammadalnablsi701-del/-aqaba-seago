@@ -38,9 +38,31 @@ export function calculateTieredPricing({pricing,adults,children,mealPlan="withou
   const adultSubtotal=roundMoney(adultUnitPrice*adults);
   const childSubtotal=roundMoney(childUnitPrice*children);
   const grossAmount=roundMoney(adultSubtotal+childSubtotal);
-  const commissionAmount=calcCommission(
-    grossAmount,seats,pricing.commissionType,Number(pricing.commissionValue||0)
-  );
+  let commissionAmount;
+  if(pricing.commissionType==="fixed_per_person"&&[
+    pricing.adultCommission,pricing.childCommission,
+    pricing.buffetAdultCommission,pricing.buffetChildCommission
+  ].some(v=>v!==undefined&&v!==null)){
+    const fallback=Number(pricing.commissionValue||0);
+    const adultCommission=Number(
+      buffet ? (pricing.buffetAdultCommission ?? pricing.adultCommission ?? fallback)
+             : (pricing.adultCommission ?? fallback)
+    );
+    const childCommission=Number(
+      buffet ? (pricing.buffetChildCommission ?? pricing.childCommission ?? fallback)
+             : (pricing.childCommission ?? fallback)
+    );
+    if(!Number.isFinite(adultCommission)||adultCommission<0) throw new Error("Invalid adult commission");
+    if(!Number.isFinite(childCommission)||childCommission<0) throw new Error("Invalid child commission");
+    commissionAmount=roundMoney(Math.min(
+      grossAmount,
+      adultCommission*adults+childCommission*children
+    ));
+  }else{
+    commissionAmount=calcCommission(
+      grossAmount,seats,pricing.commissionType,Number(pricing.commissionValue||0)
+    );
+  }
 
   return {
     currency:pricing.currency||"JOD",
