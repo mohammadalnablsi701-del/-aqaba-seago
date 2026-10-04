@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
   createPaymentCheckout, getPayment, getQuote, hasApi, listBookings, listDepartures, listTrips,
-  loginCustomer, registerCustomer, requestPhoneOtp, verifyPhoneOtp, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, requestAccountPhoneOtp, verifyAccountPhoneOtp, createSupportRequest
+  loginCustomer, registerCustomer, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, saveAccountPhone, createSupportRequest
 } from "./api.js";
 
 const COUNTRY_CODES=[
@@ -456,10 +456,8 @@ function GoogleSignInButton({role,onAuthenticated}){
 
 function AuthForm({ onAuthenticated }) {
   const [mode,setMode]=useState("login");
-  const [method,setMethod]=useState("email");
-  const [form,setForm]=useState({name:"",email:"",phone:"",password:"",code:""});
+  const [form,setForm]=useState({name:"",email:"",phone:"",password:""});
   const [countryCode,setCountryCode]=useState("+962");
-  const [otpSent,setOtpSent]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
 
@@ -467,16 +465,6 @@ function AuthForm({ onAuthenticated }) {
     e.preventDefault();
     setBusy(true); setError("");
     try {
-      if(method==="phone"){
-        if(!otpSent){
-          await requestPhoneOtp(internationalPhone(form.phone,countryCode),"customer",mode);
-          setOtpSent(true);
-          return;
-        }
-        const result=await verifyPhoneOtp({phone:internationalPhone(form.phone,countryCode),code:form.code,role:"customer",mode,name:form.name});
-        onAuthenticated(result);
-        return;
-      }
       const result = mode === "login"
         ? await loginCustomer({email:form.email,password:form.password})
         : await registerCustomer({...form,phone:internationalPhone(form.phone,countryCode)});
@@ -488,38 +476,28 @@ function AuthForm({ onAuthenticated }) {
     }
   }
 
-  function switchMode(next){setMode(next);setOtpSent(false);setError("");setForm(v=>({...v,code:""}));}
-  function switchMethod(next){setMethod(next);setOtpSent(false);setError("");setForm(v=>({...v,code:""}));}
+  function switchMode(next){setMode(next);setError("");}
 
   return (
     <div className="auth-panel">
       <div className="auth-panel__head">
         <span>SEAGO ACCOUNT</span>
         <h2>{mode==="login" ? "Sign in to book" : "Create your account"}</h2>
-        <p>{method==="phone"?"Use your mobile number and a one-time code.":"Use your email and password."}</p>
+        <p>Continue with Google or use your email and password.</p>
       </div>
-      <GoogleSignInButton role="customer" onAuthenticated={onAuthenticated}/><div className="auth-divider"><span>or continue with</span></div><div className="auth-method-tabs">
-        <button type="button" className={method==="phone"?"active":""} onClick={()=>switchMethod("phone")}>Phone</button>
-        <button type="button" className={method==="email"?"active":""} onClick={()=>switchMethod("email")}>Email</button>
-      </div>
+      <GoogleSignInButton role="customer" onAuthenticated={onAuthenticated}/>
+      <div className="auth-divider"><span>or use email</span></div>
       <form onSubmit={submit}>
-        {method==="phone"?<>
-          {mode==="register" && !otpSent && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
-          <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} disabled={otpSent} required placeholder="7X XXX XXXX"/>
-          {otpSent&&<input placeholder="Verification code" inputMode="numeric" autoComplete="one-time-code" value={form.code} onChange={e=>setForm({...form,code:e.target.value.replace(/\D/g,"").slice(0,10)})} required/>}
-        </>:<>
-          {mode==="register" && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
-          <input type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
-          {mode==="register" && <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="Phone (optional)"/>}
-          <input type="password" minLength="8" maxLength="128" placeholder="Password (8+ characters)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
-        </>}
+        {mode==="register" && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
+        <input type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
+        {mode==="register" && <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="Phone (optional)"/>}
+        <input type="password" minLength="8" maxLength="128" placeholder="Password (8+ characters)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
         {error && <div className="form-error">{error}</div>}
         <button className="primary-button auth-submit" disabled={busy}>
           {busy ? <LoaderCircle className="spin" size={18}/> : null}
-          {method==="phone"?(otpSent?"Verify & continue":"Send code"):(mode==="login"?"Sign in":"Create account")}
+          {mode==="login"?"Sign in":"Create account"}
         </button>
       </form>
-      {method==="phone"&&otpSent&&<button className="auth-switch" onClick={()=>{setOtpSent(false);setForm(v=>({...v,code:""}));setError("")}}>Change phone number</button>}
       <button className="auth-switch" onClick={()=>switchMode(mode==="login"?"register":"login")}>
         {mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in"}
       </button>
@@ -864,8 +842,6 @@ function PersonalDetailsScreen({ auth, onAuthenticated, onBack }) {
   const user=auth?.user||{};
   const [countryCode,setCountryCode]=useState("+962");
   const [phone,setPhone]=useState("");
-  const [code,setCode]=useState("");
-  const [otpSent,setOtpSent]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
@@ -875,17 +851,10 @@ function PersonalDetailsScreen({ auth, onAuthenticated, onBack }) {
     if(!auth?.token)return;
     setBusy(true);setError("");setMessage("");
     try{
-      const full=internationalPhone(phone,countryCode);
-      if(!otpSent){
-        await requestAccountPhoneOtp(full,auth.token);
-        setOtpSent(true);
-        setMessage("Verification code sent by SMS.");
-      }else{
-        const result=await verifyAccountPhoneOtp(full,code,auth.token);
-        onAuthenticated?.(result);
-        setOtpSent(false);setCode("");setPhone("");
-        setMessage("Phone number verified and saved.");
-      }
+      const result=await saveAccountPhone(internationalPhone(phone,countryCode),auth.token);
+      onAuthenticated?.(result);
+      setPhone("");
+      setMessage("Phone number saved.");
     }catch(e){setError(e.message||"Could not update phone number.");}
     finally{setBusy(false);}
   }
@@ -898,13 +867,11 @@ function PersonalDetailsScreen({ auth, onAuthenticated, onBack }) {
       <div><span className="profile-detail-icon"><UserRound size={18}/></span><span><small>Phone</small><b>{user.phone||"Not provided"}</b></span></div>
     </section>
     {auth?.token&&<form className="phone-update-card" onSubmit={submitPhone}>
-      <div><b>{user.phone?"Change phone number":"Add a phone number"}</b><small>We’ll verify it by SMS before saving it to your SeaGo account.</small></div>
-      {!otpSent?<CountryPhoneField code={countryCode} setCode={setCountryCode} value={phone} onChange={e=>setPhone(e.target.value)} required/>:
-        <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,10))} placeholder="Verification code" required/>}
+      <div><b>{user.phone?"Change phone number":"Add a phone number"}</b><small>This number is used for booking contact and WhatsApp communication. No SMS verification is required.</small></div>
+      <CountryPhoneField code={countryCode} setCode={setCountryCode} value={phone} onChange={e=>setPhone(e.target.value)} required/>
       {error&&<div className="form-error">{error}</div>}
       {message&&<div className="form-success">{message}</div>}
-      <button className="primary-button" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:null}{otpSent?"Verify & save":"Send verification code"}</button>
-      {otpSent&&<button type="button" className="auth-switch" onClick={()=>{setOtpSent(false);setCode("");setMessage("");setError("")}}>Use a different number</button>}
+      <button className="primary-button" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:null}Save phone number</button>
     </form>}
     <div className="profile-sub-note"><CheckCircle2 size={16}/><span>Your booking confirmations and tickets stay linked to this account.</span></div>
   </div>;
