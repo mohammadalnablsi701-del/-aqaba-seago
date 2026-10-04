@@ -17,6 +17,14 @@ function fmtDate(value){
 }
 
 function money(v,c="JOD"){return `${Number(v||0).toFixed(2)} ${c}`}
+function escapeHtml(value){
+  return String(value??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
 
 async function createInApp({key,userId,type,title,body,bookingId=null,data={}}){
   if(!userId)return null;
@@ -83,19 +91,19 @@ async function sendEmail({key,bookingId,type,to,subject,html}){
 }
 
 function shell(title,body){
-  return `<!doctype html><html><body style="margin:0;background:#f4f8fb;font-family:Arial,sans-serif;color:#15364b"><div style="max-width:620px;margin:auto;padding:24px"><div style="background:#fff;border-radius:18px;padding:24px;border:1px solid #e2ebf1"><div style="font-size:22px;font-weight:800;color:#0b6fa4">Aqaba SeaGo</div><h1 style="font-size:24px;margin:18px 0 8px">${title}</h1>${body}<p style="margin-top:24px;font-size:12px;color:#7b8c99">Aqaba SeaGo · Aqaba, Jordan</p></div></div></body></html>`;
+  return `<!doctype html><html><body style="margin:0;background:#f4f8fb;font-family:Arial,sans-serif;color:#15364b"><div style="max-width:620px;margin:auto;padding:24px"><div style="background:#fff;border-radius:18px;padding:24px;border:1px solid #e2ebf1"><div style="font-size:22px;font-weight:800;color:#0b6fa4">Aqaba SeaGo</div><h1 style="font-size:24px;margin:18px 0 8px">${escapeHtml(title)}</h1>${body}<p style="margin-top:24px;font-size:12px;color:#7b8c99">Aqaba SeaGo · Aqaba, Jordan</p></div></div></body></html>`;
 }
 
 function bookingTable(b){
   const trip=b.tripId||{}, dep=b.departureId||{}, loc=trip.departureLocation||{};
   return `<div style="background:#f7fafc;border-radius:12px;padding:14px;margin:16px 0">
     <p><b>Booking:</b> SG-${String(b._id).slice(-8).toUpperCase()}</p>
-    <p><b>Trip:</b> ${trip.titleEn||trip.titleAr||"Sea Experience"}</p>
+    <p><b>Trip:</b> ${escapeHtml(trip.titleEn||trip.titleAr||"Sea Experience")}</p>
     <p><b>Departure:</b> ${fmtDate(dep.startsAt)}</p>
     <p><b>Guests:</b> ${b.adults||0} adult(s) · ${b.children||0} child(ren)</p>
     <p><b>Package:</b> ${b.mealPlan==="with_buffet"?"Open buffet included":"Without buffet"}</p>
     <p><b>Total:</b> ${money(b.pricing?.grossAmount,b.pricing?.currency)}</p>
-    ${loc.name?`<p><b>Departure point:</b> ${loc.name}${loc.address?` · ${loc.address}`:""}</p>`:""}
+    ${loc.name?`<p><b>Departure point:</b> ${escapeHtml(loc.name)}${loc.address?` · ${escapeHtml(loc.address)}`:""}</p>`:""}
   </div>`;
 }
 
@@ -114,7 +122,7 @@ export async function sendBookingConfirmation(bookingId){
     key:`booking-confirmed:customer:${b._id}`,
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
     subject:`SeaGo booking confirmed · SG-${ref}`,
-    html:shell("Booking confirmed",`<p>Hi ${b.customerId?.name||"there"}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?payment=success" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#fff;text-decoration:none;border-radius:10px">View your ticket</a></p>`)
+    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?payment=success" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#fff;text-decoration:none;border-radius:10px">View your ticket</a></p>`)
   }).catch(err=>console.error("Customer confirmation email failed",err));
 
   if(owner?.email){
@@ -122,7 +130,7 @@ export async function sendBookingConfirmation(bookingId){
       key:`booking-confirmed:provider:${b._id}`,
       bookingId:b._id,type:"booking_confirmed_provider",to:owner.email,
       subject:`New SeaGo booking · SG-${ref}`,
-      html:shell("New booking received",`<p>A new confirmed booking was received for ${provider.businessName}.</p>${bookingTable(b)}`)
+      html:shell("New booking received",`<p>A new confirmed booking was received for ${escapeHtml(provider.businessName)}.</p>${bookingTable(b)}`)
     }).catch(err=>console.error("Provider confirmation email failed",err));
   }
 }
@@ -136,7 +144,7 @@ export async function sendCancellationNotice(bookingId){
     key:`booking-cancelled:customer:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,
     bookingId:b._id,type:"booking_cancelled_customer",to:b.customerId?.email,
     subject:`SeaGo booking cancelled · SG-${ref}`,
-    html:shell("Booking cancelled",`<p>Your booking has been cancelled.</p>${bookingTable(b)}<p><b>Reason:</b> ${c.reason||"Cancellation"}</p><p><b>Refund:</b> ${c.refundPercentage||0}% · ${money(c.refundAmount,b.pricing?.currency)} · ${c.refundStatus||"none"}</p>`)
+    html:shell("Booking cancelled",`<p>Your booking has been cancelled.</p>${bookingTable(b)}<p><b>Reason:</b> ${escapeHtml(c.reason||"Cancellation")}</p><p><b>Refund:</b> ${c.refundPercentage||0}% · ${money(c.refundAmount,b.pricing?.currency)} · ${c.refundStatus||"none"}</p>`)
   });
 
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
@@ -147,7 +155,7 @@ export async function sendCancellationNotice(bookingId){
       key:`booking-cancelled:provider:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,
       bookingId:b._id,type:"booking_cancelled_provider",to:owner.email,
       subject:`SeaGo booking cancelled · SG-${ref}`,
-      html:shell("Booking cancelled",`<p>A booking for ${provider.businessName} was cancelled.</p>${bookingTable(b)}<p><b>Source:</b> ${c.source||"-"}</p><p><b>Reason:</b> ${c.reason||"Cancellation"}</p>`)
+      html:shell("Booking cancelled",`<p>A booking for ${escapeHtml(provider.businessName)} was cancelled.</p>${bookingTable(b)}<p><b>Source:</b> ${escapeHtml(c.source||"-")}</p><p><b>Reason:</b> ${escapeHtml(c.reason||"Cancellation")}</p>`)
     });
   }
 }
@@ -169,7 +177,7 @@ export async function processUpcomingReminders(){
       key:`departure-reminder-24h:customer:${b._id}`,
       bookingId:b._id,type:"departure_reminder_24h",to:b.customerId?.email,
       subject:`SeaGo reminder · Your trip is tomorrow`,
-      html:shell("Your trip is tomorrow",`<p>Hi ${b.customerId?.name||"there"}, here is your 24-hour reminder.</p>${bookingTable(b)}<p>Please arrive early enough for check-in.</p>`)
+      html:shell("Your trip is tomorrow",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, here is your 24-hour reminder.</p>${bookingTable(b)}<p>Please arrive early enough for check-in.</p>`)
     });
     if(log?.status==="sent") sent++;
   }
