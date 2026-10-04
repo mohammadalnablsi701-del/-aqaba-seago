@@ -517,3 +517,9 @@
 .phone-update-card>input{width:100%;height:50px;border:1px solid var(--line);border-radius:13px;padding:0 13px;background:#fff;color:var(--ink);font-size:16px}
 .phone-update-card>.primary-button{width:100%}
 .form-success{background:#edf9f4;color:#08745f;border:1px solid #d2ecdf;border-radius:12px;padding:10px 12px;font-size:11px;line-height:1.4}
+
+.support-request-card{margin:14px 20px 0;border:1px solid var(--line);border-radius:18px;padding:15px;background:#fbfdfe;display:grid;gap:11px}
+.support-request-card label{display:grid;gap:6px}.support-request-card label>span{font-size:10px;font-weight:800;color:#6f8199}
+.support-request-card input,.support-request-card select,.support-request-card textarea{width:100%;border:1px solid var(--line);border-radius:13px;background:#fff;color:var(--ink);padding:11px 12px;font:inherit;font-size:16px}
+.support-request-card input,.support-request-card select{height:48px}.support-request-card textarea{resize:vertical;min-height:110px}
+.support-request-card>.primary-button{width:100%}.support-signin-note{margin:14px 20px;padding:13px;border:1px solid var(--line);border-radius:14px;background:#fbfdfe;color:var(--muted);font-size:11px}
