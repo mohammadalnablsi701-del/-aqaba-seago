@@ -390,3 +390,24 @@ main{
   .overview-kpi b{font-size:21px}
   .provider-breakdown-head{flex-direction:column}
 }
+
+.settlement-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
+.settlement-kpis>div{background:#fff;border:1px solid #e4ebf0;border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:6px}
+.settlement-kpis small,.settlement-row span,.settlement-history-row span{font-size:11px;color:#72808c}
+.settlement-kpis b{font-size:20px}
+.settlement-kpis .paid{border-color:#cfe9dc;background:#fbfffd}
+.settlement-kpis .outstanding{border-color:#f2d8b9;background:#fffdf9}
+.settlement-card,.settlement-history{background:#fff;border:1px solid #e4ebf0;border-radius:16px;padding:16px;margin-top:14px}
+.settlement-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.settlement-row{display:grid;grid-template-columns:minmax(170px,1.4fr) repeat(6,minmax(85px,.7fr)) auto;gap:10px;align-items:center;border:1px solid #e8eef2;border-radius:13px;padding:13px}
+.settlement-row>div{display:flex;flex-direction:column;gap:3px}
+.settlement-company b{font-size:14px}
+.settlement-outstanding b{font-size:15px}
+.settlement-pay{border:0;border-radius:10px;background:#0b6f9f;color:#fff;padding:10px 12px;font-size:11px;font-weight:900;white-space:nowrap}
+.settlement-pay:disabled{background:#d9e1e6;color:#7c8992}
+.settlement-history-row{display:flex;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #edf1f4}
+.settlement-history-row:last-child{border-bottom:0}
+.settlement-history-row>div{display:flex;flex-direction:column;gap:3px}
+.settlement-history-row>div:last-child{text-align:right}
+@media(max-width:1100px){.settlement-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.settlement-row{grid-template-columns:1fr 1fr 1fr}.settlement-company,.settlement-pay{grid-column:1/-1}.settlement-pay{justify-self:start}}
+@media(max-width:620px){.settlement-kpis{grid-template-columns:1fr}.settlement-row{grid-template-columns:1fr 1fr}.settlement-company,.settlement-pay{grid-column:1/-1}.settlement-history-row{flex-direction:column}.settlement-history-row>div:last-child{text-align:left}}
