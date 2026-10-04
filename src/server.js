@@ -7,7 +7,6 @@ import { cleanupDemoDataOnce } from "./services/demoCleanup.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders, sendTestEmail } from "./services/notifications.js";
 import { runPilotE2EOnce } from "./services/pilotE2E.js";
-import { bootstrapFunNSunOwnerOnce } from "./services/bootstrapFunNSunOwner.js";
 import { releaseCheckoutHoldsForDeparture as releasePilotHolds } from "./services/payments.js";
 
 const port=Number(process.env.PORT||4000);
@@ -27,11 +26,6 @@ if(publicLaunch&&(process.env.PAYMENT_PROVIDER||"mock")==="mock"){
 
 await connectDb(process.env.MONGODB_URI);
 await seedDemoData();
-
-const funNSunOwnerBootstrap=await bootstrapFunNSunOwnerOnce();
-if(funNSunOwnerBootstrap){
-  console.log("Fun N Sun owner bootstrap result",JSON.stringify(funNSunOwnerBootstrap));
-}
 
 
 const demoCleanupResult=await cleanupDemoDataOnce();
