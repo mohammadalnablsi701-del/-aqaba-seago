@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Wait for production API
         shell: bash
         run: |
@@ -57,18 +62,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected_pages="$(git log -1 --format=%H -- customer-app provider-app admin-app .github/workflows/pages.yml)"
           for i in {1..24}; do
             api_commit="$(curl -fsS https://aqaba-seago-api.onrender.com/health | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
             page_commit="$(curl -fsS https://mohammadalnablsi701-del.github.io/-aqaba-seago/version.json | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
-            echo "Expected: $GITHUB_SHA"
-            echo "API:      $api_commit"
-            echo "Pages:    $page_commit"
-            if [ "$api_commit" = "$GITHUB_SHA" ] && [ "$page_commit" = "$GITHUB_SHA" ]; then
+            echo "API expected:   $GITHUB_SHA"
+            echo "API deployed:   $api_commit"
+            echo "Pages expected: $expected_pages"
+            echo "Pages deployed: $page_commit"
+            if [ "$api_commit" = "$GITHUB_SHA" ] && [ "$page_commit" = "$expected_pages" ]; then
               exit 0
             fi
             sleep 10
           done
-          echo "Production did not converge to current commit"
+          echo "Production did not converge to expected commits"
           exit 1
 
       - name: Verify production API endpoints are reachable
