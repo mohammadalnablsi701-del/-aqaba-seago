@@ -132,6 +132,9 @@ export async function sendTestPush(token){
   return request("/api/push/test",{method:"POST",token});
 }
 
+export const requestAccountPhoneOtp=(phone,token)=>request("/api/auth/phone/request",{method:"POST",token,body:JSON.stringify({phone})});
+export const verifyAccountPhoneOtp=(phone,code,token)=>request("/api/auth/phone/verify",{method:"POST",token,body:JSON.stringify({phone,code})});
+
 export const requestPhoneOtp=(phone,role,mode)=>request("/api/auth/otp/request",{method:"POST",body:JSON.stringify({phone,role,mode})});
 export const verifyPhoneOtp=(data)=>request("/api/auth/otp/verify",{method:"POST",body:JSON.stringify(data)});
 
