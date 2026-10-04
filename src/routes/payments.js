@@ -34,7 +34,7 @@ router.post("/checkout", requireAuth, requireRole("customer"), async (req, res, 
     }
     if (!hold) {
       const departure = await Departure.findOneAndUpdate(
-        { _id: req.body.departureId, status: "scheduled", startsAt: { $gte: new Date() },
+        { _id: req.body.departureId, status: "scheduled", salesClosed: { $ne: true }, startsAt: { $gte: new Date() },
           $expr: { $lte: [{ $add: ["$reservedSeats", seats] }, "$capacity"] } },
         { $inc: { reservedSeats: seats } }, { new: true }
       );
