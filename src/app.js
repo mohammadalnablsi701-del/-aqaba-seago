@@ -15,6 +15,7 @@ import ticketRoutes from "./routes/tickets.js";
 import mediaRoutes from "./routes/media.js";
 import notificationRoutes from "./routes/notifications.js";
 import pushRoutes from "./routes/push.js";
+import supportRoutes from "./routes/support.js";
 
 function buildCorsOptions() {
   const allowed = String(process.env.ALLOWED_ORIGINS || "")
@@ -82,6 +83,7 @@ export function createApp() {
   app.use("/api/media", mediaRoutes);
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/push", pushRoutes);
+  app.use("/api/support", supportRoutes);
 
   app.use((err, _req, res, _next) => {
     console.error(err);
