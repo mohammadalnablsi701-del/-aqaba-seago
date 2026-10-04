@@ -1,0 +1,8 @@
+.booking-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;overflow:visible}
+.booking-filters button{min-width:0;padding:8px 7px;font-size:9px;white-space:normal;line-height:1.2}
+.booking-card-main em.valid,.booking-detail-hero em.valid{background:#fff7e8;color:#9a5b00;max-width:108px;text-align:center;line-height:1.2}
+.booking-quick-actions .details-secondary{background:#fff;border:1px solid #dce7ed;color:#617888}
+@media(max-width:560px){
+  .booking-filters{grid-template-columns:1fr 1fr}
+  .booking-filters button{font-size:10px;padding:9px 8px}
+}
