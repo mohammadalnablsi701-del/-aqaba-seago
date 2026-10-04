@@ -305,3 +305,7 @@ nav{
 .header-refresh{border:1px solid #d8e5ec;background:#f7fbfd;color:#0b6f9f;border-radius:11px;padding:8px 10px;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:900}
 .header-refresh:disabled{opacity:.6}
 @media(max-width:560px){.header-refresh span{display:none}.header-refresh{width:44px;height:44px;padding:0;justify-content:center}}
+
+.home-empty-day{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 0}
+.home-empty-day p{margin:0}
+.home-empty-day button{border:0;border-radius:10px;background:#0b6f9f;color:#fff;padding:10px 12px;font-size:10px;font-weight:900;display:flex;align-items:center;gap:6px}
