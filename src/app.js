@@ -23,9 +23,17 @@ function buildCorsOptions() {
     .map(v => v.trim())
     .filter(Boolean);
 
+  const ownOrigins = new Set();
+  const externalUrl = String(process.env.RENDER_EXTERNAL_URL || "").trim().replace(/\/$/, "");
+  const externalHostname = String(process.env.RENDER_EXTERNAL_HOSTNAME || "").trim();
+  if (externalUrl) ownOrigins.add(externalUrl);
+  if (externalHostname) ownOrigins.add(`https://${externalHostname}`);
+  // Render does not expose the external URL in every runtime configuration.
+  ownOrigins.add("https://aqaba-seago-api.onrender.com");
+
   return {
     origin(origin, callback) {
-      if (!origin || allowed.length === 0 || allowed.includes(origin)) {
+      if (!origin || allowed.length === 0 || allowed.includes(origin) || ownOrigins.has(origin)) {
         return callback(null, true);
       }
       return callback(new Error("Origin not allowed by CORS"));
