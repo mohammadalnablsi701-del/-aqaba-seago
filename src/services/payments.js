@@ -302,7 +302,8 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
     const finalPayment=confirmed?.payment||payment;
     await recordPaymentEvent({providerName,event,payment:finalPayment});
     if(confirmed?.bookingId){
-      sendBookingConfirmation(confirmed.bookingId).catch(err=>console.error("Booking confirmation notification failed",err));
+      try{await sendBookingConfirmation(confirmed.bookingId);}
+      catch(err){console.error("Booking confirmation notification failed",err);}
     }
     return {duplicate:false,payment:finalPayment};
   } else if (["failed", "cancelled", "expired"].includes(event.status)) {
