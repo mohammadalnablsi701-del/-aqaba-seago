@@ -1,0 +1,64 @@
+name: Production Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for production API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..18}; do
+            code="$(curl -sS -o /tmp/ready.json -w "%{http_code}" https://aqaba-seago-api.onrender.com/ready || true)"
+            if [ "$code" = "200" ] && grep -q '"ok":true' /tmp/ready.json; then
+              cat /tmp/ready.json
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production API did not become ready"
+          cat /tmp/ready.json || true
+          exit 1
+
+      - name: Verify Google auth config and CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          curl -sS -D "$headers" -o "$body"             -H "Origin: https://mohammadalnablsi701-del.github.io"             https://aqaba-seago-api.onrender.com/api/auth/google/config
+          cat "$body"
+          grep -qi '^access-control-allow-origin: https://mohammadalnablsi701-del.github.io' "$headers"
+          grep -q '"enabled":true' "$body"
+          grep -q '764739593570-ls3m81l4defks40st7e4ejrkci98q4m5.apps.googleusercontent.com' "$body"
+
+      - name: Verify public app pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://mohammadalnablsi701-del.github.io/-aqaba-seago"
+          for path in "/" "/provider/" "/admin/"; do
+            code="$(curl -L -sS -o /tmp/page.html -w "%{http_code}" "$base$path")"
+            echo "$path -> $code"
+            test "$code" = "200"
+            grep -qi '<!doctype html' /tmp/page.html
+          done
+
+      - name: Verify production API endpoints are reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://aqaba-seago-api.onrender.com/health | grep -q '"ok":true'
+          curl -fsS https://aqaba-seago-api.onrender.com/api/trips > /tmp/trips.json
+          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/trips.json","utf8")); if(!Array.isArray(x)) process.exit(1); console.log("Public trips:",x.length)'
