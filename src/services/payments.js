@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import CheckoutHold from "../models/CheckoutHold.js";
@@ -10,32 +11,105 @@ import { sendBookingConfirmation } from "./notifications.js";
 const SUCCESS_TERMINAL_PAYMENT_STATUSES=new Set(["paid","partially_refunded","refunded"]);
 export function isSuccessfulTerminalPaymentStatus(status){return SUCCESS_TERMINAL_PAYMENT_STATUSES.has(String(status||""));}
 
-async function findOrCreateConfirmedBooking(hold,payment){
-  const idempotencyKey=`payment:${payment._id}`;
-  let booking=await Booking.findOne({customerId:hold.customerId,idempotencyKey});
-  if(booking)return booking;
+async function confirmPaidHoldAtomic({paymentId,event}){
+  const session=await mongoose.startSession();
+  let result=null;
   try{
-    booking=await Booking.create({
-      customerId:hold.customerId,
-      providerId:hold.providerId,
-      tripId:hold.tripId,
-      departureId:hold.departureId,
-      seats:hold.seats,
-      adults:hold.adults,
-      children:hold.children,
-      mealPlan:hold.mealPlan,
-      status:"confirmed",
-      holdExpiresAt:hold.expiresAt,
-      pricing:hold.pricing,
-      idempotencyKey
+    await session.withTransaction(async()=>{
+      const payment=await Payment.findById(paymentId).session(session);
+      if(!payment)throw Object.assign(new Error("Payment not found"),{statusCode:404});
+      const hold=await CheckoutHold.findById(payment.holdId).session(session);
+      if(!hold){
+        payment.status="needs_review";
+        payment.lastEventId=event.eventId;
+        payment.rawLastEvent=event.raw;
+        await payment.save({session});
+        result={payment,bookingId:null};
+        return;
+      }
+
+      if(hold.status==="paid"){
+        const booking=payment.bookingId
+          ? await Booking.findById(payment.bookingId).session(session)
+          : await Booking.findOne({customerId:hold.customerId,idempotencyKey:`payment:${payment._id}`}).session(session);
+        if(!booking){
+          payment.status="needs_review";
+          payment.lastEventId=event.eventId;
+          payment.rawLastEvent=event.raw;
+          await payment.save({session});
+          result={payment,bookingId:null};
+          return;
+        }
+        payment.bookingId=booking._id;
+        payment.status="paid";
+        payment.paidAt ||= new Date();
+        payment.lastEventId=event.eventId;
+        payment.rawLastEvent=event.raw;
+        await payment.save({session});
+        result={payment,bookingId:booking._id};
+        return;
+      }
+
+      const now=new Date();
+      if(hold.status!=="active"||hold.expiresAt<=now){
+        payment.status="needs_review";
+        payment.lastEventId=event.eventId;
+        payment.rawLastEvent=event.raw;
+        await payment.save({session});
+        result={payment,bookingId:null};
+        return;
+      }
+
+      const departure=await Departure.findOne({_id:hold.departureId,status:"scheduled",startsAt:{$gt:now}}).session(session).select("_id");
+      const trip=await Trip.findOne({_id:hold.tripId,active:true}).session(session).select("_id providerId");
+      const provider=trip?await Provider.findOne({_id:trip.providerId,status:"approved"}).session(session).select("_id"):null;
+      if(!departure||!trip||!provider){
+        payment.status="needs_review";
+        payment.lastEventId=event.eventId;
+        payment.rawLastEvent=event.raw;
+        await payment.save({session});
+        result={payment,bookingId:null};
+        return;
+      }
+
+      const idempotencyKey=`payment:${payment._id}`;
+      const booking=await Booking.findOneAndUpdate(
+        {customerId:hold.customerId,idempotencyKey},
+        {$setOnInsert:{
+          customerId:hold.customerId,
+          providerId:hold.providerId,
+          tripId:hold.tripId,
+          departureId:hold.departureId,
+          seats:hold.seats,
+          adults:hold.adults,
+          children:hold.children,
+          mealPlan:hold.mealPlan,
+          status:"confirmed",
+          holdExpiresAt:hold.expiresAt,
+          pricing:hold.pricing,
+          idempotencyKey
+        }},
+        {new:true,upsert:true,setDefaultsOnInsert:true,session}
+      );
+
+      const claimed=await CheckoutHold.findOneAndUpdate(
+        {_id:hold._id,status:"active",expiresAt:{$gt:now}},
+        {$set:{status:"paid"}},
+        {new:true,session}
+      );
+      if(!claimed)throw Object.assign(new Error("Checkout hold changed during payment confirmation"),{statusCode:409});
+
+      payment.bookingId=booking._id;
+      payment.status="paid";
+      payment.paidAt ||= now;
+      payment.lastEventId=event.eventId;
+      payment.rawLastEvent=event.raw;
+      await payment.save({session});
+      result={payment,bookingId:booking._id};
     });
-    return booking;
-  }catch(e){
-    if(e?.code===11000){
-      booking=await Booking.findOne({customerId:hold.customerId,idempotencyKey});
-      if(booking)return booking;
-    }
-    throw e;
+    return result;
+  }finally{
+    await session.endSession();
   }
 }
 
@@ -194,44 +268,15 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
 
   const amountMatches = sameMoney(event.amount, payment.amount);
   const currencyMatches = event.currency === payment.currency;
-  let bookingToNotify=null;
 
   if (!amountMatches || !currencyMatches) {
     payment.status = "needs_review";
   } else if (event.status === "paid") {
-    const [departure, inventorySellable] = await Promise.all([
-      Departure.findOne({
-        _id: hold.departureId,
-        status: "scheduled",
-        startsAt: { $gt: new Date() }
-      }).select("_id"),
-      holdInventoryIsSellable(hold)
-    ]);
-    if (!departure || !inventorySellable) {
-      if (hold.status === "active") await releaseHold(hold, "released");
-      payment.status = "needs_review";
-    } else if (hold.status === "active" && hold.expiresAt > new Date()) {
-      const booking=await findOrCreateConfirmedBooking(hold,payment);
-      await CheckoutHold.updateOne({_id:hold._id,status:"active"},{$set:{status:"paid"}});
-      payment.bookingId=booking._id;
-      payment.status="paid";
-      payment.paidAt ||= new Date();
-      bookingToNotify=booking._id;
-    } else if (hold.status === "paid") {
-      const booking=payment.bookingId
-        ? await Booking.findById(payment.bookingId)
-        : await Booking.findOne({customerId:hold.customerId,idempotencyKey:`payment:${payment._id}`});
-      if(booking){
-        payment.bookingId=booking._id;
-        payment.status="paid";
-        payment.paidAt ||= new Date();
-      }else{
-        payment.status="needs_review";
-      }
-    } else {
-      if (hold.status === "active") await releaseHold(hold, "expired");
-      payment.status = "needs_review";
+    const confirmed=await confirmPaidHoldAtomic({paymentId:payment._id,event});
+    if(confirmed?.bookingId){
+      sendBookingConfirmation(confirmed.bookingId).catch(err=>console.error("Booking confirmation notification failed",err));
     }
+    return {duplicate:false,payment:confirmed?.payment||payment};
   } else if (["failed", "cancelled", "expired"].includes(event.status)) {
     await releaseHold(hold, event.status === "expired" ? "expired" : "released");
     payment.status = event.status;
@@ -243,8 +288,5 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   payment.lastEventId = event.eventId;
   payment.rawLastEvent = event.raw;
   await payment.save();
-  if(bookingToNotify){
-    sendBookingConfirmation(bookingToNotify).catch(err=>console.error("Booking confirmation notification failed",err));
-  }
   return { duplicate: false, payment };
 }
