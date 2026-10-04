@@ -329,3 +329,11 @@ nav{
 .quick-trip-actions button{padding:7px 8px;font-size:9px;min-height:38px}
 .quick-trip-actions button svg{width:14px;height:14px}
 .quick-trip-actions button.active-open,.quick-trip-actions button.active-closed{box-shadow:none}
+
+.quick-trip-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.quick-trip-actions .sales-action.open{background:#e8f8f1;color:#087443;border-color:#cfeadd}
+.quick-trip-actions .sales-action.close{background:#fff;color:#315466;border-color:#dce7ed}
+@media(max-width:560px){
+  .quick-trip-actions{grid-template-columns:1fr 1fr}
+  .quick-trip-actions .sales-action{grid-column:1/-1}
+}
