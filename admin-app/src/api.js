@@ -14,6 +14,13 @@ const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");async 
 }export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});export const providers=token=>req("/api/admin/providers",{token});export const approveProvider=(token,id)=>req("/api/admin/providers/"+id+"/approve",{token,method:"PATCH"});export const trips=token=>req("/api/admin/trips",{token});export const setCommission=(token,id,percentage)=>req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({percentage})});export const refunds=token=>req("/api/admin/refunds",{token});export const notifications=token=>req("/api/admin/notifications",{token});
 export const supportRequests=token=>req("/api/admin/support-requests",{token});
 export const setSupportRequestStatus=(token,id,status)=>req("/api/admin/support-requests/"+id,{token,method:"PATCH",body:JSON.stringify({status})});
+export const overview=(token,{from="",to="",providerId=""}={})=>{
+  const q=new URLSearchParams();
+  if(from)q.set("from",from);
+  if(to)q.set("to",to);
+  if(providerId)q.set("providerId",providerId);
+  return req("/api/admin/overview"+(q.toString()?"?"+q.toString():""),{token});
+};
 export const readiness=token=>req("/api/admin/readiness",{token});
 export const demoCleanupPreview=token=>req("/api/admin/demo-cleanup-preview",{token});
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
