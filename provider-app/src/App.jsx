@@ -580,8 +580,9 @@ return <div className="app"><header><ProviderBrand/><div className="header-actio
       return <article className={"quick-trip-card "+(salesOpen?"is-open":"is-closed")} key={"quick-"+d.id}>
         <div className="quick-trip-main"><div className="quick-trip-time"><Clock size={16}/><b>{depRows.length?new Date(d.startsAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):new Date(d.startsAt).toLocaleString([],{timeZone:"Asia/Amman",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</b></div><div><h3>{d.tripId?.titleEn||d.tripId?.titleAr}</h3><span>{d.reservedSeats}/{d.capacity} reserved · {available} available</span></div><em>{statusLabel}</em></div>
         <div className="quick-trip-actions">
-          <button className={!salesClosed?"active-open":""} disabled={busy||!salesClosed||d.status!=="scheduled"} onClick={()=>quickSetSales(d.id,false)}><CheckCircle2 size={15}/> {busy?"Updating...":"Open sales"}</button>
-          <button className={salesClosed?"active-closed":""} disabled={busy||salesClosed||d.status!=="scheduled"} onClick={()=>quickSetSales(d.id,true)}><XCircle size={15}/> {busy?"Updating...":"Close sales"}</button>
+          {d.status==="scheduled"&&!soldOut&&(salesClosed
+            ?<button className="sales-action open" disabled={busy} onClick={()=>quickSetSales(d.id,false)}><CheckCircle2 size={15}/> {busy?"Updating...":"Open sales"}</button>
+            :<button className="sales-action close" disabled={busy} onClick={()=>quickSetSales(d.id,true)}><XCircle size={15}/> {busy?"Updating...":"Close sales"}</button>)}
           <button onClick={()=>setManifestDeparture(d.id)}><UsersRound size={15}/> Passengers</button>
           <button onClick={()=>setEditingDeparture(d)}><Pencil size={15}/> Manage</button>
         </div>
