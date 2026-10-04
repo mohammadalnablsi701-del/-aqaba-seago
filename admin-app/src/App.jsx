@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from"react";
-import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell,LifeBuoy}from"lucide-react";
+import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell,LifeBuoy,LayoutDashboard,Mail,ReceiptText}from"lucide-react";
 import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function AdminBrand({login=false}){return <div className={"admin-brand"+(login?" admin-brand-login":"")}><svg className="admin-brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#D8DEE6" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="10.5"/>{[0,45,90,135,180,225,270,315].map(a=><line key={a} x1="32" y1="5.5" x2="32" y2="14" transform={`rotate(${a} 32 32)`}/>)}<path d="M25 33c3-4 6 3 9 2 2-.5 3.5-2 5-3"/></g></svg><div className="admin-brand-copy"><b>SeaGo</b><span>AQABA · ADMIN</span></div></div>}
@@ -44,10 +44,19 @@ export default function App(){
   const emailFailureSamples=notificationRows.filter(n=>n.status==="failed"&&n.error).slice(0,3);
   function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setSupportRows([]);}
   return <div className="app"><header><AdminBrand/><div className="admin-head-actions"><button onClick={load} disabled={loading}><RefreshCw className={loading?"spin":""} size={16}/> {loading?"Refreshing":"Refresh"}</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
-    <div className="admin-tabs"><button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}>Pilot readiness</button><button className={tab==="providers"?"active":""} onClick={()=>setTab("providers")}>Providers{providerRows.filter(p=>p.status==="pending").length?` (${providerRows.filter(p=>p.status==="pending").length})`:""}</button><button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}>Commissions</button><button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}>Cancellations & refunds</button><button className={tab==="support"?"active":""} onClick={()=>setTab("support")}>Support{supportRows.filter(x=>x.status==="open").length?" ("+supportRows.filter(x=>x.status==="open").length+")":""}</button><button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}>Email notifications</button></div>
+    <aside className="admin-tabs" aria-label="Admin navigation">
+      <div className="admin-tabs__label">Workspace</div>
+      <button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}><LayoutDashboard size={17}/><span>Overview</span></button>
+      <button className={tab==="providers"?"active":""} onClick={()=>setTab("providers")}><UsersRound size={17}/><span>Providers</span>{providerRows.filter(p=>p.status==="pending").length>0&&<em>{providerRows.filter(p=>p.status==="pending").length}</em>}</button>
+      <button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}><Percent size={17}/><span>Trips & fees</span></button>
+      <button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}><ReceiptText size={17}/><span>Refunds</span></button>
+      <button className={tab==="support"?"active":""} onClick={()=>setTab("support")}><LifeBuoy size={17}/><span>Support</span>{supportRows.filter(x=>x.status==="open").length>0&&<em>{supportRows.filter(x=>x.status==="open").length}</em>}</button>
+      <button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}><Mail size={17}/><span>System</span></button>
+    </aside>
+    <section className="admin-content">
     {error&&<div className="error">{error}</div>}
-    {loading?<p>Loading...</p>:tab==="readiness"?<>
-      <div className="title"><ShipWheel/><div><small>PILOT</small><h1>Pilot readiness</h1><p>Operational checks before inviting the first real provider and customers.</p></div></div>
+    {loading?<div className="admin-loading"><RefreshCw className="spin" size={18}/> Loading dashboard...</div>:tab==="readiness"?<>
+      <div className="title"><ShipWheel/><div><small>OVERVIEW</small><h1>SeaGo operations</h1><p>Live business health, pilot status and upcoming activity in one place.</p></div></div>
       {ready&&<section className="ops-overview"><div className="ops-overview-head"><div><small>OPERATIONS OVERVIEW</small><h2>All-time confirmed activity</h2><p className="ops-generated">Updated {ready.generatedAt?new Date(ready.generatedAt).toLocaleString():"just now"}</p></div><span>{ready.operations?.currency||"JOD"}</span></div><div className="ops-metrics"><div><small>Confirmed bookings</small><b>{ready.counts?.confirmedBookings||0}</b></div><div><small>Confirmed sales</small><b>{Number(ready.operations?.grossSales||0).toFixed(2)}</b></div><div><small>SeaGo commission</small><b>{Number(ready.operations?.seaGoCommission||0).toFixed(2)}</b></div><div><small>Provider net</small><b>{Number(ready.operations?.providerNet||0).toFixed(2)}</b></div></div><div className="ops-upcoming"><div className="ops-section-title"><b>Next departures</b><span>{ready.operations?.confirmedSeats||0} confirmed seats</span></div>{ready.operations?.upcoming?.length?ready.operations.upcoming.map(d=><div className="ops-departure" key={d.id}><div><b>{d.tripTitle}</b><span>{d.providerName}</span></div><div><strong>{new Date(d.startsAt).toLocaleString([],{dateStyle:"medium",timeStyle:"short"})}</strong><small>{d.reservedSeats||0}/{d.capacity} booked · {d.availableSeats} left</small></div></div>):<p className="ops-empty">No upcoming departures yet.</p>}</div></section>}
 {ready&&<div className={"controlled-pilot-card "+(ready.controlledPilotReady?"ready":"blocked")}><div><small>CONTROLLED PILOT</small><h2>{ready.controlledPilotReady?"Ready for first real test":"Not ready yet"}</h2><p>{ready.controlledPilotReady?"Use one approved provider and one real customer. Payment remains test-only and no real money is charged.":"Complete the required readiness checks below before inviting a real customer."}</p></div><div className="controlled-pilot-actions"><a href="../provider/" target="_blank" rel="noreferrer">Open Provider App</a><a href="../" target="_blank" rel="noreferrer">Open Customer App</a></div>{ready.environment?.mockCheckout&&<em>Test payment mode · no real charge</em>}</div>}
 {ready&&<div className="readiness-grid">
@@ -62,7 +71,7 @@ export default function App(){
       <div className="title"><UsersRound/><div><small>PROVIDERS</small><h1>Provider applications</h1><p>Review new SeaGo partners and approve them before they can publish trips.</p></div></div>
       <div className="provider-admin-list">{providerRows.length?providerRows.map(p=><ProviderAdminRow key={p._id} p={p} token={auth.token} onSaved={load}/>):<div className="admin-empty"><UsersRound size={28}/><b>No providers yet</b><span>New provider applications will appear here.</span></div>}</div>
     </>:tab==="commissions"?<>
-      <div className="title"><Percent/><div><small>COMMISSIONS</small><h1>Trip commission control</h1><p>Only admin can change SeaGo commission. Provider apps cannot edit this value.</p></div></div>
+      <div className="title"><Percent/><div><small>TRIPS & FEES</small><h1>Trip commission control</h1><p>Review trip performance and manage SeaGo commission from one place.</p></div></div>
       <div className="list">{rows.length?rows.map(t=><TripRow key={t._id} t={t} token={auth.token} onSaved={load}/>):<div className="admin-empty"><Percent size={28}/><b>No trips yet</b><span>Commission controls appear after a provider creates a trip.</span></div>}</div>
     </>:tab==="refunds"?<>
       <div className="title"><RotateCcw/><div><small>REFUNDS</small><h1>Cancellations & refunds</h1><p>Track customer and provider cancellations, refund percentages and payment status.</p></div></div>
@@ -71,12 +80,13 @@ export default function App(){
       <div className="title"><LifeBuoy/><div><small>SUPPORT</small><h1>Customer support requests</h1><p>Tracked requests submitted from the SeaGo customer app.</p></div></div>
       <div className="support-admin-list">{supportRows.length?supportRows.map(r=><SupportRow key={r._id} r={r} token={auth.token} onSaved={load}/>):<div className="admin-empty"><LifeBuoy size={28}/><b>No support requests</b><span>Customer requests will appear here.</span></div>}</div>
     </>:<>
-      <div className="title"><Bell/><div><small>EMAIL</small><h1>Email notifications</h1><p>Delivery history for confirmations, cancellations and trip reminders.</p></div></div>
+      <div className="title"><Bell/><div><small>SYSTEM</small><h1>System notifications</h1><p>Email delivery history and operational notification health.</p></div></div>
       <div className="email-summary-grid"><div><small>Total</small><b>{emailCounts.total}</b></div><div className="ok"><small>Sent</small><b>{emailCounts.sent}</b></div><div className="bad"><small>Failed</small><b>{emailCounts.failed}</b></div><div className="warn"><small>Skipped</small><b>{emailCounts.skipped}</b></div></div>
       {emailCounts.failed>0&&<div className="email-alert"><b>Email delivery needs attention</b><span>{emailCounts.failed} failed event{emailCounts.failed===1?"":"s"} detected.</span>{emailFailureSamples.map((n,i)=><small key={n._id||i}>{n.error}</small>)}</div>}
       <div className="email-filters"><select value={emailStatus} onChange={e=>setEmailStatus(e.target.value)}><option value="all">All statuses</option><option value="sent">Sent</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select><select value={emailType} onChange={e=>setEmailType(e.target.value)}><option value="all">All types</option>{emailTypes.map(t=><option key={t} value={t}>{t}</option>)}</select><span>{emailFiltered.length} shown</span></div>
       <div className="notification-list">{emailFiltered.length?emailFiltered.map(n=><NotificationRow key={n._id} n={n}/>):<p>No email events match these filters.</p>}</div>
     </>}
+    </section>
   </main></div>
 }
 
