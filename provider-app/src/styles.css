@@ -337,3 +337,11 @@ nav{
   .quick-trip-actions{grid-template-columns:1fr 1fr}
   .quick-trip-actions .sales-action{grid-column:1/-1}
 }
+
+.trip-card-actions{grid-template-columns:1.35fr 1fr auto;align-items:center}
+.trip-card-actions .edit-action{background:#eef6fb;color:#0a5f91}
+.trip-card-actions .duplicate-action{background:transparent;border:1px solid #dfe9ee;color:#718492;padding:8px 9px;font-size:9px;font-weight:800}
+@media(max-width:560px){
+  .trip-card-actions{grid-template-columns:1fr 1fr}
+  .trip-card-actions .duplicate-action{grid-column:1/-1;justify-self:start}
+}
