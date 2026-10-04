@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { requireAuth } from "../middleware/auth.js";
 import { normalizeJordanPhone, phoneCandidates, sendPhoneOtp, checkPhoneOtp } from "../services/phoneOtp.js";
 
 const router=express.Router();
@@ -104,6 +105,32 @@ async function findUserByPhoneRole(phoneNormalized,role){
   if(user&&!user.phoneNormalized){user.phoneNormalized=phoneNormalized;await user.save();}
   return user;
 }
+
+router.post("/phone/request",requireAuth,async(req,res,next)=>{
+  try{
+    const phone=normalizeJordanPhone(req.body.phone);
+    if(!phone)return res.status(400).json({error:"Enter a valid phone number"});
+    const existing=await User.findOne({role:req.user.role,phoneNormalized:phone,_id:{$ne:req.user._id}}).select("_id");
+    if(existing)return res.status(409).json({error:"Phone already registered"});
+    await sendPhoneOtp(phone);
+    res.json({ok:true,phone,expiresInSeconds:600});
+  }catch(e){next(e);}
+});
+
+router.post("/phone/verify",requireAuth,async(req,res,next)=>{
+  try{
+    const phone=normalizeJordanPhone(req.body.phone);
+    const code=String(req.body.code||"").trim();
+    if(!phone||!/^[0-9]{4,10}$/.test(code))return res.status(400).json({error:"Enter a valid phone and verification code"});
+    const existing=await User.findOne({role:req.user.role,phoneNormalized:phone,_id:{$ne:req.user._id}}).select("_id");
+    if(existing)return res.status(409).json({error:"Phone already registered"});
+    const approved=await checkPhoneOtp(phone,code);
+    if(!approved)return res.status(401).json({error:"Invalid or expired verification code"});
+    const user=await User.findByIdAndUpdate(req.user._id,{$set:{phone,phoneNormalized:phone}},{new:true});
+    if(!user||!user.isActive)return res.status(401).json({error:"Invalid account"});
+    res.json({user:safe(user),token:sign(user)});
+  }catch(e){next(e);}
+});
 
 router.post("/otp/request",async(req,res,next)=>{
   try{
