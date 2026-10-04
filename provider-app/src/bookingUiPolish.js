@@ -16,6 +16,10 @@ function polishBookingUi(root=document){
     if(text==='Not checked-in')button.textContent='Not checked in';
     if(text==='Checked-in')button.textContent='Checked in';
   });
+
+  root.querySelectorAll('.booking-quick-actions button').forEach(button=>{
+    if(button.textContent?.trim()==='Details')button.classList.add('details-secondary');
+  });
 }
 
 export function enableBookingUiPolish(){
