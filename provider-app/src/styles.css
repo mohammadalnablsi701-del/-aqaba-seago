@@ -325,3 +325,7 @@ nav{
   .home-summary-grid{grid-template-columns:1fr 1fr}
   .home-summary-grid .home-summary-net{grid-column:1/-1}
 }
+
+.quick-trip-actions button{padding:7px 8px;font-size:9px;min-height:38px}
+.quick-trip-actions button svg{width:14px;height:14px}
+.quick-trip-actions button.active-open,.quick-trip-actions button.active-closed{box-shadow:none}
