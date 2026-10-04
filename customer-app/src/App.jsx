@@ -441,7 +441,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
         <section className="detail-section">
           <span className="detail-section__label">TRIP ESSENTIALS</span>
           <div className="feature-grid">
-            <div><Anchor/><span><small>Experience</small><b>{trip.category}</b></span></div>
+            <div><Anchor/><span><small>Experience</small><b>{trip.experienceLabel||trip.category}</b></span></div>
             <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
             <div><UsersRound/><span><small>Availability</small><b>{trip.liveInventory?.nextDepartureAt?`${trip.liveInventory.nextAvailableSeats} seats next trip`:"No live departure"}</b></span></div>
             <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
