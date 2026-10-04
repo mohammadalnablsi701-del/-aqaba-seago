@@ -21,6 +21,17 @@ function cleanPhone(value){
   return String(value??"").trim().replace(/[^\d+\-() ]/g,"").slice(0,30);
 }
 
+function bookingForAccess(booking, access, { payment = undefined } = {}){
+  const obj=typeof booking?.toObject==="function"?booking.toObject():{...booking};
+  const canViewFinance=Boolean(access?.capabilities?.includes("view_finance"));
+  if(!canViewFinance){
+    delete obj.pricing;
+    delete obj.cancellation;
+  }
+  if(payment!==undefined&&canViewFinance)obj.payment=payment;
+  return obj;
+}
+
 router.post("/",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
     const businessName=cleanText(req.body.businessName,120);
@@ -133,7 +144,7 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
       if(!s)return false;
       return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Amman",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(s))===req.query.date;
     }):rows;
-    res.json(filtered);
+    res.json(filtered.map(b=>bookingForAccess(b,access)));
   }catch(e){next(e);}
 });
 
@@ -248,9 +259,8 @@ router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(r
     if(!booking)return res.status(404).json({error:"Booking not found"});
     const payment=await Payment.findOne({bookingId:booking._id}).select("status amount currency paidAt provider");
     res.json({
-      ...booking.toObject(),
-      bookingReference:"SG-"+String(booking._id).slice(-8).toUpperCase(),
-      payment:payment||null
+      ...bookingForAccess(booking,access,{payment:payment||null}),
+      bookingReference:"SG-"+String(booking._id).slice(-8).toUpperCase()
     });
   }catch(e){next(e);}
 });
