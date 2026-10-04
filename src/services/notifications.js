@@ -1,6 +1,7 @@
 import Booking from "../models/Booking.js";
 import Provider from "../models/Provider.js";
 import User from "../models/User.js";
+import Payment from "../models/Payment.js";
 import NotificationLog from "../models/NotificationLog.js";
 import InAppNotification from "../models/InAppNotification.js";
 import { sendPushToUser } from "./push.js";
@@ -112,6 +113,7 @@ export async function sendBookingConfirmation(bookingId){
   const ref=String(b._id).slice(-8).toUpperCase();
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
+  const payment=await Payment.findOne({bookingId:b._id}).select("_id");
 
   await createInApp({key:`booking-confirmed:customer:${b._id}`,userId:b.customerId?._id,type:"booking_confirmed",title:"Booking confirmed",body:`Your ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} booking SG-${ref} is confirmed.`,bookingId:b._id,data:{screen:"tickets"}});
   if(owner?._id){
@@ -122,7 +124,7 @@ export async function sendBookingConfirmation(bookingId){
     key:`booking-confirmed:customer:${b._id}`,
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
     subject:`SeaGo booking confirmed · SG-${ref}`,
-    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?payment=success" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#fff;text-decoration:none;border-radius:10px">View your ticket</a></p>`)
+    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?payment=success&amp;paymentId=${encodeURIComponent(payment?._id||"")}" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#fff;text-decoration:none;border-radius:10px">View your ticket</a></p>`)
   }).catch(err=>console.error("Customer confirmation email failed",err));
 
   if(owner?.email){
