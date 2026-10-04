@@ -10,6 +10,7 @@ import Booking from "../models/Booking.js";
 import InAppNotification from "../models/InAppNotification.js";
 import NotificationLog from "../models/NotificationLog.js";
 import ProviderMember from "../models/ProviderMember.js";
+import SupportRequest from "../models/SupportRequest.js";
 
 async function api(base,path,{method="GET",token,body,headers={}}={}) {
   const r=await fetch(base+path,{
@@ -216,6 +217,12 @@ export async function runPilotE2EOnce({port}) {
     if(payment.status!=="paid"||!payment.bookingId) throw new Error("Payment verification failed");
     step("payment-verified");
 
+    const checkinBookings=await api(base,"/api/providers/me/bookings",{token:checkinToken});
+    const checkinBooking=checkinBookings.find(x=>String(x._id)===String(payment.bookingId));
+    if(!checkinBooking)throw new Error("Check-in staff cannot see booking");
+    if(checkinBooking.pricing||checkinBooking.payment||checkinBooking.cancellation)throw new Error("Check-in staff received financial booking fields");
+    step("checkin-finance-fields-hidden");
+
     const providerNotifications=await api(base,"/api/notifications",{token:providerToken});
     const bookingNotice=providerNotifications.items?.find(n=>String(n.bookingId)===String(payment.bookingId));
     if(!bookingNotice||bookingNotice.data?.screen!=="bookings") throw new Error("Provider booking notification is not actionable");
@@ -225,6 +232,18 @@ export async function runPilotE2EOnce({port}) {
     const customerNotice=customerNotifications.items?.find(n=>String(n.bookingId)===String(payment.bookingId)&&n.type==="booking_confirmed");
     if(!customerNotice||customerNotice.data?.screen!=="tickets") throw new Error("Customer booking notification is not actionable");
     step("customer-booking-notification-actionable");
+
+    const support=await api(base,"/api/support",{method:"POST",token:customerToken,body:{
+      bookingId:payment.bookingId,
+      subject:"Pilot support request",
+      message:"Please confirm support routing for this booking."
+    }});
+    if(!support.id||!support.bookingReference)throw new Error("Customer support request was not created");
+    const adminSupport=await api(base,"/api/admin/support-requests",{token:adminToken});
+    const supportRow=adminSupport.find(x=>String(x._id)===String(support.id));
+    if(!supportRow||String(supportRow.bookingId?._id||supportRow.bookingId)!==String(payment.bookingId))throw new Error("Support request did not reach admin");
+    await api(base,`/api/admin/support-requests/${support.id}`,{method:"PATCH",token:adminToken,body:{status:"resolved"}});
+    step("support-request-routed");
 
     const tickets=await api(base,"/api/bookings",{token:customerToken});
     booking=tickets.find(x=>String(x._id)===String(paid.bookingId));
@@ -330,6 +349,7 @@ export async function runPilotE2EOnce({port}) {
       const bookingIds=bookings.map(x=>x._id);
 
       if(bookingIds.length){
+        await SupportRequest.deleteMany({bookingId:{$in:bookingIds}});
         await NotificationLog.deleteMany({bookingId:{$in:bookingIds}});
         await InAppNotification.deleteMany({bookingId:{$in:bookingIds}});
       }
