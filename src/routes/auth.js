@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
-import { normalizeJordanPhone, phoneCandidates, sendPhoneOtp, checkPhoneOtp } from "../services/phoneOtp.js";
+import { normalizeJordanPhone } from "../services/phoneOtp.js";
 
 const router=express.Router();
 
@@ -99,102 +99,24 @@ router.post("/login",async(req,res,next)=>{
   }catch(e){next(e);}
 });
 
-async function findUserByPhoneRole(phoneNormalized,role){
-  const candidates=phoneCandidates(phoneNormalized);
-  const user=await User.findOne({role,$or:[{phoneNormalized},...candidates.map(phone=>({phone}))]});
-  if(user&&!user.phoneNormalized){user.phoneNormalized=phoneNormalized;await user.save();}
-  return user;
-}
-
-router.post("/phone/request",requireAuth,async(req,res,next)=>{
+router.patch("/phone",requireAuth,async(req,res,next)=>{
   try{
     const phone=normalizeJordanPhone(req.body.phone);
     if(!phone)return res.status(400).json({error:"Enter a valid phone number"});
     const existing=await User.findOne({role:req.user.role,phoneNormalized:phone,_id:{$ne:req.user._id}}).select("_id");
     if(existing)return res.status(409).json({error:"Phone already registered"});
-    await sendPhoneOtp(phone);
-    res.json({ok:true,phone,expiresInSeconds:600});
-  }catch(e){next(e);}
-});
-
-router.post("/phone/verify",requireAuth,async(req,res,next)=>{
-  try{
-    const phone=normalizeJordanPhone(req.body.phone);
-    const code=String(req.body.code||"").trim();
-    if(!phone||!/^[0-9]{4,10}$/.test(code))return res.status(400).json({error:"Enter a valid phone and verification code"});
-    const existing=await User.findOne({role:req.user.role,phoneNormalized:phone,_id:{$ne:req.user._id}}).select("_id");
-    if(existing)return res.status(409).json({error:"Phone already registered"});
-    const approved=await checkPhoneOtp(phone,code);
-    if(!approved)return res.status(401).json({error:"Invalid or expired verification code"});
     const user=await User.findByIdAndUpdate(req.user._id,{$set:{phone,phoneNormalized:phone}},{new:true});
     if(!user||!user.isActive)return res.status(401).json({error:"Invalid account"});
     res.json({user:safe(user),token:sign(user)});
   }catch(e){next(e);}
 });
 
-router.post("/phone/request",requireAuth,async(req,res,next)=>{
-  try{
-    const phone=normalizeJordanPhone(req.body.phone);
-    if(!phone)return res.status(400).json({error:"Enter a valid phone number"});
-    const existing=await User.findOne({role:req.user.role,phoneNormalized:phone,_id:{$ne:req.user._id}}).select("_id");
-    if(existing)return res.status(409).json({error:"Phone already registered"});
-    await sendPhoneOtp(phone);
-    res.json({ok:true,phone,expiresInSeconds:600});
-  }catch(e){next(e);}
+router.post("/otp/request",(_req,res)=>{
+  res.status(410).json({error:"Phone code sign-in is disabled. Use Google or email instead."});
 });
 
-router.post("/phone/verify",requireAuth,async(req,res,next)=>{
-  try{
-    const phone=normalizeJordanPhone(req.body.phone);
-    const code=String(req.body.code||"").trim();
-    if(!phone||!/^[0-9]{4,10}$/.test(code))return res.status(400).json({error:"Enter a valid phone and verification code"});
-    const existing=await User.findOne({role:req.user.role,phoneNormalized:phone,_id:{$ne:req.user._id}}).select("_id");
-    if(existing)return res.status(409).json({error:"Phone already registered"});
-    const approved=await checkPhoneOtp(phone,code);
-    if(!approved)return res.status(401).json({error:"Invalid or expired verification code"});
-    const user=await User.findByIdAndUpdate(req.user._id,{$set:{phone,phoneNormalized:phone}},{new:true});
-    if(!user||!user.isActive)return res.status(401).json({error:"Invalid account"});
-    res.json({user:safe(user),token:sign(user)});
-  }catch(e){next(e);}
-});
-
-router.post("/otp/request",async(req,res,next)=>{
-  try{
-    const role=["customer","provider","admin"].includes(req.body.role)?req.body.role:"customer";
-    const mode=req.body.mode==="register"?"register":"login";
-    const phone=normalizeJordanPhone(req.body.phone);
-    if(!phone)return res.status(400).json({error:"Enter a valid phone number"});
-    if(mode==="register"&&role==="admin")return res.status(403).json({error:"Admin accounts cannot be created by phone"});
-    const existing=await findUserByPhoneRole(phone,role);
-    if(mode==="login"&&!existing)return res.status(404).json({error:"No account found for this phone"});
-    if(mode==="register"&&existing)return res.status(409).json({error:"Phone already registered"});
-    await sendPhoneOtp(phone);
-    res.json({ok:true,phone,expiresInSeconds:600});
-  }catch(e){next(e);}
-});
-
-router.post("/otp/verify",async(req,res,next)=>{
-  try{
-    const role=["customer","provider","admin"].includes(req.body.role)?req.body.role:"customer";
-    const mode=req.body.mode==="register"?"register":"login";
-    const phone=normalizeJordanPhone(req.body.phone);
-    const code=String(req.body.code||"").trim();
-    if(!phone||!/^[0-9]{4,10}$/.test(code))return res.status(400).json({error:"Enter a valid phone and verification code"});
-    const approved=await checkPhoneOtp(phone,code);
-    if(!approved)return res.status(401).json({error:"Invalid or expired verification code"});
-    let user=await findUserByPhoneRole(phone,role);
-    if(mode==="register"){
-      if(role==="admin")return res.status(403).json({error:"Admin accounts cannot be created by phone"});
-      if(user)return res.status(409).json({error:"Phone already registered"});
-      const name=cleanText(req.body.name,80);
-      if(!name)return res.status(400).json({error:"Name is required"});
-      user=await User.create({name,phone,phoneNormalized:phone,role,isActive:true});
-    }else if(!user){
-      return res.status(404).json({error:"Account not found"});
-    }
-    if(!user.isActive)return res.status(401).json({error:"Invalid account"});
-    res.json({user:safe(user),token:sign(user)});
-  }catch(e){next(e);}
+router.post("/otp/verify",(_req,res)=>{
+  res.status(410).json({error:"Phone code sign-in is disabled. Use Google or email instead."});
 });
 
 function sign(u){
