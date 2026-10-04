@@ -1,4 +1,4 @@
-import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+import express from "express";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
 router.get("/trips",async(_req,res,next)=>{try{
   const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});
   const tripIds=rows.map(t=>t._id);
@@ -24,6 +24,20 @@ router.get("/providers",async(_req,res,next)=>{try{
   res.json(rows.map(p=>({...p.toObject(),operations:byProvider.get(String(p._id))||{tripCount:0,activeTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0},settingsConfigured:Boolean(p.settings?.configured)})));
 }catch(e){next(e);}});
 router.get("/notifications",async(_req,res,next)=>{try{const rows=await NotificationLog.find({}).sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
+router.get("/support-requests",async(_req,res,next)=>{try{
+  const rows=await SupportRequest.find({}).populate("customerId","name email phone").populate("bookingId","status").sort({createdAt:-1}).limit(300);
+  res.json(rows);
+}catch(e){next(e);}});
+router.patch("/support-requests/:requestId",async(req,res,next)=>{try{
+  const status=String(req.body.status||"");
+  if(!["open","in_progress","resolved","closed"].includes(status))return res.status(400).json({error:"Invalid support status"});
+  const update={$set:{status}};
+  if(["resolved","closed"].includes(status)){update.$set.resolvedAt=new Date();update.$set.resolvedBy=req.user._id;}
+  else{update.$unset={resolvedAt:1,resolvedBy:1};}
+  const row=await SupportRequest.findByIdAndUpdate(req.params.requestId,update,{new:true});
+  if(!row)return res.status(404).json({error:"Support request not found"});
+  res.json(row);
+}catch(e){next(e);}});
 router.get("/refunds",async(_req,res,next)=>{try{
   const rows=await Booking.find({"cancellation.cancelledAt":{$exists:true}})
     .populate("customerId","name email phone")
