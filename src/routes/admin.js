@@ -1,4 +1,4 @@
-import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import ProviderSettlement from "../models/ProviderSettlement.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
 
 function overviewDate(value,end=false){
   const s=String(value||"").trim();
@@ -99,6 +99,142 @@ router.get("/overview",async(req,res,next)=>{
       })()
     });
   }catch(e){next(e);}
+});
+
+
+function settlementMoney(n){return Number(Number(n||0).toFixed(2));}
+async function settlementLedger({from,to,providerId}){
+  const match={status:{$in:["paid","partially_refunded","refunded"]},bookingId:{$ne:null},paidAt:{$ne:null}};
+  if(from||to){
+    match.paidAt={};
+    if(from)match.paidAt.$gte=from;
+    if(to)match.paidAt.$lte=to;
+  }
+  const pipeline=[
+    {$match:match},
+    {$lookup:{from:"bookings",localField:"bookingId",foreignField:"_id",as:"booking"}},
+    {$unwind:"$booking"}
+  ];
+  if(providerId)pipeline.push({$match:{"booking.providerId":new mongoose.Types.ObjectId(providerId)}});
+  pipeline.push(
+    {$lookup:{from:"providers",localField:"booking.providerId",foreignField:"_id",as:"provider"}},
+    {$unwind:{path:"$provider",preserveNullAndEmptyArrays:true}},
+    {$project:{
+      paymentId:"$_id",
+      bookingId:"$booking._id",
+      providerId:"$booking.providerId",
+      providerName:{$ifNull:["$provider.businessName","Unknown provider"]},
+      amount:{$ifNull:["$amount",0]},
+      refundedAmount:{$ifNull:["$refundedAmount",0]},
+      commissionAmount:{$ifNull:["$booking.pricing.commissionAmount",0]},
+      providerNetAmount:{$ifNull:["$booking.pricing.providerNetAmount",0]}
+    }}
+  );
+  const payments=await Payment.aggregate(pipeline);
+  const paymentIds=payments.map(x=>x.paymentId);
+  const settled=paymentIds.length?await ProviderSettlement.find({paymentIds:{$in:paymentIds},status:"paid"}).select("paymentIds").lean():[];
+  const settledIds=new Set(settled.flatMap(s=>(s.paymentIds||[]).map(String)));
+  const providersList=await Provider.find({}).select("_id businessName status").sort({businessName:1}).lean();
+  const byProvider=new Map();
+  for(const p of providersList){
+    if(providerId&&String(p._id)!==providerId)continue;
+    byProvider.set(String(p._id),{
+      providerId:p._id,providerName:p.businessName,providerStatus:p.status,
+      bookings:0,grossSales:0,refunds:0,seaGoCommission:0,providerNet:0,paid:0,outstanding:0,
+      unsettledPaymentIds:[],unsettledBookingIds:[]
+    });
+  }
+  for(const x of payments){
+    const key=String(x.providerId);
+    if(!byProvider.has(key))byProvider.set(key,{providerId:x.providerId,providerName:x.providerName,providerStatus:"",bookings:0,grossSales:0,refunds:0,seaGoCommission:0,providerNet:0,paid:0,outstanding:0,unsettledPaymentIds:[],unsettledBookingIds:[]});
+    const row=byProvider.get(key);
+    const gross=Number(x.amount||0),refund=Number(x.refundedAmount||0),retained=Math.max(0,gross-refund);
+    const ratio=gross>0?retained/gross:0;
+    const commission=Number(x.commissionAmount||0)*ratio;
+    const providerNet=Number(x.providerNetAmount||0)*ratio;
+    const isSettled=settledIds.has(String(x.paymentId));
+    row.bookings+=1;row.grossSales+=gross;row.refunds+=refund;row.seaGoCommission+=commission;row.providerNet+=providerNet;
+    if(isSettled)row.paid+=providerNet;
+    else{
+      row.outstanding+=providerNet;
+      row.unsettledPaymentIds.push(x.paymentId);
+      row.unsettledBookingIds.push(x.bookingId);
+    }
+  }
+  const breakdown=[...byProvider.values()].map(r=>({
+    ...r,
+    grossSales:settlementMoney(r.grossSales),
+    refunds:settlementMoney(r.refunds),
+    seaGoCommission:settlementMoney(r.seaGoCommission),
+    providerNet:settlementMoney(r.providerNet),
+    paid:settlementMoney(r.paid),
+    outstanding:settlementMoney(r.outstanding)
+  })).sort((a,b)=>b.outstanding-a.outstanding||a.providerName.localeCompare(b.providerName));
+  const totals=breakdown.reduce((a,r)=>{
+    a.grossSales+=r.grossSales;a.refunds+=r.refunds;a.seaGoCommission+=r.seaGoCommission;a.providerNet+=r.providerNet;a.paid+=r.paid;a.outstanding+=r.outstanding;return a;
+  },{grossSales:0,refunds:0,seaGoCommission:0,providerNet:0,paid:0,outstanding:0});
+  return{providersList,breakdown,totals:Object.fromEntries(Object.entries(totals).map(([k,v])=>[k,settlementMoney(v)]))};
+}
+
+router.get("/settlements",async(req,res,next)=>{
+  try{
+    const from=overviewDate(req.query.from,false),to=overviewDate(req.query.to,true);
+    if(req.query.from&&!from)return res.status(400).json({error:"Invalid from date"});
+    if(req.query.to&&!to)return res.status(400).json({error:"Invalid to date"});
+    if(from&&to&&from>to)return res.status(400).json({error:"From date must be before to date"});
+    const providerId=String(req.query.providerId||"").trim();
+    if(providerId&&!/^[a-f0-9]{24}$/i.test(providerId))return res.status(400).json({error:"Invalid provider"});
+    const data=await settlementLedger({from,to,providerId});
+    const history=await ProviderSettlement.find(providerId?{providerId}:{})
+      .populate("providerId","businessName").populate("paidBy","name email")
+      .sort({paidAt:-1}).limit(100).lean();
+    res.json({
+      generatedAt:new Date(),currency:"JOD",
+      filters:{from:req.query.from||null,to:req.query.to||null,providerId:providerId||null},
+      providers:data.providersList.map(p=>({id:p._id,businessName:p.businessName,status:p.status})),
+      totals:data.totals,
+      breakdown:data.breakdown.map(({unsettledPaymentIds,unsettledBookingIds,...x})=>x),
+      history:history.map(s=>({
+        id:s._id,providerId:s.providerId?._id||s.providerId,providerName:s.providerId?.businessName||"Provider",
+        periodFrom:s.periodFrom,periodTo:s.periodTo,currency:s.currency,
+        grossSales:s.grossSales,refunds:s.refunds,seaGoCommission:s.seaGoCommission,
+        providerNet:s.providerNet,amountPaid:s.amountPaid,status:s.status,paidAt:s.paidAt,
+        paidBy:s.paidBy?{name:s.paidBy.name,email:s.paidBy.email}:null,note:s.note||""
+      }))
+    });
+  }catch(e){next(e);}
+});
+
+router.post("/settlements/pay",async(req,res,next)=>{
+  try{
+    const from=overviewDate(req.body.from,false),to=overviewDate(req.body.to,true);
+    const providerId=String(req.body.providerId||"").trim();
+    if(!from||!to)return res.status(400).json({error:"From and to dates are required"});
+    if(from>to)return res.status(400).json({error:"From date must be before to date"});
+    if(!/^[a-f0-9]{24}$/i.test(providerId))return res.status(400).json({error:"Invalid provider"});
+    const provider=await Provider.findById(providerId).select("_id businessName");
+    if(!provider)return res.status(404).json({error:"Provider not found"});
+    const data=await settlementLedger({from,to,providerId});
+    const row=data.breakdown.find(x=>String(x.providerId)===providerId);
+    if(!row||row.outstanding<=0||!row.unsettledPaymentIds.length)return res.status(409).json({error:"No outstanding provider balance in this period"});
+    const settlement=await ProviderSettlement.create({
+      providerId:provider._id,
+      paymentIds:row.unsettledPaymentIds,
+      bookingIds:row.unsettledBookingIds,
+      periodFrom:from,periodTo:to,currency:"JOD",
+      grossSales:row.grossSales,refunds:row.refunds,seaGoCommission:row.seaGoCommission,
+      providerNet:row.providerNet,amountPaid:row.outstanding,
+      paidAt:new Date(),paidBy:req.user._id,
+      note:String(req.body.note||"").trim().slice(0,500)
+    });
+    res.status(201).json({
+      ok:true,id:settlement._id,providerId:provider._id,providerName:provider.businessName,
+      amountPaid:settlement.amountPaid,currency:settlement.currency,paidAt:settlement.paidAt
+    });
+  }catch(e){
+    if(e?.code===11000)return res.status(409).json({error:"One or more payments were already settled. Refresh and try again."});
+    next(e);
+  }
 });
 
 router.get("/trips",async(_req,res,next)=>{try{
