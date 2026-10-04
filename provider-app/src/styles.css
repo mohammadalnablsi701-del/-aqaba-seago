@@ -274,3 +274,30 @@ nav{
 .auth-divider{display:flex;align-items:center;gap:10px;margin:8px 0 12px;color:#8a9aa6;font-size:11px}
 .auth-divider:before,.auth-divider:after{content:"";height:1px;background:#e2e9ee;flex:1}
 .auth-divider span{white-space:nowrap}
+
+
+/* Provider quick-start: keep full permissions, make daily operation effortless */
+.quick-today{background:linear-gradient(180deg,#fbfeff,#f5fbfd);border:1px solid #d8e8ef;border-radius:18px;padding:14px;margin-bottom:14px}
+.quick-today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px}
+.quick-today-head small{font-size:9px;font-weight:900;letter-spacing:.12em;color:#00a7b5}
+.quick-today-head h2{margin:3px 0 3px;font-size:18px;color:#173d53}
+.quick-today-head p{margin:0;color:#728592;font-size:11px;line-height:1.45;max-width:560px}
+.quick-today-head>button{border:0;border-radius:11px;background:#0b6f9f;color:#fff;padding:10px 12px;font-size:10px;font-weight:900;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.quick-today-list{display:grid;gap:9px}
+.quick-trip-card{background:#fff;border:1px solid #e1ebf0;border-radius:14px;padding:11px}
+.quick-trip-card.is-open{border-left:4px solid #079455}.quick-trip-card.is-closed{border-left:4px solid #d92d20}
+.quick-trip-main{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.quick-trip-time{display:flex;align-items:center;gap:5px;background:#eef7fb;color:#0b6f9f;border-radius:10px;padding:8px 9px}
+.quick-trip-time b{font-size:11px}.quick-trip-main h3{margin:0 0 3px;font-size:12px;color:#173d53}.quick-trip-main span{font-size:10px;color:#718492}
+.quick-trip-main em{font-style:normal;font-size:9px;font-weight:900;border-radius:999px;padding:6px 8px;background:#e8f8f1;color:#087443;white-space:nowrap}
+.quick-trip-card.is-closed .quick-trip-main em{background:#fff0ee;color:#b42318}
+.quick-trip-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}
+.quick-trip-actions button{border:1px solid #dce7ed;background:#fff;color:#315466;border-radius:10px;padding:9px 8px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:5px}
+.quick-trip-actions button.active-open{background:#e8f8f1;color:#087443;border-color:#cfeadd}
+.quick-trip-actions button.active-closed{background:#fff0ee;color:#b42318;border-color:#f3d0cc}
+.quick-trip-actions button:disabled{opacity:.58}
+@media(max-width:560px){
+  .quick-today-head{flex-direction:column}.quick-today-head>button{width:100%;justify-content:center}
+  .quick-trip-main{grid-template-columns:auto 1fr}.quick-trip-main em{grid-column:1/-1;justify-self:start}
+  .quick-trip-actions{grid-template-columns:1fr 1fr}
+}
