@@ -301,3 +301,7 @@ nav{
   .quick-trip-main{grid-template-columns:auto 1fr}.quick-trip-main em{grid-column:1/-1;justify-self:start}
   .quick-trip-actions{grid-template-columns:1fr 1fr}
 }
+
+.header-refresh{border:1px solid #d8e5ec;background:#f7fbfd;color:#0b6f9f;border-radius:11px;padding:8px 10px;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:900}
+.header-refresh:disabled{opacity:.6}
+@media(max-width:560px){.header-refresh span{display:none}.header-refresh{width:44px;height:44px;padding:0;justify-content:center}}
