@@ -21,6 +21,14 @@ export const overview=(token,{from="",to="",providerId=""}={})=>{
   if(providerId)q.set("providerId",providerId);
   return req("/api/admin/overview"+(q.toString()?"?"+q.toString():""),{token});
 };
+export const settlements=(token,{from="",to="",providerId=""}={})=>{
+  const q=new URLSearchParams();
+  if(from)q.set("from",from);
+  if(to)q.set("to",to);
+  if(providerId)q.set("providerId",providerId);
+  return req("/api/admin/settlements"+(q.toString()?"?"+q.toString():""),{token});
+};
+export const markSettlementPaid=(token,{providerId,from,to,note=""})=>req("/api/admin/settlements/pay",{token,method:"POST",body:JSON.stringify({providerId,from,to,note})});
 export const readiness=token=>req("/api/admin/readiness",{token});
 export const demoCleanupPreview=token=>req("/api/admin/demo-cleanup-preview",{token});
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
