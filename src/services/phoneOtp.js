@@ -5,7 +5,7 @@ export function normalizeJordanPhone(value){
   if(!raw)return "";
   let d=digits(raw);
   if(d.startsWith("00962"))d=d.slice(2);
-  if(d.startsWith("962"))return "+"+d;
+  if(d.startsWith("962"))return /^9627\d{8}$/.test(d)?"+"+d:"";
   if(d.startsWith("07")&&d.length===10)return "+962"+d.slice(1);
   if(d.startsWith("7")&&d.length===9)return "+962"+d;
   if(raw.startsWith("+")&&d.length>=8&&d.length<=15)return "+"+d;
