@@ -1,6 +1,6 @@
 import React,{useEffect,useState}from"react";
-import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell,LifeBuoy,LayoutDashboard,Mail,ReceiptText}from"lucide-react";
-import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,overview,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
+import{Percent,RefreshCw,Save,RotateCcw,LogOut,CheckCircle2,XCircle,ShipWheel,UsersRound,Bell,LifeBuoy,LayoutDashboard,Mail,ReceiptText,WalletCards}from"lucide-react";
+import{login,providers,approveProvider,setProviderStatus,trips,setCommission,refunds,notifications,supportRequests,setSupportRequestStatus,overview,settlements,markSettlementPaid,readiness,demoCleanupPreview,cleanupDemo}from"./api.js";
 
 function AdminBrand({login=false}){return <div className={"admin-brand"+(login?" admin-brand-login":"")}><svg className="admin-brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#D8DEE6" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="10.5"/>{[0,45,90,135,180,225,270,315].map(a=><line key={a} x1="32" y1="5.5" x2="32" y2="14" transform={`rotate(${a} 32 32)`}/>)}<path d="M25 33c3-4 6 3 9 2 2-.5 3.5-2 5-3"/></g></svg><div className="admin-brand-copy"><b>SeaGo</b><span>AQABA · ADMIN</span></div></div>}
 
@@ -27,7 +27,7 @@ function Login({onDone}) {
 }
 
 export default function App(){
-  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[supportRows,setSupportRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");const[overviewData,setOverviewData]=useState(null);const[overviewLoading,setOverviewLoading]=useState(false);const[overviewError,setOverviewError]=useState("");const[overviewPreset,setOverviewPreset]=useState("month");const[overviewProvider,setOverviewProvider]=useState("");const initialRange=rangeForPreset("month");const[overviewFrom,setOverviewFrom]=useState(initialRange.from);const[overviewTo,setOverviewTo]=useState(initialRange.to);const[overviewRefresh,setOverviewRefresh]=useState(0);
+  const[auth,setAuth]=useState(stored());const[providerRows,setProviderRows]=useState([]);const[rows,setRows]=useState([]);const[refundRows,setRefundRows]=useState([]);const[notificationRows,setNotificationRows]=useState([]);const[supportRows,setSupportRows]=useState([]);const[emailStatus,setEmailStatus]=useState("all");const[emailType,setEmailType]=useState("all");const[ready,setReady]=useState(null);const[demoPreview,setDemoPreview]=useState(null);const[cleanupText,setCleanupText]=useState("");const[cleanupBusy,setCleanupBusy]=useState(false);const[cleanupMsg,setCleanupMsg]=useState("");const[tab,setTab]=useState("readiness");const[loading,setLoading]=useState(false);const[error,setError]=useState("");const[overviewData,setOverviewData]=useState(null);const[overviewLoading,setOverviewLoading]=useState(false);const[overviewError,setOverviewError]=useState("");const[overviewPreset,setOverviewPreset]=useState("month");const[overviewProvider,setOverviewProvider]=useState("");const initialRange=rangeForPreset("month");const[overviewFrom,setOverviewFrom]=useState(initialRange.from);const[overviewTo,setOverviewTo]=useState(initialRange.to);const[overviewRefresh,setOverviewRefresh]=useState(0);const[settlementData,setSettlementData]=useState(null);const[settlementLoading,setSettlementLoading]=useState(false);const[settlementError,setSettlementError]=useState("");const[settlementProvider,setSettlementProvider]=useState("");const[settlementPreset,setSettlementPreset]=useState("month");const[settlementFrom,setSettlementFrom]=useState(initialRange.from);const[settlementTo,setSettlementTo]=useState(initialRange.to);const[settlementRefresh,setSettlementRefresh]=useState(0);const[settlementBusy,setSettlementBusy]=useState("");
   useEffect(()=>{
     const expired=()=>{setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setSupportRows([]);setError("Your session expired. Please sign in again.");};
     window.addEventListener("seago:session-expired",expired);
@@ -50,6 +50,32 @@ export default function App(){
     const next=rangeForPreset(preset);
     setOverviewFrom(next.from);setOverviewTo(next.to);
   }
+  useEffect(()=>{
+    let ignore=false;
+    if(!auth?.token)return;
+    setSettlementLoading(true);setSettlementError("");
+    settlements(auth.token,{from:settlementFrom,to:settlementTo,providerId:settlementProvider})
+      .then(r=>{if(!ignore)setSettlementData(r)})
+      .catch(e=>{if(!ignore)setSettlementError(e.message||"Could not load settlements")})
+      .finally(()=>{if(!ignore)setSettlementLoading(false)});
+    return()=>{ignore=true};
+  },[auth?.token,settlementFrom,settlementTo,settlementProvider,settlementRefresh]);
+  function applySettlementPreset(preset){
+    setSettlementPreset(preset);
+    const next=rangeForPreset(preset);
+    setSettlementFrom(next.from);setSettlementTo(next.to);
+  }
+  async function payProviderSettlement(row){
+    if(!settlementFrom||!settlementTo)return;
+    const amount=Number(row.outstanding||0).toFixed(2);
+    if(!window.confirm(`Mark ${amount} JOD as paid to ${row.providerName} for ${settlementFrom} → ${settlementTo}?`))return;
+    setSettlementBusy(String(row.providerId));setSettlementError("");
+    try{
+      await markSettlementPaid(auth.token,{providerId:String(row.providerId),from:settlementFrom,to:settlementTo});
+      setSettlementRefresh(v=>v+1);setOverviewRefresh(v=>v+1);
+    }catch(e){setSettlementError(e.message||"Could not mark settlement paid")}
+    finally{setSettlementBusy("")}
+  }
   async function runDemoCleanup(){
     if(!demoPreview?.provider?.id&& !demoPreview?.provider?._id){setCleanupMsg("No demo provider found.");return;}
     setCleanupBusy(true);setCleanupMsg("");
@@ -68,12 +94,12 @@ export default function App(){
   const emailFiltered=notificationRows.filter(n=>(emailStatus==="all"||n.status===emailStatus)&&(emailType==="all"||n.type===emailType));
   const emailFailureSamples=notificationRows.filter(n=>n.status==="failed"&&n.error).slice(0,3);
   function signOut(){localStorage.removeItem("seago_admin_auth");setAuth(null);setProviderRows([]);setRows([]);setRefundRows([]);setNotificationRows([]);setSupportRows([]);}
-  return <div className="app"><header><AdminBrand/><div className="admin-head-actions"><button onClick={()=>{load();setOverviewRefresh(v=>v+1)}} disabled={loading}><RefreshCw className={loading?"spin":""} size={16}/> {loading?"Refreshing":"Refresh"}</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
+  return <div className="app"><header><AdminBrand/><div className="admin-head-actions"><button onClick={()=>{load();setOverviewRefresh(v=>v+1);setSettlementRefresh(v=>v+1)}} disabled={loading}><RefreshCw className={loading?"spin":""} size={16}/> {loading?"Refreshing":"Refresh"}</button><button onClick={signOut}><LogOut size={16}/> Sign out</button></div></header><main>
     <aside className="admin-tabs" aria-label="Admin navigation">
       <div className="admin-tabs__label">Workspace</div>
       <button className={tab==="readiness"?"active":""} onClick={()=>setTab("readiness")}><LayoutDashboard size={17}/><span>Overview</span></button>
       <button className={tab==="providers"?"active":""} onClick={()=>setTab("providers")}><UsersRound size={17}/><span>Providers</span>{providerRows.filter(p=>p.status==="pending").length>0&&<em>{providerRows.filter(p=>p.status==="pending").length}</em>}</button>
-      <button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}><Percent size={17}/><span>Trips & fees</span></button>
+      <button className={tab==="commissions"?"active":""} onClick={()=>setTab("commissions")}><Percent size={17}/><span>Trips & fees</span></button><button className={tab==="settlements"?"active":""} onClick={()=>setTab("settlements")}><WalletCards size={17}/><span>Settlements</span>{Number(settlementData?.totals?.outstanding||0)>0&&<em>{Number(settlementData.totals.outstanding).toFixed(0)}</em>}</button>
       <button className={tab==="refunds"?"active":""} onClick={()=>setTab("refunds")}><ReceiptText size={17}/><span>Refunds</span></button>
       <button className={tab==="support"?"active":""} onClick={()=>setTab("support")}><LifeBuoy size={17}/><span>Support</span>{supportRows.filter(x=>x.status==="open").length>0&&<em>{supportRows.filter(x=>x.status==="open").length}</em>}</button>
       <button className={tab==="notifications"?"active":""} onClick={()=>setTab("notifications")}><Mail size={17}/><span>System</span></button>
@@ -125,6 +151,44 @@ export default function App(){
     </>:tab==="commissions"?<>
       <div className="title"><Percent/><div><small>TRIPS & FEES</small><h1>Trip commission control</h1><p>Review trip performance and manage SeaGo commission from one place.</p></div></div>
       <div className="list">{rows.length?rows.map(t=><TripRow key={t._id} t={t} token={auth.token} onSaved={load}/>):<div className="admin-empty"><Percent size={28}/><b>No trips yet</b><span>Commission controls appear after a provider creates a trip.</span></div>}</div>
+    </>:tab==="settlements"?<>
+      <div className="title"><WalletCards/><div><small>PROVIDER SETTLEMENTS</small><h1>Pay providers</h1><p>Track what SeaGo collected, what belongs to each provider, and what has already been paid.</p></div></div>
+      <section className="overview-filter-card">
+        <div className="overview-presets">
+          {[["today","Today"],["7d","7 days"],["30d","30 days"],["month","This month"]].map(([id,label])=><button key={id} className={settlementPreset===id?"active":""} onClick={()=>applySettlementPreset(id)}>{label}</button>)}
+        </div>
+        <div className="overview-filter-grid">
+          <label><span>Company</span><select value={settlementProvider} onChange={e=>setSettlementProvider(e.target.value)}><option value="">All companies</option>{(settlementData?.providers||providerRows).map(p=><option key={p.id||p._id} value={p.id||p._id}>{p.businessName}</option>)}</select></label>
+          <label><span>From</span><input type="date" value={settlementFrom} onChange={e=>{setSettlementPreset("custom");setSettlementFrom(e.target.value)}}/></label>
+          <label><span>To</span><input type="date" value={settlementTo} onChange={e=>{setSettlementPreset("custom");setSettlementTo(e.target.value)}}/></label>
+        </div>
+      </section>
+      {settlementError&&<div className="error">{settlementError}</div>}
+      {settlementLoading&&!settlementData?<div className="admin-loading"><RefreshCw className="spin" size={18}/> Loading settlements...</div>:<>
+        <section className="settlement-kpis">
+          <div><small>Gross sales</small><b>{Number(settlementData?.totals?.grossSales||0).toFixed(2)} JOD</b></div>
+          <div><small>SeaGo commission</small><b>{Number(settlementData?.totals?.seaGoCommission||0).toFixed(2)} JOD</b></div>
+          <div><small>Provider net</small><b>{Number(settlementData?.totals?.providerNet||0).toFixed(2)} JOD</b></div>
+          <div className="paid"><small>Paid</small><b>{Number(settlementData?.totals?.paid||0).toFixed(2)} JOD</b></div>
+          <div className="outstanding"><small>Outstanding</small><b>{Number(settlementData?.totals?.outstanding||0).toFixed(2)} JOD</b></div>
+        </section>
+        <section className="settlement-card">
+          <div className="provider-breakdown-head"><div><small>PAYABLE BY COMPANY</small><h2>{settlementProvider?"Selected company":"All companies"}</h2></div><span>{settlementFrom} → {settlementTo}</span></div>
+          <div className="settlement-list">{(settlementData?.breakdown||[]).length?settlementData.breakdown.map(row=><article className="settlement-row" key={row.providerId}>
+            <div className="settlement-company"><b>{row.providerName}</b><small>{row.bookings} paid booking(s)</small></div>
+            <div><span>Gross</span><b>{Number(row.grossSales||0).toFixed(2)}</b></div>
+            <div><span>Refunds</span><b>{Number(row.refunds||0).toFixed(2)}</b></div>
+            <div><span>SeaGo</span><b>{Number(row.seaGoCommission||0).toFixed(2)}</b></div>
+            <div><span>Provider net</span><b>{Number(row.providerNet||0).toFixed(2)}</b></div>
+            <div><span>Paid</span><b>{Number(row.paid||0).toFixed(2)}</b></div>
+            <div className="settlement-outstanding"><span>Outstanding</span><b>{Number(row.outstanding||0).toFixed(2)} JOD</b></div>
+            <button className="settlement-pay" disabled={!settlementFrom||!settlementTo||Number(row.outstanding||0)<=0||settlementBusy===String(row.providerId)} onClick={()=>payProviderSettlement(row)}>{settlementBusy===String(row.providerId)?"Saving...":Number(row.outstanding||0)>0?"Mark as paid":"Paid"}</button>
+          </article>):<div className="admin-empty"><WalletCards size={28}/><b>No provider balance in this period</b><span>Paid bookings will appear here automatically.</span></div>}</div>
+        </section>
+        <section className="settlement-history"><div className="provider-breakdown-head"><div><small>PAYMENT HISTORY</small><h2>Recent settlements</h2></div></div>
+          {(settlementData?.history||[]).length?settlementData.history.map(s=><div className="settlement-history-row" key={s.id}><div><b>{s.providerName}</b><span>{new Date(s.periodFrom).toLocaleDateString()} → {new Date(s.periodTo).toLocaleDateString()}</span></div><div><b>{Number(s.amountPaid||0).toFixed(2)} {s.currency||"JOD"}</b><span>Paid {new Date(s.paidAt).toLocaleString()}</span></div></div>):<p className="muted">No settlements recorded yet.</p>}
+        </section>
+      </>}
     </>:tab==="refunds"?<>
       <div className="title"><RotateCcw/><div><small>REFUNDS</small><h1>Cancellations & refunds</h1><p>Track customer and provider cancellations, refund percentages and payment status.</p></div></div>
       <div className="refund-list">{refundRows.length?refundRows.map(r=><RefundRow key={r._id} r={r}/>):<div className="admin-empty"><RotateCcw size={28}/><b>No cancellations</b><span>Refund activity will appear here when a booking is cancelled.</span></div>}</div>
