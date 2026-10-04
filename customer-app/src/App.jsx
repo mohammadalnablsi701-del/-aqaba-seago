@@ -279,7 +279,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
         </div>
         {trip.apiId&&<div className={"trip-live-status "+(trip.liveInventory?.nextDepartureAt?"available":"unavailable")}>
           {trip.liveInventory?.nextDepartureAt
-            ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
+            ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
             : <><CalendarDays size={13}/><span>No departures available</span></>}
         </div>}
         <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">View experience <ChevronRight size={15}/></div>
@@ -529,7 +529,7 @@ function AuthForm({ onAuthenticated }) {
 function formatDeparture(value) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("en", {
-    weekday:"short", day:"numeric", month:"short", hour:"numeric", minute:"2-digit"
+    timeZone:"Asia/Amman", weekday:"short", day:"numeric", month:"short", hour:"numeric", minute:"2-digit"
   }).format(date);
 }
 
@@ -1078,7 +1078,7 @@ function NotificationsScreen({auth,onUnreadChange,onAuthenticated}){
         const Icon=t.includes("cancel")?CalendarDays:t.includes("booking")||t.includes("confirm")?Ticket:t.includes("remind")?Bell:CheckCircle2;
         return <button key={n._id} className={"notification-card "+(!n.readAt?"unread":"")} onClick={()=>open(n)}>
           <div className="notification-icon"><Icon size={18}/></div>
-          <div className="notification-card__copy"><div className="notification-card__top"><b>{n.title}</b>{!n.readAt&&<span className="notification-new">NEW</span>}</div><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"})}</small></div>
+          <div className="notification-card__copy"><div className="notification-card__top"><b>{n.title}</b>{!n.readAt&&<span className="notification-new">NEW</span>}</div><p>{n.body}</p><small>{new Date(n.createdAt).toLocaleString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"})}</small></div>
           <ChevronRight size={17} className="notification-chevron"/>
         </button>
       })}</div>
