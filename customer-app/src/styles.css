@@ -523,3 +523,13 @@
 .support-request-card input,.support-request-card select,.support-request-card textarea{width:100%;border:1px solid var(--line);border-radius:13px;background:#fff;color:var(--ink);padding:11px 12px;font:inherit;font-size:16px}
 .support-request-card input,.support-request-card select{height:48px}.support-request-card textarea{resize:vertical;min-height:110px}
 .support-request-card>.primary-button{width:100%}.support-signin-note{margin:14px 20px;padding:13px;border:1px solid var(--line);border-radius:14px;background:#fbfdfe;color:var(--muted);font-size:11px}
+
+.ticket-status--used{background:#e9edf3;color:#31455f}
+.ticket-card--used{opacity:.96}
+.ticket-card--used:before{background:linear-gradient(90deg,#64748b,#94a3b8)}
+.ticket-used-banner{display:flex;align-items:center;gap:9px;background:#f1f5f9;border:1px solid #dbe3ec;border-radius:13px;padding:10px 11px;margin:14px 0 2px;color:#334155}
+.ticket-used-banner span{display:flex;flex-direction:column;gap:2px}
+.ticket-used-banner b{font-size:11px}
+.ticket-used-banner small{font-size:9px;text-transform:none;letter-spacing:0;color:#64748b}
+.ticket-used-stamp{display:grid;place-items:center;gap:4px;min-width:88px;border:1px dashed #94a3b8;border-radius:14px;padding:12px;color:#475569;background:#f8fafc;font-weight:900;letter-spacing:.08em}
+.ticket-used-stamp span{font-size:11px}
