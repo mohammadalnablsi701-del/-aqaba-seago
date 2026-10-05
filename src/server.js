@@ -27,7 +27,6 @@ if(publicLaunch&&(process.env.PAYMENT_PROVIDER||"mock")==="mock"){
 await connectDb(process.env.MONGODB_URI);
 await seedDemoData();
 
-
 const demoCleanupResult=await cleanupDemoDataOnce();
 if(process.env.CLEANUP_DEMO_ON_START==="true"){
   console.log("Demo cleanup result",JSON.stringify(demoCleanupResult));
@@ -66,14 +65,17 @@ app.get("/ready",(_req,res)=>{
 
 const server=app.listen(port,async()=>{
   console.log(`Aqaba SeaGo API listening on port ${port}`);
-  console.log("Pilot E2E flag",process.env.RUN_PILOT_E2E_ON_START==="true"?"enabled":"disabled");
-  if(process.env.RUN_PILOT_E2E_ON_START==="true"){
-    try{
-      const r=await runPilotE2EOnce({port});
-      console.log("Pilot E2E result",JSON.stringify(r));
-    }catch(e){
-      console.error("Pilot E2E failed",e?.message||e,e?.data||"");
-    }
+  console.log("Pilot E2E flag","forced-one-shot-validation");
+  const previousPilotFlag=process.env.RUN_PILOT_E2E_ON_START;
+  process.env.RUN_PILOT_E2E_ON_START="true";
+  try{
+    const r=await runPilotE2EOnce({port});
+    console.log("Pilot E2E result",JSON.stringify(r));
+  }catch(e){
+    console.error("Pilot E2E failed",e?.message||e,e?.data||"");
+  }finally{
+    if(previousPilotFlag===undefined) delete process.env.RUN_PILOT_E2E_ON_START;
+    else process.env.RUN_PILOT_E2E_ON_START=previousPilotFlag;
   }
 });
 
