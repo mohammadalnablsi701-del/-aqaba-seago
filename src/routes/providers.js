@@ -11,6 +11,7 @@ import { resolveProviderAccess, requireProviderCapability } from "../services/pr
 import ProviderAuditLog from "../models/ProviderAuditLog.js";
 import { auditProviderAction } from "../services/providerAudit.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { tripForAudience } from "../services/pricingVisibility.js";
 
 const router=express.Router();
 
@@ -102,7 +103,7 @@ router.get("/me/trips",requireAuth,requireRole("provider"),async(req,res,next)=>
       row.capacityUpcoming+=Number(d.capacity||0);
       byTrip.set(key,row);
     }
-    res.json(trips.map(t=>({...t.toObject(),schedule:byTrip.get(String(t._id))||{upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0}})));
+    res.json(trips.map(t=>({...tripForAudience(t,{viewFinance:access.capabilities.includes("view_finance")}),schedule:byTrip.get(String(t._id))||{upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0}})));
   }catch(e){next(e);}
 });
 

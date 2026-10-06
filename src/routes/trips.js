@@ -4,6 +4,7 @@ import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
+import { tripForAudience } from "../services/pricingVisibility.js";
 
 const router = express.Router();
 
@@ -55,12 +56,7 @@ function sanitizeImages(input){
   }).filter(Boolean);
 }
 
-function serverPricing(input = {}, existing = null) {
-  const defaultCommission = Number(process.env.DEFAULT_COMMISSION_PERCENTAGE || 0);
-  const existingValue = existing?.commissionType === "percentage"
-    ? Number(existing?.commissionValue ?? defaultCommission)
-    : defaultCommission;
-
+function salePriceUpdate(input = {}, existing = null) {
   const adultPrice = Number(input.adultPrice ?? input.pricePerPerson ?? existing?.adultPrice ?? existing?.pricePerPerson ?? 0);
   const childPrice = Number(input.childPrice ?? existing?.childPrice ?? adultPrice);
   const buffetEnabled = input.buffetEnabled !== undefined ? Boolean(input.buffetEnabled) : Boolean(existing?.buffetEnabled);
@@ -76,9 +72,7 @@ function serverPricing(input = {}, existing = null) {
     buffetEnabled,
     buffetAdultPrice,
     buffetChildPrice,
-    buffetDescription,
-    commissionType: "percentage",
-    commissionValue: existingValue
+    buffetDescription
   };
 }
 
@@ -98,7 +92,11 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       departureLocation: req.body.departureLocation ? {...req.body.departureLocation,name:cleanText(req.body.departureLocation.name,120),address:cleanText(req.body.departureLocation.address,220),googleMapsUrl:cleanText(req.body.departureLocation.googleMapsUrl,500)} : undefined,
       images: sanitizeImages(req.body.images),
       active: req.body.active !== false,
-      pricing: serverPricing(req.body.pricing),
+      pricing: {
+        ...salePriceUpdate(req.body.pricing),
+        commissionType: "percentage",
+        commissionValue: Number(process.env.DEFAULT_COMMISSION_PERCENTAGE || 0)
+      },
       providerId: p._id
     });
 
@@ -128,7 +126,11 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
     }
 
     if (req.body.pricing) {
-      trip.pricing = serverPricing(req.body.pricing, trip.pricing);
+      // Update sale fields individually: never overwrite the administrative
+      // agreement, including a concurrent commission edit made by an admin.
+      for (const [key, value] of Object.entries(salePriceUpdate(req.body.pricing, trip.pricing))) {
+        trip.set(`pricing.${key}`, value);
+      }
     }
 
     await trip.save();
@@ -141,10 +143,9 @@ router.get("/", async (_req, res, next) => {
   try {
     const approvedProviders = await Provider.find({ status: "approved" }).select("_id");
     const providerIds = approvedProviders.map(p => p._id);
-    res.json(
-      await Trip.find({ active: true, providerId: { $in: providerIds } })
-        .populate("providerId", "businessName")
-    );
+    const trips = await Trip.find({ active: true, providerId: { $in: providerIds } })
+      .populate("providerId", "businessName");
+    res.json(trips.map(trip => tripForAudience(trip)));
   } catch (e) { next(e); }
 });
 

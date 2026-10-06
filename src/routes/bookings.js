@@ -3,6 +3,7 @@ import Booking from "../models/Booking.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { signTicketToken } from "../services/tickets.js";
 import { cancelBooking, cancellationPolicyFor } from "../services/cancellations.js";
+import { salePricing, tripForAudience } from "../services/pricingVisibility.js";
 
 const router = express.Router();
 
@@ -20,6 +21,8 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
       const ticketToken = signTicketToken(row);
       return {
         ...obj,
+        pricing: salePricing(obj.pricing),
+        tripId: obj.tripId ? tripForAudience(obj.tripId) : obj.tripId,
         customer: { name: obj.customerSnapshot?.name || req.user.name || "", phone: obj.customerSnapshot?.phone || req.user.phoneNormalized || req.user.phone || "" },
         ticketToken,
         ticketValidationUrl: `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(ticketToken)}`
