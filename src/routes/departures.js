@@ -8,6 +8,7 @@ import { auditProviderAction } from "../services/providerAudit.js";
 import { calculateTieredPricing } from "../services/pricing.js";
 import { releaseExpiredCheckoutHolds, releaseCheckoutHoldsForDeparture } from "../services/payments.js";
 import { cancelDepartureBookings } from "../services/cancellations.js";
+import { salePricing } from "../services/pricingVisibility.js";
 
 const router = express.Router();
 
@@ -239,7 +240,7 @@ router.get("/:departureId/quote", async (req, res, next) => {
       children,
       mealPlan,
       availableSeats: departure.capacity - departure.reservedSeats,
-      pricing
+      pricing: salePricing(pricing)
     });
   } catch (err) {
     next(err);
