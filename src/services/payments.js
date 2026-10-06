@@ -21,13 +21,9 @@ async function recordPaymentEvent({providerName,event,payment}){
   }catch(e){if(e?.code!==11000)throw e;}
 }
 
-async function confirmPaidHoldAtomic({paymentId,event}){
-  const session=await mongoose.startSession();
+async function confirmPaidHoldInSession({payment,event,session}){
   let result=null;
-  try{
-    await session.withTransaction(async()=>{
-      const payment=await Payment.findById(paymentId).session(session);
-      if(!payment)throw Object.assign(new Error("Payment not found"),{statusCode:404});
+  async function confirm(){
       const hold=await CheckoutHold.findById(payment.holdId).session(session);
       if(!hold){
         payment.status="needs_review";
@@ -42,7 +38,7 @@ async function confirmPaidHoldAtomic({paymentId,event}){
         const booking=payment.bookingId
           ? await Booking.findById(payment.bookingId).session(session)
           : await Booking.findOne({customerId:hold.customerId,idempotencyKey:`payment:${payment._id}`}).session(session);
-        if(!booking){
+        if(!booking || booking.status!=="confirmed"){
           payment.status="needs_review";
           payment.lastEventId=event.eventId;
           payment.rawLastEvent=event.raw;
@@ -130,11 +126,9 @@ async function confirmPaidHoldAtomic({paymentId,event}){
       payment.rawLastEvent=event.raw;
       await payment.save({session});
       result={payment,bookingId:booking._id};
-    });
-    return result;
-  }finally{
-    await session.endSession();
   }
+  await confirm();
+  return result;
 }
 
 function sameMoney(a, b) {
@@ -148,17 +142,18 @@ async function holdInventoryIsSellable(hold) {
   return Boolean(provider);
 }
 
-async function releaseHold(hold, status = "released") {
+async function releaseHold(hold, status = "released", session = undefined) {
   if (!hold || hold.status !== "active") return false;
   const claimed = await CheckoutHold.findOneAndUpdate(
     { _id: hold._id, status: "active" },
     { $set: { status } },
-    { new: true }
+    { new: true, session }
   );
   if (!claimed) return false;
   await Departure.updateOne(
     { _id: claimed.departureId },
-    { $inc: { reservedSeats: -Number(claimed.seats || 0) } }
+    { $inc: { reservedSeats: -Number(claimed.seats || 0) } },
+    { session }
   );
   return true;
 }
@@ -252,87 +247,89 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
 
   const provider = getPaymentProvider(payment.provider);
   const checkout = await provider.createCheckout({ payment, baseUrl });
-  payment.externalPaymentId = checkout.externalPaymentId;
-  payment.checkoutUrl = checkout.checkoutUrl;
-  payment.status = payment.status === "paid" ? "paid" : "pending";
-  await payment.save();
-  return payment;
+  // A webhook may have finalized this payment while checkout was being prepared.
+  const updated = await Payment.findOneAndUpdate(
+    { _id: payment._id, status: { $in: ["created", "pending"] } },
+    { $set: { externalPaymentId: checkout.externalPaymentId, checkoutUrl: checkout.checkoutUrl, status: "pending" } },
+    { new: true }
+  );
+  return updated || await Payment.findById(payment._id);
 }
 
 export async function processPaymentWebhook({ providerName, rawBody, signature }) {
   const provider = getPaymentProvider(providerName);
   provider.verifyWebhook({ rawBody, signature });
   const event = provider.parseWebhook(rawBody);
-
-  if (!event.eventId || !event.externalPaymentId) {
+  const allowedStatuses = new Set(["pending", "paid", "failed", "cancelled", "expired"]);
+  if (!event.eventId || !event.externalPaymentId || !allowedStatuses.has(event.status) ||
+      !Number.isFinite(event.amount) || event.amount < 0) {
     throw Object.assign(new Error("Malformed payment event"), { statusCode: 400 });
   }
 
-  const payment = await Payment.findOne({
-    provider: providerName,
-    externalPaymentId: event.externalPaymentId
-  });
-  if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
-  if(await PaymentEvent.exists({provider:providerName,eventId:event.eventId}))return {duplicate:true,payment};
-  if (payment.lastEventId === event.eventId) return { duplicate: true, payment };
+  const session = await mongoose.startSession();
+  let result;
+  let confirmationBookingId;
+  try {
+    await session.withTransaction(async () => {
+      // MongoDB may retry this callback after a write conflict. Always reload
+      // the state and reset side effects instead of using a stale preflight read.
+      confirmationBookingId = null;
+      const payment = await Payment.findOne({
+        provider: providerName, externalPaymentId: event.externalPaymentId
+      }).session(session);
+      if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
+      const seen = await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
+      if (seen || payment.lastEventId === event.eventId) {
+        result = { duplicate: true, payment };
+        return;
+      }
 
-  if(isSuccessfulTerminalPaymentStatus(payment.status)&&event.status!=="paid"){
-    payment.lastEventId=event.eventId;
-    payment.rawLastEvent=event.raw;
-    await payment.save();
-    await recordPaymentEvent({providerName,event,payment});
-    return {duplicate:false,payment};
-  }
-  if(FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)&&event.status!=="paid"){
-    payment.lastEventId=event.eventId;
-    payment.rawLastEvent=event.raw;
-    await payment.save();
-    await recordPaymentEvent({providerName,event,payment});
-    return {duplicate:false,payment};
-  }
-  if(payment.status==="needs_review"){
-    payment.lastEventId=event.eventId;
-    payment.rawLastEvent=event.raw;
-    await payment.save();
-    await recordPaymentEvent({providerName,event,payment});
-    return {duplicate:false,payment};
-  }
+      // Never resurrect a refunded payment or overwrite a successful result.
+      // Record ignored events separately without saving a stale Payment document.
+      if (isSuccessfulTerminalPaymentStatus(payment.status) || payment.status === "needs_review" ||
+          (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status) && event.status !== "paid")) {
+        result = { duplicate: false, payment };
+        return;
+      }
 
-  const hold = await CheckoutHold.findById(payment.holdId);
-  if (!hold) {
-    payment.status = "needs_review";
-    payment.lastEventId = event.eventId;
-    payment.rawLastEvent = event.raw;
-    await payment.save();
-    await recordPaymentEvent({providerName,event,payment});
-    return { duplicate: false, payment };
-  }
-
-  const amountMatches = sameMoney(event.amount, payment.amount);
-  const currencyMatches = event.currency === payment.currency;
-
-  if (!amountMatches || !currencyMatches) {
-    payment.status = "needs_review";
-  } else if (event.status === "paid") {
-    const confirmed=await confirmPaidHoldAtomic({paymentId:payment._id,event});
-    const finalPayment=confirmed?.payment||payment;
-    await recordPaymentEvent({providerName,event,payment:finalPayment});
-    if(confirmed?.bookingId){
-      try{await sendBookingConfirmation(confirmed.bookingId);}
-      catch(err){console.error("Booking confirmation notification failed",err);}
-    }
-    return {duplicate:false,payment:finalPayment};
-  } else if (["failed", "cancelled", "expired"].includes(event.status)) {
-    await releaseHold(hold, event.status === "expired" ? "expired" : "released");
-    payment.status = event.status;
-    payment.failedAt = new Date();
-  } else {
-    payment.status = "pending";
+      const hold = await CheckoutHold.findById(payment.holdId).session(session);
+      if (!hold || !sameMoney(event.amount, payment.amount) || event.currency !== payment.currency) {
+        payment.status = "needs_review";
+      } else if (event.status === "paid") {
+        if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)) {
+          // A late success after seats were released requires reconciliation,
+          // never automatic rebooking or a second seat allocation.
+          payment.status = "needs_review";
+        } else {
+          const confirmed = await confirmPaidHoldInSession({payment,event,session});
+          confirmationBookingId = confirmed?.bookingId || null;
+          result = { duplicate: false, payment: confirmed?.payment || payment };
+          return;
+        }
+      } else if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(event.status)) {
+        if (hold.status === "paid" || payment.bookingId) {
+          payment.status = "needs_review";
+        } else {
+          await releaseHold(hold, event.status === "expired" ? "expired" : "released", session);
+          payment.status = event.status;
+          payment.failedAt = new Date();
+        }
+      } else {
+        payment.status = "pending";
+      }
+      payment.lastEventId = event.eventId;
+      payment.rawLastEvent = event.raw;
+      await payment.save({session});
+      result = { duplicate: false, payment };
+    });
+  } finally {
+    await session.endSession();
   }
 
-  payment.lastEventId = event.eventId;
-  payment.rawLastEvent = event.raw;
-  await payment.save();
-  await recordPaymentEvent({providerName,event,payment});
-  return { duplicate: false, payment };
+  if (!result.duplicate) await recordPaymentEvent({providerName,event,payment:result.payment});
+  if (confirmationBookingId) {
+    try { await sendBookingConfirmation(confirmationBookingId); }
+    catch (err) { console.error("Booking confirmation notification failed", err); }
+  }
+  return result;
 }

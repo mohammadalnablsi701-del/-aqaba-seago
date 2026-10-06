@@ -7,6 +7,36 @@ on:
     branches: [main]
 
 jobs:
+  payment-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install backend dependencies
+        run: npm install
+      - name: Install isolated MongoDB test runner
+        run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
+      - name: Test payment transactions on a disposable replica set
+        run: |
+          node <<'JS'
+          const {MongoMemoryReplSet}=require(process.env.RUNNER_TEMP+'/seago-mongo/node_modules/mongodb-memory-server');
+          const {spawn}=require('node:child_process');
+          (async()=>{
+            const db=await MongoMemoryReplSet.create({replSet:{count:1,storageEngine:'wiredTiger'}});
+            let code=1;
+            try{
+              const child=spawn(process.execPath,['--test','test/payment-transitions.integration.test.js'],{
+                env:{...process.env,SEAGO_TEST_MONGODB_URI:db.getUri()},stdio:'inherit'
+              });
+              code=await new Promise((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject)});
+            }finally{await db.stop()}
+            process.exit(code??1);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+
   backend-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,4 +102,3 @@ jobs:
       - name: Build admin app
         working-directory: admin-app
         run: npm run build
-
