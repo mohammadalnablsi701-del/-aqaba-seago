@@ -2,7 +2,8 @@ name: Production Uptime Monitor
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # Avoid GitHub Actions' busiest quarter-hour boundaries while preserving a 15-minute cadence.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 permissions:
