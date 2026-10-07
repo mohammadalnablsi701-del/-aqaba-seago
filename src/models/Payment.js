@@ -12,6 +12,7 @@ const paymentSchema = new mongoose.Schema({
     default: "created",
     index: true
   },
+  settlementRevision: {type:Number,default:0},
   amount: { type: Number, min: 0, required: true },
   currency: { type: String, default: "JOD" },
   checkoutUrl: String,

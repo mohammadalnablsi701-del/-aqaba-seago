@@ -164,13 +164,15 @@ export default function App(){
         </div>
       </section>
       {settlementError&&<div className="error">{settlementError}</div>}
+      {settlementData?.reconciliationRequired&&<div className="error">Some older settlements cannot be allocated to this date range. Review the full settlement period before recording another payment.</div>}
+      {Number(settlementData?.totals?.recoveryDue||0)>0&&<div className="error">Refunds after payout: {Number(settlementData.totals.recoveryDue).toFixed(2)} JOD to recover from providers. Further payouts require reconciliation.</div>}
       {settlementLoading&&!settlementData?<div className="admin-loading"><RefreshCw className="spin" size={18}/> Loading settlements...</div>:<>
         <section className="settlement-kpis">
           <div><small>Gross sales</small><b>{Number(settlementData?.totals?.grossSales||0).toFixed(2)} JOD</b></div>
           <div><small>SeaGo commission</small><b>{Number(settlementData?.totals?.seaGoCommission||0).toFixed(2)} JOD</b></div>
           <div><small>Provider net</small><b>{Number(settlementData?.totals?.providerNet||0).toFixed(2)} JOD</b></div>
-          <div className="paid"><small>Paid</small><b>{Number(settlementData?.totals?.paid||0).toFixed(2)} JOD</b></div>
-          <div className="outstanding"><small>Outstanding</small><b>{Number(settlementData?.totals?.outstanding||0).toFixed(2)} JOD</b></div>
+          <div className="paid"><small>Paid</small><b>{settlementData?.reconciliationRequired?"Review required":Number(settlementData?.totals?.paid||0).toFixed(2)+" JOD"}</b></div>
+          <div className="outstanding"><small>Outstanding</small><b>{settlementData?.reconciliationRequired?"Review required":Number(settlementData?.totals?.outstanding||0).toFixed(2)+" JOD"}</b></div>
         </section>
         <section className="settlement-card">
           <div className="provider-breakdown-head"><div><small>PAYABLE BY COMPANY</small><h2>{settlementProvider?"Selected company":"All companies"}</h2></div><span>{settlementFrom} → {settlementTo}</span></div>
@@ -181,8 +183,8 @@ export default function App(){
             <div><span>SeaGo</span><b>{Number(row.seaGoCommission||0).toFixed(2)}</b></div>
             <div><span>Provider net</span><b>{Number(row.providerNet||0).toFixed(2)}</b></div>
             <div><span>Paid</span><b>{Number(row.paid||0).toFixed(2)}</b></div>
-            <div className="settlement-outstanding"><span>Outstanding</span><b>{Number(row.outstanding||0).toFixed(2)} JOD</b></div>
-            <button className="settlement-pay" disabled={!settlementFrom||!settlementTo||Number(row.outstanding||0)<=0||settlementBusy===String(row.providerId)} onClick={()=>payProviderSettlement(row)}>{settlementBusy===String(row.providerId)?"Saving...":Number(row.outstanding||0)>0?"Mark as paid":"Paid"}</button>
+            <div className="settlement-outstanding"><span>Outstanding</span><b>{row.reconciliationRequired?"Review required":Number(row.outstanding||0).toFixed(2)+" JOD"}</b></div>
+            <button className="settlement-pay" disabled={row.reconciliationRequired||row.recoveryDue>0||!settlementFrom||!settlementTo||Number(row.outstanding||0)<=0||settlementBusy===String(row.providerId)} onClick={()=>payProviderSettlement(row)}>{settlementBusy===String(row.providerId)?"Saving...":row.reconciliationRequired||row.recoveryDue>0?"Review required":Number(row.outstanding||0)>0?"Mark as paid":"Paid"}</button>
           </article>):<div className="admin-empty"><WalletCards size={28}/><b>No provider balance in this period</b><span>Paid bookings will appear here automatically.</span></div>}</div>
         </section>
         <section className="settlement-history"><div className="provider-breakdown-head"><div><small>PAYMENT HISTORY</small><h2>Recent settlements</h2></div></div>
