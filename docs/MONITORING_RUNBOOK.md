@@ -19,9 +19,15 @@ The workflow checks the real production surfaces, not mocks:
 
 Each check retries up to three times with network timeouts to reduce false positives from transient failures. A persistent failure fails the GitHub Actions run and emits an Actions error annotation.
 
+### Persistent incident escalation
+
+If a scheduled uptime run still fails after retries, the workflow creates a repository issue titled `[Uptime] Production availability incident`. If that incident is already open, later failures add a timestamped comment instead of creating duplicate issues. When all uptime checks recover, the workflow comments on the open incident and closes it automatically.
+
+This gives the project a durable, searchable incident record even if an individual Actions failure is missed. Delivery of push/email notifications for that GitHub issue still depends on the account's GitHub notification settings; Slack, Discord, PagerDuty or another independent escalation channel is not configured yet.
+
 ### Uptime incident response
 
-When the uptime workflow fails:
+When the uptime workflow or automated incident reports a failure:
 
 1. Confirm which exact check failed in the workflow log.
 2. If the API failed, inspect Render deployment status, recent events and application/request logs.
@@ -29,9 +35,7 @@ When the uptime workflow fails:
 4. Confirm the deployed commit matches the expected `main` release.
 5. If only GitHub Pages failed, inspect the Pages workflow and deployed `version.json`.
 6. Do not redeploy blindly if there is evidence of a database, payment or data-integrity incident.
-7. Record the incident cause and resolution.
-
-A failing GitHub Actions run is currently the monitoring signal. A guaranteed external escalation channel such as Slack, Discord, email, PagerDuty or similar is **not yet configured** and must not be assumed.
+7. Record the incident cause and resolution. The automated issue remains the primary incident timeline for uptime failures.
 
 ## 2. Admin operations queue
 
@@ -90,19 +94,21 @@ A complete production log-retention policy and repository-wide PII/logging revie
 
 ## 6. Current monitoring status
 
-Implemented and validated:
+Implemented and validated in code/Staging:
 
 - Health/readiness endpoints.
 - Commit identity in `/health`.
 - Release-time Production Smoke.
 - Scheduled 15-minute production uptime checks.
+- Persistent GitHub incident issue creation/update/recovery closure for uptime failures.
 - Protected admin operations queue for `needs_review`, notification failures and support workload.
 - Structured payment-webhook failure logging with no raw webhook payload/signature.
 - Integration tests for operations-queue authorization and counts.
 
 Still open:
 
-- Guaranteed external escalation channel for uptime failures.
+- Verify the first scheduled production uptime execution after the incident-escalation workflow is promoted to `main`.
+- Optional independent escalation channel outside GitHub if required operationally.
 - Repeated payment-webhook failure threshold/alert after the real gateway is integrated.
 - Email-delivery failure threshold/alert after the production sender is configured.
 - Formal log-retention period.
