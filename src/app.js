@@ -24,6 +24,7 @@ function buildCorsOptions() {
     .split(",")
     .map(v => v.trim())
     .filter(Boolean);
+  const permissiveEmptyAllowlist = process.env.NODE_ENV !== "production" && allowed.length === 0;
 
   const ownOrigins = new Set();
   const externalUrl = String(process.env.RENDER_EXTERNAL_URL || "").trim().replace(/\/$/, "");
@@ -35,10 +36,10 @@ function buildCorsOptions() {
 
   return {
     origin(origin, callback) {
-      if (!origin || allowed.length === 0 || allowed.includes(origin) || ownOrigins.has(origin)) {
+      if (!origin || permissiveEmptyAllowlist || allowed.includes(origin) || ownOrigins.has(origin)) {
         return callback(null, true);
       }
-      return callback(new Error("Origin not allowed by CORS"));
+      return callback(null, false);
     },
     credentials: false
   };
