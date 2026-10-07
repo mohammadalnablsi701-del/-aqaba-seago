@@ -243,7 +243,14 @@ function scanFeedback(kind="scan"){
   }catch{}
 }
 
-function Scanner({token,onClose,onDone}){
+function ScannerDeparture({token,onClose,onDone}){
+  const[date,setDate]=useState(today());const[rows,setRows]=useState([]);const[selected,setSelected]=useState(null);const[error,setError]=useState("");const[loading,setLoading]=useState(true);
+  useEffect(()=>{let active=true;setLoading(true);setError("");departures(token,date).then(r=>{if(active)setRows(r.filter(d=>d.status==="scheduled"))}).catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[token,date]);
+  if(selected)return <Scanner token={token} departure={selected} onClose={()=>setSelected(null)} onDone={onDone}/>;
+  return <div className="scanner-screen"><div className="scanner-head"><div><small>CHECK-IN</small><h2>Select departure</h2></div><button onClick={onClose} aria-label="Close scanner">×</button></div><p>Choose the trip you are boarding. Only tickets for this departure will be accepted. Check-in opens 2 hours before departure.</p><label>Departure date <input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>{error&&<p className="error">{error}</p>}{loading?<p>Loading departures...</p>:rows.length?rows.map(d=><button className="secondary-scan" key={d.id} onClick={()=>setSelected(d)}>{d.tripId?.titleEn||d.tripId?.titleAr} · {new Date(d.startsAt).toLocaleString([],{timeZone:"Asia/Amman",dateStyle:"medium",timeStyle:"short"})}</button>):<p>No scheduled departures on this date.</p>}</div>;
+}
+
+function Scanner({token,onClose,onDone,departure}){
 const[result,setResult]=useState(null);
 const[pendingToken,setPendingToken]=useState("");
 const[busy,setBusy]=useState(false);
@@ -283,7 +290,7 @@ useEffect(()=>{
             if(raw.startsWith("SG2:"))t=raw.slice(4);
             else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
             if(!t)throw new Error("Invalid SeaGo QR");
-            const info=await inspectTicket(token,t);
+            const info=await inspectTicket(token,t,departure.id);
             scanFeedback("scan");
             setPendingToken(t);
             setResult({mode:"preview",...info});
@@ -315,7 +322,7 @@ useEffect(()=>{
               else if(raw.startsWith("AQABA-SEAGO|BOOKING:"))throw new Error("Old ticket QR. Refresh the customer ticket page and scan the new secure QR.");
               else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
               if(!t)throw new Error("Invalid SeaGo QR");
-              const info=await inspectTicket(token,t);
+              const info=await inspectTicket(token,t,departure.id);
               scanFeedback("scan");
               setPendingToken(t);setResult({mode:"preview",...info});
               try{await scanner.stop()}catch{}
@@ -342,7 +349,7 @@ useEffect(()=>{
     qrRef.current=null;
     if(q?.isScanning){Promise.resolve(q.stop()).catch(()=>{})}
   };
-},[scanCycle,result,token]);
+},[scanCycle,result,token,departure.id]);
 
 async function closeScanner(){
   if(closing)return;
@@ -380,7 +387,7 @@ async function toggleTorch(){
 async function confirm(){
   if(!pendingToken||busy)return;
   setBusy(true);
-  try{const r=await checkIn(token,pendingToken);scanFeedback("success");setResult({mode:"success",...r});onDone?.();}
+  try{const r=await checkIn(token,pendingToken,departure.id);scanFeedback("success");setResult({mode:"success",...r});onDone?.();}
   catch(e){setResult({mode:"error",error:e.message});}
   finally{setBusy(false);}
 }
@@ -388,7 +395,7 @@ async function confirm(){
 const mode=result?.mode;
 return <div className="scanner-screen">
   <div className="scanner-head">
-    <div><small>REAR CAMERA</small><h2>Scan ticket</h2></div>
+    <div><small>REAR CAMERA</small><h2>{departure.tripId?.titleEn||"Scan ticket"}</h2><p>{new Date(departure.startsAt).toLocaleString([],{timeZone:"Asia/Amman",dateStyle:"medium",timeStyle:"short"})}</p></div>
     <div className="scanner-head-actions">
       {torchSupported&&!result&&<button className={"torch-button "+(torchOn?"active":"")} onClick={toggleTorch} aria-label="Toggle flash"><Flashlight size={19}/></button>}
       <button onClick={closeScanner} disabled={closing} aria-label="Close scanner">{closing?"…":"×"}</button>
@@ -402,7 +409,7 @@ return <div className="scanner-screen">
     </div>
     {cameraError&&<button className="scanner-retry" onClick={scanAgain}>Try camera again</button>}
   </>}
-  {mode==="preview"&&<div className="ticket-preview">{result.valid?<CheckCircle2 size={52}/>:<XCircle size={52}/>}<small>{result.valid?"VALID TICKET":result.used?"ALREADY USED":result.status==="cancelled"?"CANCELLED TICKET":"TICKET NOT VALID"}</small><h2>{result.trip}</h2><div className="preview-grid"><div><span>Guest</span><b>{result.customer?.name||"Guest"}</b></div><div><span>Booking</span><b>{result.bookingReference}</b></div><div><span>Persons</span><b>{result.adults!==undefined?`${result.adults||0} adult(s) · ${result.children||0} child(ren)`:result.guests}</b></div><div><span>Package</span><b>{result.mealPlan==="with_buffet"?"Open buffet":"Without buffet"}</b></div><div><span>Departure</span><b>{result.departureAt?new Date(result.departureAt).toLocaleString([],{timeZone:"Asia/Amman",dateStyle:"medium",timeStyle:"short"}):"TBA"}</b></div></div>{result.customer?.phone&&<p className="contact">{result.customer.phone}</p>}<button className="confirm-checkin" disabled={!result.valid||busy} onClick={confirm}>{busy?"Checking in...":result.used?"Already checked in":"Confirm check-in"}</button><button className="secondary-scan" onClick={scanAgain}>Cancel / scan another</button></div>}
+  {mode==="preview"&&<div className="ticket-preview">{result.valid?<CheckCircle2 size={52}/>:<XCircle size={52}/>}<small>{result.valid?"VALID TICKET":result.used?"ALREADY USED":result.status==="cancelled"?"CANCELLED TICKET":"TICKET NOT VALID"}</small><h2>{result.trip}</h2><div className="preview-grid"><div><span>Guest</span><b>{result.customer?.name||"Guest"}</b></div><div><span>Booking</span><b>{result.bookingReference}</b></div><div><span>Persons</span><b>{result.adults!==undefined?`${result.adults||0} adult(s) · ${result.children||0} child(ren)`:result.guests}</b></div><div><span>Package</span><b>{result.mealPlan==="with_buffet"?"Open buffet":"Without buffet"}</b></div><div><span>Departure</span><b>{result.departureAt?new Date(result.departureAt).toLocaleString([],{timeZone:"Asia/Amman",dateStyle:"medium",timeStyle:"short"}):"TBA"}</b></div></div>{result.customer?.phone&&<p className="contact">{result.customer.phone}</p>}{result.error&&<p className="error">{result.error}</p>}<button className="confirm-checkin" disabled={!result.valid||busy} onClick={confirm}>{busy?"Checking in...":result.used?"Already checked in":"Confirm check-in"}</button><button className="secondary-scan" onClick={scanAgain}>Cancel / scan another</button></div>}
   {mode==="success"&&<div className="scan-result ok"><CheckCircle2 size={56}/><h2>Check-in successful</h2><p>{result.guests} person(s) checked in</p><button onClick={scanAgain}>Scan another</button></div>}
   {mode==="error"&&<div className="scan-result bad"><XCircle size={56}/><h2>Ticket rejected</h2><p>{result.error}</p><button onClick={scanAgain}>Scan another</button></div>}
 </div>}
@@ -479,7 +486,7 @@ function BookingDetail({token,bookingId,onClose,onOpenManifest}){
 const[data,setData]=useState(null);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
 async function load(){try{setData(await bookingDetail(token,bookingId));setError("")}catch(e){setError(e.message)}}
 useEffect(()=>{load()},[bookingId,token]);
-async function manualCheckIn(){if(!data||data.checkedInAt||busy)return;if(!window.confirm("Check in this booking manually?\n\nConfirm the guest identity first."))return;setBusy(true);setError("");try{await manualCheckInBooking(token,bookingId);await load()}catch(e){setError(e.message)}finally{setBusy(false)}}
+async function manualCheckIn(){if(!data||data.checkedInAt||busy)return;if(!window.confirm("Check in this booking manually?\n\nConfirm the guest identity first."))return;setBusy(true);setError("");try{await manualCheckInBooking(token,bookingId,data.departureId?._id||data.departureId);await load()}catch(e){setError(e.message)}finally{setBusy(false)}}
 if(error&&!data)return <div className="detail-sheet"><div className="manage-form-head"><h2>Booking details</h2><button onClick={onClose}>×</button></div><div className="error">{error}</div></div>;
 if(!data)return <div className="detail-sheet"><div className="loading">Loading booking...</div></div>;
 const phone=String(data.customerId?.phone||"").trim();const wa=whatsappNumber(phone);const departure=data.departureId?.startsAt?new Date(data.departureId.startsAt):null;const departureId=data.departureId?._id||data.departureId;
@@ -557,7 +564,7 @@ async function quickSetSales(departureId,salesClosed){
   }finally{
     setQuickUpdating("");
   }
-}if(!auth)return <Login onDone={setAuth}/>;const signOut=()=>{localStorage.removeItem("seago_provider_auth");setAuth(null);setProvider(null);setProfileMissing(false)};if(loading&&!provider&&!profileMissing)return <div className="onboarding-shell"><div className="loading">Loading provider account...</div></div>;if(profileMissing)return <ProviderProfileSetup token={auth.token} onCreated={p=>{setProvider(p);setProfileMissing(false)}}/>;if(provider&&provider.status!=="approved")return <ProviderApprovalStatus provider={provider} onRefresh={load} onSignOut={signOut}/>;if(scanner)return <Scanner token={auth.token} onClose={()=>setScanner(false)} onDone={load}/>;
+}if(!auth)return <Login onDone={setAuth}/>;const signOut=()=>{localStorage.removeItem("seago_provider_auth");setAuth(null);setProvider(null);setProfileMissing(false)};if(loading&&!provider&&!profileMissing)return <div className="onboarding-shell"><div className="loading">Loading provider account...</div></div>;if(profileMissing)return <ProviderProfileSetup token={auth.token} onCreated={p=>{setProvider(p);setProfileMissing(false)}}/>;if(provider&&provider.status!=="approved")return <ProviderApprovalStatus provider={provider} onRefresh={load} onSignOut={signOut}/>;if(scanner)return <ScannerDeparture token={auth.token} onClose={()=>setScanner(false)} onDone={load}/>;
 const checked=bookingRows.filter(b=>b.checkedInAt).length;const guests=bookingRows.reduce((s,b)=>s+Number(b.seats||0),0);const isToday=date===today();const dayLabel=isToday?"Today":new Date(date+"T12:00:00").toLocaleDateString([],{weekday:"short",day:"numeric",month:"short"});const caps=new Set(provider?.capabilities||[]);const canManageTrips=caps.has("manage_trips");const canManageDepartures=caps.has("manage_departures");const canFinance=caps.has("view_finance");const canSettings=caps.has("manage_settings");const canTeam=caps.has("manage_team");const homeScopeDeps=depRows.length?depRows:upcomingDepRows;const homeScopeLabel=depRows.length?dayLabel:"Upcoming";const homeDepIds=new Set(homeScopeDeps.map(d=>String(d.id)));const homeScopeBookings=allBookingRows.filter(b=>homeDepIds.has(String(b.departureId?._id||b.departureId)));const homeBookings=homeScopeBookings.length;const homeGuests=homeScopeBookings.reduce((sum,b)=>sum+Number(b.seats||0),0);const homeNet=homeScopeBookings.reduce((sum,b)=>sum+Number(b.pricing?.providerNetAmount||0),0);
 if(teamOpen)return <div className="app"><header><ProviderBrand/></header><main><ProviderTeam token={auth.token} onClose={()=>setTeamOpen(false)}/></main></div>;if(settingsOpen)return <div className="app"><header><ProviderBrand/></header><main><ProviderSettings token={auth.token} provider={provider} onCancel={()=>setSettingsOpen(false)} onSaved={updated=>{setProvider(updated);setSettingsOpen(false)}}/></main></div>;
 if(addingTrip||editingTrip||duplicateTrip)return <div className="app"><header><ProviderBrand/></header><main><TripForm token={auth.token} provider={provider} trip={editingTrip} duplicateFrom={duplicateTrip} onCancel={()=>{setAddingTrip(false);setEditingTrip(null);setDuplicateTrip(null)}} onCreated={created=>{setAddingTrip(false);setDuplicateTrip(null);setNewTripWizard(created)}} onSaved={async()=>{setAddingTrip(false);setEditingTrip(null);setDuplicateTrip(null);await load()}}/></main></div>;
