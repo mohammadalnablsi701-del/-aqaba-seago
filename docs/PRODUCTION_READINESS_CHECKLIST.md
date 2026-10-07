@@ -123,13 +123,16 @@ These must be complete before public real-money launch.
 - ✅ MongoDB connection health is exposed through readiness endpoint.
 - ✅ Staging is separated from production and uses its own Railway MongoDB single-node replica set.
 - ✅ Staging and production environment variables are separated.
-- ⬜ Enable/confirm automated production database backups.
-- ⬜ Document restore procedure.
-- ⬜ Perform one restore test into a non-production database.
-- ⬜ Confirm retention period for backups.
+- ✅ Application-level BSON backup/restore tooling exists and preserves documents, BSON types, empty collections and indexes.
+- ✅ Restore is fail-closed for production/public launch, requires explicit opt-in and exact target confirmation, and refuses restoring into the source database name.
+- ✅ Restore procedure is documented in `docs/DATABASE_BACKUP_RESTORE.md`.
+- ✅ Automated backup → restore → verification drill passes against a disposable non-production MongoDB replica set in CI.
+- ⬜ Enable/confirm provider-native automated production database backups.
+- ⬜ Confirm provider-native retention period for backups.
+- ⬜ Perform one provider-native backup restore test into a non-production database/cluster.
 - ⬜ Restrict production database network/user permissions to minimum required access.
 
-**Exit criterion:** accidental deletion or bad deployment can be recovered.
+**Exit criterion:** accidental deletion or bad deployment can be recovered. **Application-level recovery is validated; provider-native production backup coverage remains open.**
 
 ## 7. Error monitoring and operational visibility
 
@@ -276,6 +279,7 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ CI runs on both `staging` and `main`.
 - ✅ CI builds backend, customer app, provider app and admin app.
 - ✅ Full-history secret scanning runs in CI and currently passes.
+- ✅ Database backup/restore roundtrip is exercised in CI against a disposable MongoDB replica set.
 - ✅ GitHub Pages deployment workflow exists.
 - ✅ Automated checkout integration test exists.
 - ✅ Concurrent final-seat reservation test exists.
@@ -346,7 +350,7 @@ Do not work on this list randomly.
 
 ## Sprint 2 — Production foundation — in progress
 1. ✅ Production/staging separation.
-2. ⬜ Backups and restore test.
+2. 🟡 Application-level backup/restore validated; provider-native backups/retention still need verification.
 3. ⬜ Monitoring and alerts.
 4. ⬜ Official domain + final HTTPS/CORS/OAuth cleanup.
 5. ⬜ Production email sender.
@@ -382,8 +386,9 @@ Based on the repository and validated deployments on 2026-10-07:
 - Staging/production separation: **implemented and validated**
 - CI + Staging Smoke + Production Smoke: **implemented and passing**
 - JWT/security baseline: **production expiry/secret policy enforced; full-history secret scan passes**
+- Database recovery: **application-level backup/restore tooling and automated restore drill validated; provider-native production backups/retention still unverified**
 - Real payment: **not yet production-ready**
-- Production backups/monitoring: **incomplete**
+- Production monitoring: **incomplete**
 - Legal/policies/domain: **incomplete**
 - Security review: **not yet externally reviewed**
 - Public real-money launch: **not ready yet**
