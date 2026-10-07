@@ -140,14 +140,17 @@ These must be complete before public real-money launch.
 - ✅ `/health` reports deployed commit SHA on both Railway and Render environments.
 - ✅ Graceful shutdown exists.
 - ✅ Production Smoke checks deployed commit identity and critical public endpoints after `main` releases.
-- ⬜ Add production error monitoring/alerting.
-- ⬜ Alert when API is unavailable.
-- ⬜ Alert on repeated payment webhook failures.
-- ⬜ Alert on email delivery failures above threshold.
-- ⬜ Alert or admin queue for `needs_review` payments.
-- ⬜ Define log retention and remove sensitive fields from logs.
+- ✅ Scheduled production uptime workflow checks API readiness/health, public trips, customer app, provider app and admin app every 15 minutes with retries and timeouts.
+- 🟡 Persistent uptime failures fail the GitHub Actions monitor and create an error signal; a guaranteed external escalation channel is not configured yet.
+- ✅ Protected admin operations queue surfaces `needs_review` payments, notification failures from the last 24 hours and open/in-progress support workload.
+- ✅ Operations-queue authorization and counts are covered by an integration test on a disposable MongoDB replica set.
+- ✅ Payment webhook processing failures emit bounded structured logs without intentionally logging raw webhook payloads or signatures.
+- ⬜ Alert on repeated payment webhook failures above a defined threshold after the real gateway is integrated.
+- ⬜ Alert on email delivery failures above a defined threshold after the production sender is configured.
+- ⬜ Define production log-retention period and complete repository-wide PII/logging review.
+- ✅ Monitoring response procedure is documented in `docs/MONITORING_RUNBOOK.md`.
 
-**Exit criterion:** important failures are discovered automatically, not by customers.
+**Exit criterion:** important failures are discovered automatically and routed to an operator. **Core discovery is implemented; guaranteed external escalation and final threshold/log-retention policy remain open.**
 
 ## 8. Domain, HTTPS and production URLs
 
@@ -229,6 +232,7 @@ These can be completed before or during a small invited pilot, but should be don
 - ✅ Refund-before-settlement reduces provider payable correctly in automated tests.
 - ✅ Refund-after-settlement preserves actual cash paid and records recovery correctly in automated tests.
 - ✅ Concurrent settlement payout is protected against duplicate payout.
+- ✅ Protected operations endpoint exposes `needs_review`, recent notification failures and support workload to admins only.
 - ⬜ Define process for correcting an incorrectly marked settlement.
 - ⬜ Add export/download report if operations require it.
 
@@ -268,7 +272,7 @@ A senior/security reviewer should review this section before broad public launch
 - ⬜ Review dependency vulnerabilities.
 - ⬜ Run dependency audit in CI.
 - ⬜ Add security headers verification test.
-- ⬜ Ensure no PII/payment secrets are written to logs.
+- 🟡 New webhook monitoring logs avoid raw bodies/signatures and bound messages; full repository-wide PII/logging review remains open.
 - ⬜ Perform external security/code review before wide public launch.
 
 ---
@@ -280,6 +284,7 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ CI builds backend, customer app, provider app and admin app.
 - ✅ Full-history secret scanning runs in CI and currently passes.
 - ✅ Database backup/restore roundtrip is exercised in CI against a disposable MongoDB replica set.
+- ✅ Protected admin operations queue has HTTP authorization/count regression coverage in CI.
 - ✅ GitHub Pages deployment workflow exists.
 - ✅ Automated checkout integration test exists.
 - ✅ Concurrent final-seat reservation test exists.
@@ -313,7 +318,7 @@ A senior/security reviewer should review this section before broad public launch
 - ⬜ Confirm Render service plan is sufficient for expected traffic.
 - ⬜ Confirm no sleep/cold-start behavior is acceptable for paid bookings.
 - ⬜ Confirm production MongoDB plan/storage/connection limits.
-- ⬜ Add uptime monitoring.
+- 🟡 Scheduled uptime workflow is implemented and validated in Staging; mark fully complete after promotion to `main` and first production execution.
 - ⬜ Document ownership/access to GitHub, Render, domain, database and payment provider.
 
 ---
@@ -351,7 +356,7 @@ Do not work on this list randomly.
 ## Sprint 2 — Production foundation — in progress
 1. ✅ Production/staging separation.
 2. 🟡 Application-level backup/restore validated; provider-native backups/retention still need verification.
-3. ⬜ Monitoring and alerts.
+3. 🟡 Core monitoring implemented; guaranteed external escalation, thresholds and log-retention policy remain.
 4. ⬜ Official domain + final HTTPS/CORS/OAuth cleanup.
 5. ⬜ Production email sender.
 6. ⬜ Legal/policy pages.
@@ -382,13 +387,13 @@ Based on the repository and validated deployments on 2026-10-07:
 
 - Core marketplace workflow: **strong automated coverage; final real-device rehearsal remains**
 - Provider operations: **strong automated permission coverage; final operational rehearsal remains**
-- Admin/financial operations: **core commission/refund/settlement logic now covered by integration tests**
+- Admin/financial operations: **core commission/refund/settlement logic plus protected operational exception queue are covered by integration tests**
 - Staging/production separation: **implemented and validated**
 - CI + Staging Smoke + Production Smoke: **implemented and passing**
 - JWT/security baseline: **production expiry/secret policy enforced; full-history secret scan passes**
 - Database recovery: **application-level backup/restore tooling and automated restore drill validated; provider-native production backups/retention still unverified**
+- Production monitoring: **scheduled uptime checks + protected operations queue implemented in Staging; external escalation/threshold alerts and log-retention policy remain**
 - Real payment: **not yet production-ready**
-- Production monitoring: **incomplete**
 - Legal/policies/domain: **incomplete**
 - Security review: **not yet externally reviewed**
 - Public real-money launch: **not ready yet**
