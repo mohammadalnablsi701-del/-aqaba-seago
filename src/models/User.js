@@ -7,7 +7,8 @@ const schema=new mongoose.Schema({
   passwordHash:{type:String},
   googleSub:{type:String,trim:true},
   role:{type:String,enum:["customer","provider","admin"],default:"customer",index:true},
-  isActive:{type:Boolean,default:true}
+  isActive:{type:Boolean,default:true},
+  authVersion:{type:Number,default:0,min:0}
 },{timestamps:true});
 schema.index({email:1},{unique:true,sparse:true});
 schema.index({googleSub:1},{unique:true,sparse:true});
