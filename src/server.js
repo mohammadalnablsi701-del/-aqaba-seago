@@ -13,6 +13,8 @@ if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
 if(!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
 
 const publicLaunch=process.env.PUBLIC_LAUNCH==="true";
+const isProduction=process.env.NODE_ENV==="production";
+
 if(publicLaunch&&process.env.SEED_DEMO_DATA==="true"){
   throw new Error("SEED_DEMO_DATA must be false when PUBLIC_LAUNCH=true");
 }
@@ -21,6 +23,17 @@ if(publicLaunch&&process.env.ENABLE_MOCK_CHECKOUT==="true"){
 }
 if(publicLaunch&&(process.env.PAYMENT_PROVIDER||"mock")==="mock"){
   throw new Error("A real payment provider is required before PUBLIC_LAUNCH=true");
+}
+
+if(isProduction){
+  const unsafeStartupFlags=[];
+  if(process.env.SEED_DEMO_DATA==="true") unsafeStartupFlags.push("SEED_DEMO_DATA");
+  if(process.env.CLEANUP_DEMO_ON_START==="true") unsafeStartupFlags.push("CLEANUP_DEMO_ON_START");
+  if(process.env.RUN_PILOT_E2E_ON_START==="true") unsafeStartupFlags.push("RUN_PILOT_E2E_ON_START");
+  if(String(process.env.EMAIL_TEST_RECIPIENT||"").trim()) unsafeStartupFlags.push("EMAIL_TEST_RECIPIENT");
+  if(unsafeStartupFlags.length){
+    throw new Error(`Unsafe development startup hooks are not allowed in production: ${unsafeStartupFlags.join(", ")}`);
+  }
 }
 
 await connectDb(process.env.MONGODB_URI);
