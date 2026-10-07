@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { rejectUnsafeRequestKeys } from "./middleware/requestSecurity.js";
-import { logRequestError } from "./utils/errorLogging.js";
+import { logRequestError, publicErrorResponse } from "./utils/errorLogging.js";
 import authRoutes from "./routes/auth.js";
 import providerRoutes from "./routes/providers.js";
 import adminRoutes from "./routes/admin.js";
@@ -32,7 +32,6 @@ function buildCorsOptions() {
   const externalHostname = String(process.env.RENDER_EXTERNAL_HOSTNAME || "").trim();
   if (externalUrl) ownOrigins.add(externalUrl);
   if (externalHostname) ownOrigins.add(`https://${externalHostname}`);
-  // Render does not expose the external URL in every runtime configuration.
   ownOrigins.add("https://aqaba-seago-api.onrender.com");
 
   return {
@@ -106,9 +105,8 @@ export function createApp() {
 
   app.use((err, _req, res, _next) => {
     logRequestError(err);
-    res.status(err.statusCode || 500).json({
-      error: err.statusCode ? err.message : "Internal server error"
-    });
+    const response = publicErrorResponse(err);
+    res.status(response.statusCode).json({ error: response.error });
   });
 
   return app;
