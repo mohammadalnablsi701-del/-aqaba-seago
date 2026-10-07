@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: production-uptime-monitor
@@ -81,6 +82,37 @@ jobs:
           check_page "Customer app" "$base/"
           check_page "Provider app" "$base/provider/"
           check_page "Admin app" "$base/admin/"
+
+      - name: Open or update uptime incident
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title='[Uptime] Production availability incident'
+          issue_number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq '.[] | select(.title=="[Uptime] Production availability incident") | .number' | head -n 1)"
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          timestamp="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "Production uptime monitoring failed again at **${timestamp}**. [Open workflow run](${run_url})."
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "Production uptime monitoring detected a persistent availability failure at **${timestamp}** after retries.\n\n[Open workflow run](${run_url})\n\nFollow \`docs/MONITORING_RUNBOOK.md\` before taking recovery action."
+          fi
+
+      - name: Close recovered uptime incident
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          issue_number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq '.[] | select(.title=="[Uptime] Production availability incident") | .number' | head -n 1)"
+          if [ -n "$issue_number" ]; then
+            timestamp="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "Production uptime checks recovered at **${timestamp}**. Closing this automated incident."
+            gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY" --reason completed
+          fi
 
       - name: Record successful check
         if: success()
