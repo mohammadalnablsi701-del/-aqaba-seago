@@ -1,11 +1,15 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
+import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
+
+const params=new URLSearchParams(window.location.search);
+const recovery=Boolean(params.get("resetToken")||params.get("forgotPassword"));
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    {recovery?<PasswordRecovery/>:<App />}
   </React.StrictMode>
 );
 
