@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { productionErrorMetadata, logRequestError } from '../src/utils/errorLogging.js';
+import { productionErrorMetadata, publicErrorResponse, logRequestError } from '../src/utils/errorLogging.js';
 
 test('production error metadata excludes message, stack and arbitrary sensitive properties', () => {
   const err = new Error('user@example.com token=super-secret');
@@ -56,4 +56,30 @@ test('production logger emits structured metadata only', () => {
   assert.equal(logged.event, 'request_error');
   assert.equal(logged.statusCode, 500);
   assert.doesNotMatch(calls[0], /secret@example\.com|abc123|private payload/);
+});
+
+test('5xx API responses never expose internal error messages', () => {
+  const response = publicErrorResponse({
+    statusCode: 503,
+    message: 'Mongo connection failed for mongodb://user:secret@example.invalid/db'
+  });
+  assert.deepEqual(response, { statusCode: 503, error: 'Internal server error' });
+});
+
+test('controlled 4xx messages remain available but are bounded and single-line', () => {
+  const response = publicErrorResponse({
+    statusCode: 400,
+    message: `Invalid booking payload\n${'x'.repeat(300)}`
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.error.includes('\n'), false);
+  assert.equal(response.error.length, 240);
+  assert.match(response.error, /^Invalid booking payload /);
+});
+
+test('invalid status codes fail closed as generic 500 responses', () => {
+  assert.deepEqual(
+    publicErrorResponse({ statusCode: 999, message: 'sensitive internal detail' }),
+    { statusCode: 500, error: 'Internal server error' }
+  );
 });
