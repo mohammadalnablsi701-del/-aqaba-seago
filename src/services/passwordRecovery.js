@@ -24,8 +24,8 @@ export async function issuePasswordReset(user) {
   const expiresAt = new Date(Date.now() + resetMinutes() * 60_000);
   await PasswordResetToken.create({ userId: user._id, tokenHash: hashToken(rawToken), expiresAt });
 
-  const delivered = await sendPasswordResetEmail({ to: user.email, token: rawToken });
-  return { delivered, expiresAt };
+  sendPasswordResetEmail({ to: user.email, token: rawToken }).catch(() => {});
+  return { expiresAt };
 }
 
 export async function claimPasswordResetToken(rawToken) {
