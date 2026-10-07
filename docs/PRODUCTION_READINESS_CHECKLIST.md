@@ -1,12 +1,12 @@
 # Aqaba SeaGo — Production Readiness Checklist
 
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-07
 
 This checklist is the single launch-control document for SeaGo. Do not add non-essential features until all **P0 launch blockers** are complete.
 
 Status legend:
-- ✅ Done / verified in current code
-- 🟡 Partially done / needs final verification
+- ✅ Done / verified in current code or automated validation
+- 🟡 Partially done / needs final manual or production verification
 - ⬜ Not done
 - 🚫 Deferred intentionally
 
@@ -43,44 +43,49 @@ These must be complete before public real-money launch.
 - ✅ Payment abstraction already exists in backend.
 - ✅ Server blocks `PUBLIC_LAUNCH=true` while payment provider is still mock.
 - ✅ Payment amount/currency validation exists.
-- ✅ Payment webhook idempotency exists.
+- ✅ Payment webhook idempotency/replay protection exists and is covered by integration tests.
 - ✅ Late/invalid payment handling uses `needs_review`.
+- ✅ Concurrent payment/webhook transitions are serialized in automated tests.
+- ✅ Refund-before-settlement and refund-after-settlement accounting are covered by automated tests.
 - ⬜ Implement real gateway webhook signature verification.
-- ⬜ Test success, failure, abandoned payment, duplicate webhook and delayed webhook.
-- ⬜ Test full and partial refund behavior if supported.
-- ⬜ Disable mock checkout in production.
+- ⬜ Test the selected real gateway: success, failure, abandoned payment, duplicate webhook and delayed webhook.
+- ⬜ Test real gateway full and partial refund behavior if supported.
+- ⬜ Disable mock checkout in production before real-money launch.
 
 **Exit criterion:** real test transaction reaches SeaGo, confirms one booking only, and reconciles correctly.
 
 ## 2. End-to-end booking test
 
-- 🟡 Customer booking flow exists.
+- ✅ Customer booking flow exists.
 - ✅ Server-side pricing exists.
 - ✅ Temporary seat holds exist.
-- ✅ Hold timeout currently defaults to 5 minutes.
+- ✅ Hold timeout currently defaults to **10 minutes** in `.env.example`.
 - ✅ Capacity is atomically reserved to reduce overselling.
-- ✅ Checkout idempotency is required.
-- ⬜ Run clean E2E test on a fresh real provider/departure with capacity > 1.
-- ⬜ Test two customers attempting the final seat simultaneously.
-- ⬜ Test checkout expiry and released seat.
-- ⬜ Test successful payment after hold expiry.
-- ⬜ Test duplicate submit from customer device.
-- ⬜ Test browser reload during payment return.
+- ✅ Checkout idempotency is required and covered by automated integration tests.
+- ✅ Final-seat concurrent booking test passes with exactly one winner.
+- ✅ Checkout expiry/released-seat behavior is covered by automated tests.
+- ✅ Late successful payment after failed/expired checkout is handled as `needs_review` without double booking.
+- ✅ Duplicate checkout with the same idempotency key shares the same hold/payment identity.
+- ✅ Payload mismatch / cross-departure idempotency leakage is covered by automated tests.
+- ✅ Full Pilot E2E has passed against the dedicated Staging MongoDB replica set with cleanup successful.
+- ⬜ Run one final clean rehearsal with a real provider/departure and real human devices immediately before launch.
+- ⬜ Test browser reload during the real payment return flow once the real gateway is integrated.
 
 **Exit criterion:** no duplicate booking, no oversell, no stranded reserved seat.
 
 ## 3. QR ticket and check-in
 
-- 🟡 QR scanner exists in provider app.
-- 🟡 Rear-camera preference exists.
-- 🟡 Torch support exists where device/browser supports it.
-- 🟡 Ticket ownership/provider validation exists.
-- 🟡 Second check-in should be rejected.
+- ✅ QR scanner exists in provider app.
+- 🟡 Rear-camera preference exists and still needs final multi-device verification.
+- 🟡 Torch support exists where device/browser supports it and still needs final multi-device verification.
+- ✅ Ticket ownership/provider validation is covered by automated integration tests.
+- ✅ Wrong provider is rejected by automated tests.
+- ✅ Simultaneous double-scan is atomic: exactly one check-in succeeds.
+- ✅ Later scan of an already-used ticket is rejected by automated tests.
+- ✅ Check-in role capability boundaries are covered by provider-role tests.
 - ⬜ Verify scan using a real customer QR on at least 2 iPhones and 1 Android device.
-- ⬜ Verify ticket changes to USED immediately after successful scan.
-- ⬜ Verify second scan reports already used without changing financial data.
-- ⬜ Verify wrong provider cannot check in another provider's ticket.
-- ⬜ Verify manual check-in works as fallback.
+- ⬜ Verify ticket changes to USED immediately on those real devices.
+- ⬜ Verify manual check-in works as operational fallback on a real pilot booking.
 
 **Exit criterion:** provider can process a real boarding line without admin intervention.
 
@@ -90,43 +95,48 @@ These must be complete before public real-money launch.
 - ✅ Role checks exist for customer/provider/admin.
 - ✅ Disabled users are rejected by authenticated routes.
 - ✅ Passwords are hashed.
-- 🟡 Google sign-in is integrated/configured but needs final production verification.
-- ⬜ Review JWT expiry duration and production secret strength.
+- 🟡 Google sign-in configuration and production CORS are covered by Production Smoke; one final real-user Google sign-in verification is still required.
+- ✅ Provider ownership and team-role boundaries are covered by negative integration tests for owner, manager, staff and check-in roles.
+- 🟡 Public registration code maps requested roles only to `provider` or `customer`; an explicit automated negative test for requested `admin` is still pending.
+- ⬜ Review JWT expiry duration and production secret-strength policy.
 - ⬜ Confirm no secrets exist in Git history.
 - ⬜ Rotate any credential ever shared during development before public launch.
 - ⬜ Add/verify password reset or documented support recovery process.
-- ⬜ Verify admin account cannot be created through a public registration route.
-- ⬜ Verify provider ownership and team-role boundaries with negative tests.
 
 **Exit criterion:** account takeover and privilege escalation basics are covered.
 
 ## 5. Remove temporary development hooks
 
-- ⬜ Remove `RELEASE_WHITE_PRINCE_PILOT_HOLD` startup hook and hard-coded pilot departure ID from `src/server.js`.
-- ⬜ Confirm demo seeding is disabled in production.
-- ⬜ Confirm one-time demo cleanup switches are disabled.
-- ⬜ Confirm pilot E2E startup flag is disabled.
-- ⬜ Confirm email-test recipient startup hook is disabled.
-- ✅ Public launch guard blocks demo seed and mock checkout.
+- ✅ `RELEASE_WHITE_PRINCE_PILOT_HOLD` startup hook and hard-coded pilot release logic were removed.
+- ✅ Automatic development startup hooks were removed from `src/server.js`.
+- ✅ Production fails closed if stale legacy startup flags are configured.
+- ✅ Demo seeding is not run automatically at production startup.
+- ✅ One-time demo cleanup is not run automatically at production startup.
+- ✅ Pilot E2E is not run automatically at production startup.
+- ✅ Email-test startup hook is not run automatically at production startup.
+- ✅ Public launch guard blocks unsafe mock/demo launch configuration.
 
-**Exit criterion:** production startup performs no provider-specific or test-only mutations.
+**Exit criterion:** production startup performs no provider-specific or test-only mutations. **Met in current code.**
 
 ## 6. Database safety and backups
 
 - ✅ MongoDB connection health is exposed through readiness endpoint.
-- ⬜ Confirm production database is separate from test/dev.
-- ⬜ Enable automated database backups.
+- ✅ Staging is separated from production and uses its own Railway MongoDB single-node replica set.
+- ✅ Staging and production environment variables are separated.
+- ⬜ Enable/confirm automated production database backups.
 - ⬜ Document restore procedure.
 - ⬜ Perform one restore test into a non-production database.
 - ⬜ Confirm retention period for backups.
-- ⬜ Restrict database network/user permissions to minimum required access.
+- ⬜ Restrict production database network/user permissions to minimum required access.
 
 **Exit criterion:** accidental deletion or bad deployment can be recovered.
 
 ## 7. Error monitoring and operational visibility
 
-- ✅ Health/readiness endpoint exists.
+- ✅ Health/readiness endpoints exist.
+- ✅ `/health` reports deployed commit SHA on both Railway and Render environments.
 - ✅ Graceful shutdown exists.
+- ✅ Production Smoke checks deployed commit identity and critical public endpoints after `main` releases.
 - ⬜ Add production error monitoring/alerting.
 - ⬜ Alert when API is unavailable.
 - ⬜ Alert on repeated payment webhook failures.
@@ -139,14 +149,15 @@ These must be complete before public real-money launch.
 ## 8. Domain, HTTPS and production URLs
 
 - ✅ Current Render API uses HTTPS.
-- ✅ Current GitHub Pages frontend uses HTTPS.
+- ✅ Current GitHub Pages frontends use HTTPS.
+- ✅ Production Smoke verifies Google auth configuration/CORS and public app pages.
 - ⬜ Buy/choose official SeaGo domain.
 - ⬜ Connect customer-facing production domain.
 - ⬜ Decide whether provider/admin stay on subpaths or subdomains.
-- ⬜ Update OAuth authorized origins/redirects.
-- ⬜ Update CORS allow-list.
-- ⬜ Update payment return/webhook URLs.
-- ⬜ Verify HTTPS certificate renewal is automatic.
+- ⬜ Update OAuth authorized origins/redirects for the final official domain.
+- ⬜ Update CORS allow-list for the final official domain.
+- ⬜ Update payment return/webhook URLs after gateway selection.
+- ⬜ Verify HTTPS certificate renewal on final official domain is automatic.
 
 **Exit criterion:** all production URLs use official domains and valid HTTPS.
 
@@ -180,9 +191,10 @@ These can be completed before or during a small invited pilot, but should be don
 - ✅ QR scanner exists.
 - ✅ Manual check-in exists.
 - ✅ Provider team roles/capabilities exist.
+- ✅ Provider role permissions are covered by HTTP integration tests.
+- ✅ Owner/manager/staff/check-in boundaries are automated, including finance visibility and trip/departure/check-in permissions.
 - ✅ Provider Home was simplified for pilot use.
 - 🟡 Verify upcoming-trip Quick Start against production data after latest deployment.
-- ⬜ Test all provider roles: owner, manager, staff, check-in.
 - ⬜ Confirm provider phone/contact info appears where expected.
 - ⬜ Add clear provider support/escalation path.
 
@@ -195,8 +207,8 @@ These can be completed before or during a small invited pilot, but should be don
 - ⬜ Final mobile UX pass on iPhone and Android.
 - ⬜ Empty/loading/error states review.
 - ⬜ Verify date/time display is consistently Jordan time.
-- ⬜ Verify sold-out departures never appear bookable.
-- ⬜ Verify cancelled departures cannot be purchased.
+- ⬜ Verify sold-out departures never appear bookable on real pilot inventory.
+- ⬜ Verify cancelled departures cannot be purchased on real pilot inventory.
 
 ## Admin operations
 
@@ -210,8 +222,10 @@ These can be completed before or during a small invited pilot, but should be don
 - ✅ Paid vs outstanding provider balances are tracked.
 - ✅ Settlement history exists.
 - ✅ Duplicate settlement protection exists.
-- ⬜ Test settlement calculations against hand-calculated examples.
-- ⬜ Test refunds before and after provider settlement.
+- ✅ Settlement calculations are covered by hand-calculated automated examples.
+- ✅ Refund-before-settlement reduces provider payable correctly in automated tests.
+- ✅ Refund-after-settlement preserves actual cash paid and records recovery correctly in automated tests.
+- ✅ Concurrent settlement payout is protected against duplicate payout.
 - ⬜ Define process for correcting an incorrectly marked settlement.
 - ⬜ Add export/download report if operations require it.
 
@@ -231,16 +245,20 @@ These can be completed before or during a small invited pilot, but should be don
 
 A senior/security reviewer should review this section before broad public launch.
 
-- ✅ Helmet is reported as implemented in current milestone.
-- ✅ CORS is reported as implemented.
-- ✅ Rate limiting is reported as implemented.
-- ⬜ Review rate-limit thresholds by endpoint.
-- ⬜ Add stronger rate limits to login/OTP/payment endpoints.
+- ✅ Helmet is implemented.
+- ✅ CORS is implemented and production configuration is smoke-tested.
+- ✅ API rate limiting is implemented.
+- ✅ Auth endpoints have a separate stricter rate limiter.
+- ✅ Provider ownership/capability boundaries have automated negative tests.
+- ⬜ Add explicit automated negative test proving public registration cannot create `admin`.
+- ⬜ Review final rate-limit thresholds by endpoint.
+- ⬜ Add payment-specific abuse/rate-limit review once real gateway is selected.
 - ⬜ Validate request bodies consistently with schemas.
 - ⬜ Review Mongo query injection risks.
 - ⬜ Review XSS exposure in rendered customer/provider/admin data.
 - ⬜ Review CSRF assumptions for bearer-token flows.
-- ⬜ Review webhook replay protections.
+- ✅ Mock/payment webhook duplicate/replay behavior is covered by integration tests.
+- ⬜ Review real gateway webhook replay/signature protections after integration.
 - ⬜ Review file/image upload restrictions and MIME validation.
 - ⬜ Review dependency vulnerabilities.
 - ⬜ Run dependency audit in CI.
@@ -253,31 +271,40 @@ A senior/security reviewer should review this section before broad public launch
 # P2 — Quality and testing
 
 - ✅ Backend automated test command exists.
+- ✅ CI runs on both `staging` and `main`.
 - ✅ CI builds backend, customer app, provider app and admin app.
 - ✅ GitHub Pages deployment workflow exists.
-- ⬜ Add automated integration test for full checkout flow.
-- ⬜ Add concurrent-seat reservation test.
-- ⬜ Add payment webhook duplicate/replay test.
-- ⬜ Add expired-hold test.
-- ⬜ Add provider permission tests.
-- ⬜ Add QR/check-in integration tests.
-- ⬜ Add settlement calculation tests.
-- ⬜ Add refund + settlement tests.
-- ⬜ Add smoke test after production deploy.
-- ⬜ Define rollback procedure after a bad deployment.
+- ✅ Automated checkout integration test exists.
+- ✅ Concurrent final-seat reservation test exists.
+- ✅ Payment webhook duplicate/replay tests exist.
+- ✅ Expired-hold/release tests exist.
+- ✅ Provider permission tests exist.
+- ✅ QR/check-in integration tests exist.
+- ✅ Settlement calculation tests exist.
+- ✅ Refund + settlement tests exist.
+- ✅ Cancellation/inventory rollback and retry tests exist.
+- ✅ Production Smoke runs on `main` and validates production endpoints and deployed commit identity.
+- ✅ Staging Smoke validates exact Staging commit, readiness, public trips endpoint and `PUBLIC_LAUNCH=false`.
+- ✅ Staging promotion flow is documented in `docs/STAGING_TO_PRODUCTION.md`.
+- 🟡 Operational rollback procedure exists at platform level, but a formal written application rollback/runbook is still recommended.
 
 ---
 
 # P2 — Production infrastructure
 
-- ✅ API currently deployed on Render.
+- ✅ API currently deployed on Render Production.
 - ✅ Frontends currently deployed on GitHub Pages.
-- ⬜ Separate production and staging environment variables.
+- ✅ Dedicated Railway Staging API exists.
+- ✅ Dedicated Railway Staging MongoDB replica set exists.
+- ✅ Production and staging environment variables are separated.
+- ✅ `staging -> CI -> Staging Smoke -> PR -> main -> Production -> Production Smoke` release flow is established.
+- ✅ Production is currently deployed and validated on merge commit `3d52224ad58be7a05f9280981e061e75f57e5aa7`.
+- 🟡 Render is configured with Auto Deploy from `main`, but the 2026-10-07 promotion required one manual deploy because the automatic deploy event did not fire; investigate before relying on it operationally.
 - ⬜ Decide whether GitHub Pages remains final hosting for customer/provider/admin.
 - ⬜ Configure production custom domain.
 - ⬜ Confirm Render service plan is sufficient for expected traffic.
 - ⬜ Confirm no sleep/cold-start behavior is acceptable for paid bookings.
-- ⬜ Confirm MongoDB plan/storage/connection limits.
+- ⬜ Confirm production MongoDB plan/storage/connection limits.
 - ⬜ Add uptime monitoring.
 - ⬜ Document ownership/access to GitHub, Render, domain, database and payment provider.
 
@@ -305,21 +332,22 @@ Not blockers for first real launch.
 
 Do not work on this list randomly.
 
-## Sprint 1 — Clean and prove the core
-1. Remove temporary pilot/development hooks.
-2. Run clean booking/hold/capacity tests.
-3. Run real QR/check-in tests.
-4. Verify provider/admin financial numbers.
-5. Test provider settlements with refunds.
-6. Fix any discovered functional bugs.
+## Sprint 1 — Clean and prove the core — substantially completed
+1. ✅ Remove temporary pilot/development hooks.
+2. ✅ Automate booking/hold/capacity tests.
+3. ✅ Automate QR/check-in backend tests.
+4. ✅ Verify provider/admin financial calculations with automated examples.
+5. ✅ Test provider settlements with refunds.
+6. 🟡 Complete real-device QR/mobile rehearsal before launch.
 
-## Sprint 2 — Production foundation
-1. Production/staging separation.
-2. Backups and restore test.
-3. Monitoring and alerts.
-4. Domain + HTTPS + CORS + OAuth cleanup.
-5. Production email sender.
-6. Legal/policy pages.
+## Sprint 2 — Production foundation — in progress
+1. ✅ Production/staging separation.
+2. ⬜ Backups and restore test.
+3. ⬜ Monitoring and alerts.
+4. ⬜ Official domain + final HTTPS/CORS/OAuth cleanup.
+5. ⬜ Production email sender.
+6. ⬜ Legal/policy pages.
+7. 🟡 Investigate/verify Render Auto Deploy reliability.
 
 ## Sprint 3 — Real payment
 1. Select gateway.
@@ -334,7 +362,7 @@ Do not work on this list randomly.
 1. External payment integration review.
 2. External security/code review.
 3. Fix findings.
-4. Run full E2E launch rehearsal.
+4. Run full E2E launch rehearsal on real devices.
 5. Create stable release tag.
 6. Enable public launch.
 
@@ -342,15 +370,18 @@ Do not work on this list randomly.
 
 # Current high-level assessment
 
-Based on the current repository:
+Based on the repository and validated deployments on 2026-10-07:
 
-- Core marketplace workflow: **well underway**
-- Provider operations: **well underway**
-- Admin operations: **well underway**
+- Core marketplace workflow: **strong automated coverage; final real-device rehearsal remains**
+- Provider operations: **strong automated permission coverage; final operational rehearsal remains**
+- Admin/financial operations: **core commission/refund/settlement logic now covered by integration tests**
+- Staging/production separation: **implemented and validated**
+- CI + Staging Smoke + Production Smoke: **implemented and passing**
 - Real payment: **not yet production-ready**
-- Production operations/monitoring/backups: **incomplete**
+- Production backups/monitoring: **incomplete**
+- Legal/policies/domain: **incomplete**
 - Security review: **not yet externally reviewed**
-- Public launch: **not ready yet**
-- Controlled non-real-money pilot: **close**
+- Public real-money launch: **not ready yet**
+- Controlled non-real-money pilot: **technically much closer; final real-device/operational checks remain**
 
-The goal from this point is **not to add more features**. The goal is to close this checklist from top to bottom.
+The goal from this point is **not to add more features**. The goal is to close the remaining P0 items from top to bottom.
