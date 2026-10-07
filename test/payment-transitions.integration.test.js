@@ -159,7 +159,7 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
   const f=await confirmed();await Promise.allSettled([payout(f),cancel(f)]);
   assert.equal((await Booking.findById(f.booking._id)).status,'cancelled');
   const {breakdown:[row]}=await ledger(f);const records=await Settlement.find({providerId:f.hold.providerId});
-  assert.equal(row.paid,records.reduce((sum,s)=>sum+s.amountPaid,0));assert.equal(row.outstanding,-row.paid);assert.equal(row.providerNet,0);
+  assert.equal(row.paid,records.reduce((sum,s)=>sum+s.amountPaid,0));assert.equal(row.outstanding,0-row.paid);assert.equal(row.providerNet,0);
  });
  await t.test('legacy batch uses its stored total and refuses invented partial-period allocations',async()=>{
   const f=await confirmed(),g=await confirmed();await Booking.updateOne({_id:g.booking._id},{$set:{providerId:f.hold.providerId}});

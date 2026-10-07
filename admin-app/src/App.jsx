@@ -182,7 +182,7 @@ export default function App(){
             <div><span>Refunds</span><b>{Number(row.refunds||0).toFixed(2)}</b></div>
             <div><span>SeaGo</span><b>{Number(row.seaGoCommission||0).toFixed(2)}</b></div>
             <div><span>Provider net</span><b>{Number(row.providerNet||0).toFixed(2)}</b></div>
-            <div><span>Paid</span><b>{Number(row.paid||0).toFixed(2)}</b></div>
+            <div><span>Paid</span><b>{row.reconciliationRequired?"Review required":Number(row.paid||0).toFixed(2)}</b></div>
             <div className="settlement-outstanding"><span>Outstanding</span><b>{row.reconciliationRequired?"Review required":Number(row.outstanding||0).toFixed(2)+" JOD"}</b></div>
             <button className="settlement-pay" disabled={row.reconciliationRequired||row.recoveryDue>0||!settlementFrom||!settlementTo||Number(row.outstanding||0)<=0||settlementBusy===String(row.providerId)} onClick={()=>payProviderSettlement(row)}>{settlementBusy===String(row.providerId)?"Saving...":row.reconciliationRequired||row.recoveryDue>0?"Review required":Number(row.outstanding||0)>0?"Mark as paid":"Paid"}</button>
           </article>):<div className="admin-empty"><WalletCards size={28}/><b>No provider balance in this period</b><span>Paid bookings will appear here automatically.</span></div>}</div>
