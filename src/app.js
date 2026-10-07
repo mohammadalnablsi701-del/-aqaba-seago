@@ -80,7 +80,7 @@ export function createApp() {
       ok:true,
       service:"aqaba-seago-api",
       version:"0.3.1",
-      commit:process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null
+      commit:process.env.RAILWAY_GIT_COMMIT_SHA||process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null
     })
   );
 
