@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: staging-smoke
+  group: staging-smoke-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
