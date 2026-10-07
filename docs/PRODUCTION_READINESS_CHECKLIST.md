@@ -98,8 +98,8 @@ These must be complete before public real-money launch.
 - 🟡 Google sign-in configuration and production CORS are covered by Production Smoke; one final real-user Google sign-in verification is still required.
 - ✅ Provider ownership and team-role boundaries are covered by negative integration tests for owner, manager, staff and check-in roles.
 - ✅ Public registration cannot create an `admin` account; an explicit HTTP regression test verifies both the returned user role and JWT role are downgraded to `customer` when `role:"admin"` is requested.
-- ⬜ Review JWT expiry duration and production secret-strength policy.
-- ⬜ Confirm no secrets exist in Git history.
+- ✅ Production JWT policy is enforced and tested: token lifetime is capped at 24 hours, production secrets must be at least 32 characters, and obvious placeholder secrets are rejected at startup.
+- ✅ Full Git history is scanned by Gitleaks in CI and currently passes; `.env` has never been tracked in repository history.
 - ⬜ Rotate any credential ever shared during development before public launch.
 - ⬜ Add/verify password reset or documented support recovery process.
 
@@ -251,6 +251,8 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Auth endpoints have a separate stricter rate limiter.
 - ✅ Provider ownership/capability boundaries have automated negative tests.
 - ✅ Public registration privilege escalation is covered by an explicit HTTP regression test: requesting `role:"admin"` yields a `customer` user and `customer` JWT claims.
+- ✅ Production JWT secret and expiry policy is enforced at startup and covered by automated tests.
+- ✅ Gitleaks scans the complete Git history in CI and the current scan passes.
 - ⬜ Review final rate-limit thresholds by endpoint.
 - ⬜ Add payment-specific abuse/rate-limit review once real gateway is selected.
 - ⬜ Validate request bodies consistently with schemas.
@@ -273,6 +275,7 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Backend automated test command exists.
 - ✅ CI runs on both `staging` and `main`.
 - ✅ CI builds backend, customer app, provider app and admin app.
+- ✅ Full-history secret scanning runs in CI and currently passes.
 - ✅ GitHub Pages deployment workflow exists.
 - ✅ Automated checkout integration test exists.
 - ✅ Concurrent final-seat reservation test exists.
@@ -299,7 +302,7 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Dedicated Railway Staging MongoDB replica set exists.
 - ✅ Production and staging environment variables are separated.
 - ✅ `staging -> CI -> Staging Smoke -> PR -> main -> Production -> Production Smoke` release flow is established.
-- ✅ Production is currently deployed and validated on merge commit `7eafa412caa2d220913c134754e00ba4574aa63f`.
+- ✅ Each promoted `main` release is validated by Production Smoke against the deployed commit identity.
 - 🟡 Render is configured with Auto Deploy from `main`, but multiple 2026-10-07 promotions required manual deploys because the automatic deploy event did not fire; investigate before relying on it operationally.
 - ⬜ Decide whether GitHub Pages remains final hosting for customer/provider/admin.
 - ⬜ Configure production custom domain.
@@ -378,6 +381,7 @@ Based on the repository and validated deployments on 2026-10-07:
 - Admin/financial operations: **core commission/refund/settlement logic now covered by integration tests**
 - Staging/production separation: **implemented and validated**
 - CI + Staging Smoke + Production Smoke: **implemented and passing**
+- JWT/security baseline: **production expiry/secret policy enforced; full-history secret scan passes**
 - Real payment: **not yet production-ready**
 - Production backups/monitoring: **incomplete**
 - Legal/policies/domain: **incomplete**
