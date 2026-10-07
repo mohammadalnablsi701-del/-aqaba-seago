@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const providerSettlementSchema=new mongoose.Schema({
   providerId:{type:mongoose.Schema.Types.ObjectId,ref:"Provider",required:true,index:true},
+  items:[{_id:false,paymentId:{type:mongoose.Schema.Types.ObjectId,ref:"Payment",required:true},bookingId:{type:mongoose.Schema.Types.ObjectId,ref:"Booking",required:true},grossSales:Number,refunds:Number,seaGoCommission:Number,providerNet:Number,amountPaid:Number}],
   paymentIds:[{type:mongoose.Schema.Types.ObjectId,ref:"Payment",required:true}],
   bookingIds:[{type:mongoose.Schema.Types.ObjectId,ref:"Booking",required:true}],
   periodFrom:{type:Date,required:true,index:true},

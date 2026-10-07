@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
+import Settlement from '../src/models/ProviderSettlement.js';
+import {settlementLedger,recordSettlement} from '../src/services/settlements.js';
 import Payment from '../src/models/Payment.js';
 import PaymentEvent from '../src/models/PaymentEvent.js';
 import Booking from '../src/models/Booking.js';
@@ -21,7 +23,7 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
  process.env.MOCK_PAYMENT_WEBHOOK_SECRET='integration-only-webhook-key';delete process.env.RESEND_API_KEY;delete process.env.VAPID_PUBLIC_KEY;
  await mongoose.connect(uri,{dbName:'seago_payment_test_'+crypto.randomUUID().replaceAll('-','')});
  t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();for(const [key,v] of [['MOCK_PAYMENT_WEBHOOK_SECRET',saved.secret],['RESEND_API_KEY',saved.email],['VAPID_PUBLIC_KEY',saved.push]]){if(v===undefined)delete process.env[key];else process.env[key]=v}});
- await Promise.all([Payment,PaymentEvent,Booking,Hold,Departure,Trip,Provider,User,Notice].map(m=>m.init()));
+ await Promise.all([Settlement,Payment,PaymentEvent,Booking,Hold,Departure,Trip,Provider,User,Notice].map(m=>m.init()));
  async function setup(){
   const user=await User.create({name:'Local test',phone:'+962790000000'});
   const provider=await Provider.create({ownerUserId:user._id,businessName:'Local test',status:'approved'});
@@ -128,6 +130,50 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
   await cancelDepartureBookings(args);await cancelDepartureBookings(args);
   assert.equal(await Booking.countDocuments({departureId:f.dep._id,status:'cancelled'}),2);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
   assert.equal((await Payment.find({bookingId:{$in:bookings.map(b=>b._id)}})).reduce((sum,p)=>sum+p.refundedAmount,0),40);
+ });
+
+ const period={from:new Date('2000-01-01'),to:new Date('2100-01-01')};
+ const payout=f=>recordSettlement({...period,providerId:String(f.hold.providerId),paidBy:f.hold.customerId});
+ const ledger=f=>settlementLedger({...period,providerId:String(f.hold.providerId)});
+ await t.test('refund after payout preserves actual paid amount and exposes recoverable balance',async()=>{
+  const f=await confirmed();const s=await payout(f);assert.equal(s.amountPaid,16);
+  await cancel(f);const {breakdown:[row]}=await ledger(f);
+  assert.equal(row.paid,16);assert.equal(row.providerNet,0);assert.equal(row.outstanding,-16);assert.equal(row.recoveryDue,16);
+  assert.equal((await Settlement.findById(s._id)).amountPaid,16);
+  await assert.rejects(payout(f),{statusCode:409});
+ });
+ await t.test('partial refund after payout keeps cash paid fixed',async()=>{
+  const f=await confirmed();await payout(f);await Payment.updateOne({_id:f.payment._id},{$set:{status:'partially_refunded',refundedAmount:10}});
+  const {breakdown:[row]}=await ledger(f);assert.equal(row.paid,16);assert.equal(row.providerNet,8);assert.equal(row.outstanding,-8);assert.equal(row.recoveryDue,8);
+ });
+ await t.test('refund before payout reduces only the new settlement snapshot',async()=>{
+  const f=await confirmed();await Payment.updateOne({_id:f.payment._id},{$set:{status:'partially_refunded',refundedAmount:10}});
+  const s=await payout(f);assert.equal(s.amountPaid,8);assert.equal(s.items[0].amountPaid,8);assert.equal(s.refunds,10);
+  const {breakdown:[row]}=await ledger(f);assert.equal(row.paid,8);assert.equal(row.outstanding,0);
+ });
+ await t.test('concurrent payouts record payment only once',async()=>{
+  const f=await confirmed();const results=await Promise.allSettled([payout(f),payout(f)]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(await Settlement.countDocuments({providerId:f.hold.providerId}),1);
+ });
+ await t.test('refund racing payout leaves a valid immutable cash ledger',async()=>{
+  const f=await confirmed();await Promise.allSettled([payout(f),cancel(f)]);
+  assert.equal((await Booking.findById(f.booking._id)).status,'cancelled');
+  const {breakdown:[row]}=await ledger(f);const records=await Settlement.find({providerId:f.hold.providerId});
+  assert.equal(row.paid,records.reduce((sum,s)=>sum+s.amountPaid,0));assert.equal(row.outstanding,0-row.paid);assert.equal(row.providerNet,0);
+ });
+ await t.test('legacy batch uses its stored total and refuses invented partial-period allocations',async()=>{
+  const f=await confirmed(),g=await confirmed();await Booking.updateOne({_id:g.booking._id},{$set:{providerId:f.hold.providerId}});
+  await Payment.updateOne({_id:f.payment._id},{$set:{paidAt:new Date('2026-01-01')}});await Payment.updateOne({_id:g.payment._id},{$set:{paidAt:new Date('2026-02-01')}});
+  await Settlement.create({providerId:f.hold.providerId,paymentIds:[f.payment._id,g.payment._id],bookingIds:[f.booking._id,g.booking._id],periodFrom:period.from,periodTo:period.to,amountPaid:32,paidBy:f.hold.customerId});
+  await cancel(f);const {breakdown:[row]}=await ledger(f);assert.equal(row.paid,32);assert.equal(row.recoveryDue,16);
+  const partial=await settlementLedger({providerId:String(f.hold.providerId),from:new Date('2026-02-01'),to:new Date('2026-02-02')});
+  assert.equal(partial.breakdown[0].reconciliationRequired,true);assert.equal(partial.breakdown[0].paid,null);
+  await assert.rejects(recordSettlement({providerId:String(f.hold.providerId),paidBy:f.hold.customerId,from:new Date('2026-02-01'),to:new Date('2026-02-02')}),{statusCode:409});
+ });
+ await t.test('repeat-period settlement snapshots exclude previously paid bookings',async()=>{
+  const f=await confirmed();await payout(f);const g=await confirmed();await Booking.updateOne({_id:g.booking._id},{$set:{providerId:f.hold.providerId}});
+  const s=await payout(f);assert.equal(s.grossSales,20);assert.equal(s.providerNet,16);assert.equal(s.amountPaid,16);assert.equal(s.items.length,1);
+  const {breakdown:[row]}=await ledger(f);assert.equal(row.paid,32);assert.equal(row.outstanding,0);
  });
 
 });
