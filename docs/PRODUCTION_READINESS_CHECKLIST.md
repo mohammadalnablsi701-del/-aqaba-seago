@@ -97,7 +97,7 @@ These must be complete before public real-money launch.
 - ✅ Passwords are hashed.
 - 🟡 Google sign-in configuration and production CORS are covered by Production Smoke; one final real-user Google sign-in verification is still required.
 - ✅ Provider ownership and team-role boundaries are covered by negative integration tests for owner, manager, staff and check-in roles.
-- 🟡 Public registration code maps requested roles only to `provider` or `customer`; an explicit automated negative test for requested `admin` is still pending.
+- ✅ Public registration cannot create an `admin` account; an explicit HTTP regression test verifies both the returned user role and JWT role are downgraded to `customer` when `role:"admin"` is requested.
 - ⬜ Review JWT expiry duration and production secret-strength policy.
 - ⬜ Confirm no secrets exist in Git history.
 - ⬜ Rotate any credential ever shared during development before public launch.
@@ -250,7 +250,7 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ API rate limiting is implemented.
 - ✅ Auth endpoints have a separate stricter rate limiter.
 - ✅ Provider ownership/capability boundaries have automated negative tests.
-- ⬜ Add explicit automated negative test proving public registration cannot create `admin`.
+- ✅ Public registration privilege escalation is covered by an explicit HTTP regression test: requesting `role:"admin"` yields a `customer` user and `customer` JWT claims.
 - ⬜ Review final rate-limit thresholds by endpoint.
 - ⬜ Add payment-specific abuse/rate-limit review once real gateway is selected.
 - ⬜ Validate request bodies consistently with schemas.
@@ -283,6 +283,7 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Settlement calculation tests exist.
 - ✅ Refund + settlement tests exist.
 - ✅ Cancellation/inventory rollback and retry tests exist.
+- ✅ Public admin-registration privilege-escalation regression test exists and passes in CI.
 - ✅ Production Smoke runs on `main` and validates production endpoints and deployed commit identity.
 - ✅ Staging Smoke validates exact Staging commit, readiness, public trips endpoint and `PUBLIC_LAUNCH=false`.
 - ✅ Staging promotion flow is documented in `docs/STAGING_TO_PRODUCTION.md`.
@@ -298,8 +299,8 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Dedicated Railway Staging MongoDB replica set exists.
 - ✅ Production and staging environment variables are separated.
 - ✅ `staging -> CI -> Staging Smoke -> PR -> main -> Production -> Production Smoke` release flow is established.
-- ✅ Production is currently deployed and validated on merge commit `3d52224ad58be7a05f9280981e061e75f57e5aa7`.
-- 🟡 Render is configured with Auto Deploy from `main`, but the 2026-10-07 promotion required one manual deploy because the automatic deploy event did not fire; investigate before relying on it operationally.
+- ✅ Production is currently deployed and validated on merge commit `7eafa412caa2d220913c134754e00ba4574aa63f`.
+- 🟡 Render is configured with Auto Deploy from `main`, but multiple 2026-10-07 promotions required manual deploys because the automatic deploy event did not fire; investigate before relying on it operationally.
 - ⬜ Decide whether GitHub Pages remains final hosting for customer/provider/admin.
 - ⬜ Configure production custom domain.
 - ⬜ Confirm Render service plan is sufficient for expected traffic.
