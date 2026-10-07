@@ -1,0 +1,91 @@
+name: Production Uptime Monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-uptime-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Check production availability
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          check_json() {
+            local name="$1"
+            local url="$2"
+            local assertion="$3"
+            local tmp
+            tmp="$(mktemp)"
+
+            for attempt in 1 2 3; do
+              code="$(curl --connect-timeout 8 --max-time 20 -sS -o "$tmp" -w "%{http_code}" "$url" || true)"
+              echo "$name attempt $attempt -> HTTP $code"
+              if [ "$code" = "200" ] && node -e "$assertion" "$tmp"; then
+                return 0
+              fi
+              sleep 10
+            done
+
+            echo "::error title=Production monitor failed::$name failed after 3 attempts ($url)"
+            cat "$tmp" || true
+            return 1
+          }
+
+          check_page() {
+            local name="$1"
+            local url="$2"
+            local tmp
+            tmp="$(mktemp)"
+
+            for attempt in 1 2 3; do
+              code="$(curl -L --connect-timeout 8 --max-time 20 -sS -o "$tmp" -w "%{http_code}" "$url" || true)"
+              echo "$name attempt $attempt -> HTTP $code"
+              if [ "$code" = "200" ] && grep -qi '<!doctype html' "$tmp"; then
+                return 0
+              fi
+              sleep 10
+            done
+
+            echo "::error title=Production monitor failed::$name failed after 3 attempts ($url)"
+            return 1
+          }
+
+          check_json \
+            "API readiness" \
+            "https://aqaba-seago-api.onrender.com/ready" \
+            'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.ok!==true || !["connected","healthy"].includes(String(x.database||"").toLowerCase())) process.exit(1)'
+
+          check_json \
+            "API health" \
+            "https://aqaba-seago-api.onrender.com/health" \
+            'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.ok!==true) process.exit(1)'
+
+          check_json \
+            "Public trips API" \
+            "https://aqaba-seago-api.onrender.com/api/trips" \
+            'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!Array.isArray(x)) process.exit(1)'
+
+          base="https://mohammadalnablsi701-del.github.io/-aqaba-seago"
+          check_page "Customer app" "$base/"
+          check_page "Provider app" "$base/provider/"
+          check_page "Admin app" "$base/admin/"
+
+      - name: Record successful check
+        if: success()
+        shell: bash
+        run: |
+          echo "### Production uptime check ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "API readiness, health, public trips, customer, provider and admin surfaces are reachable." >> "$GITHUB_STEP_SUMMARY"
+          echo "Checked at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_STEP_SUMMARY"
