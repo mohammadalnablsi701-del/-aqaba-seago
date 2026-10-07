@@ -21,9 +21,9 @@ export const updateProviderSettings=(token,data)=>req("/api/providers/me/setting
 export const trips=token=>req("/api/providers/me/trips",{token});
 export const departures=(token,date)=>req("/api/providers/me/departures"+(date?"?date="+encodeURIComponent(date):""),{token});
 export const bookings=(token,date)=>req("/api/providers/me/bookings"+(date?"?date="+encodeURIComponent(date):""),{token});
-export const checkIn=(token,ticketToken,departureId)=>req("/api/tickets/check-in",{token,method:"POST",body:JSON.stringify({token:ticketToken,departureId})});
+export const checkIn=(token,ticketToken)=>req("/api/tickets/check-in",{token,method:"POST",body:JSON.stringify({token:ticketToken})});
 
-export const inspectTicket=(token,ticketToken,departureId)=>req("/api/tickets/inspect",{token,method:"POST",body:JSON.stringify({token:ticketToken,departureId})});
+export const inspectTicket=(token,ticketToken)=>req("/api/tickets/inspect",{token,method:"POST",body:JSON.stringify({token:ticketToken})});
 
 export const createTrip=(token,data)=>req("/api/trips",{token,method:"POST",body:JSON.stringify(data)});
 export const updateTrip=(token,id,data)=>req("/api/trips/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
@@ -32,7 +32,7 @@ export const createDeparturesBulk=(token,data)=>req("/api/departures/bulk",{toke
 export const updateDeparture=(token,id,data)=>req("/api/departures/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
 
 export const bookingDetail=(token,id)=>req("/api/providers/me/bookings/"+id,{token});
-export const manualCheckInBooking=(token,id,departureId)=>req("/api/providers/me/bookings/"+id+"/check-in",{token,method:"POST",body:JSON.stringify({departureId})});
+export const manualCheckInBooking=(token,id)=>req("/api/providers/me/bookings/"+id+"/check-in",{token,method:"POST"});
 
 export const providerStats=(token,date)=>req("/api/providers/me/stats?date="+encodeURIComponent(date),{token});
 
