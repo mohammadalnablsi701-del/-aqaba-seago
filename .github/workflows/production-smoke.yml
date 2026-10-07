@@ -40,11 +40,27 @@ jobs:
           set -euo pipefail
           headers="$(mktemp)"
           body="$(mktemp)"
-          curl -sS -D "$headers" -o "$body"             -H "Origin: https://mohammadalnablsi701-del.github.io"             https://aqaba-seago-api.onrender.com/api/auth/google/config
+          curl -sS -D "$headers" -o "$body" \
+            -H "Origin: https://mohammadalnablsi701-del.github.io" \
+            https://aqaba-seago-api.onrender.com/api/auth/google/config
           cat "$body"
           grep -qi '^access-control-allow-origin: https://mohammadalnablsi701-del.github.io' "$headers"
           grep -q '"enabled":true' "$body"
           grep -q '764739593570-ls3m81l4defks40st7e4ejrkci98q4m5.apps.googleusercontent.com' "$body"
+
+      - name: Verify hostile browser origins are not allowed
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          curl -sS -D "$headers" -o /tmp/hostile-origin-body.json \
+            -H "Origin: https://evil.example" \
+            https://aqaba-seago-api.onrender.com/health
+          if grep -qi '^access-control-allow-origin:' "$headers"; then
+            echo "Production incorrectly allowed an untrusted browser origin"
+            cat "$headers"
+            exit 1
+          fi
 
       - name: Verify public app pages
         shell: bash
