@@ -171,13 +171,16 @@ router.patch("/:departureId", requireAuth, requireRole("provider"), async (req,r
       if(nextStatus==="completed"&&new Date(departure.startsAt)>new Date()){
         return res.status(409).json({error:"Future departures cannot be marked completed"});
       }
-      if(nextStatus==="cancelled"&&departure.status!=="cancelled"){
-        departure.status="cancelled";
-        await departure.save();
+      if(nextStatus==="cancelled"){
+        if(departure.status!=="cancelled"){
+          departure.status="cancelled";
+          await departure.save();
+        }
+        // Retry unfinished booking cancellations even when sales are already stopped.
         await releaseCheckoutHoldsForDeparture(departure._id);
         await cancelDepartureBookings({departureId:departure._id,providerId:provider._id,reason:req.body.cancellationReason||"Departure cancelled by provider"});
         await auditProviderAction({access,user:req.user,action:"departure.cancel",targetType:"departure",targetId:departure._id,summary:"Cancelled departure for "+trip.titleEn,metadata:{startsAt:departure.startsAt,reason:req.body.cancellationReason||"Departure cancelled by provider"}});
-        return res.json(departure);
+        return res.json(await Departure.findById(departure._id));
       }
       departure.status=nextStatus;
     }

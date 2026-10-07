@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { releaseCheckoutHold } from "./inventory.js";
 import Payment from "../models/Payment.js";
 import PaymentEvent from "../models/PaymentEvent.js";
 import Booking from "../models/Booking.js";
@@ -143,66 +144,24 @@ async function holdInventoryIsSellable(hold) {
 }
 
 async function releaseHold(hold, status = "released", session = undefined) {
-  if (!hold || hold.status !== "active") return false;
-  const claimed = await CheckoutHold.findOneAndUpdate(
-    { _id: hold._id, status: "active" },
-    { $set: { status } },
-    { new: true, session }
-  );
-  if (!claimed) return false;
-  await Departure.updateOne(
-    { _id: claimed.departureId },
-    { $inc: { reservedSeats: -Number(claimed.seats || 0) } },
-    { session }
-  );
-  return true;
+  if (!hold) return false;
+  return releaseCheckoutHold(hold._id, {status,session});
 }
 
 export async function releaseCheckoutHoldsForDeparture(departureId) {
-  const active = await CheckoutHold.find({ departureId, status: "active" })
-.select("_id departureId seats status")
-    .limit(1000);
-
-  let released = 0;
-  for (const hold of active) {
-    const didRelease = await releaseHold(hold, "released");
-    if (!didRelease) continue;
-    await Payment.updateMany(
-      { holdId: hold._id, status: { $in: ["created", "pending"] } },
-      { $set: { status: "cancelled", failedAt: new Date() } }
-    );
-    released += 1;
-  }
+  const active=await CheckoutHold.find({departureId,status:"active"}).select("_id").limit(1000);
+  let released=0;
+  for(const hold of active)if(await releaseCheckoutHold(hold._id))released++;
   return released;
 }
 
 export async function releaseExpiredCheckoutHolds({ limit = 200 } = {}) {
-  const now = new Date();
-  const expired = await CheckoutHold.find({
-    status: "active",
-    expiresAt: { $lte: now }
-  }).select("_id departureId seats").sort({ expiresAt: 1 }).limit(limit);
-
-  let released = 0;
-  for (const hold of expired) {
-    const claimed = await CheckoutHold.findOneAndUpdate(
-      { _id: hold._id, status: "active", expiresAt: { $lte: now } },
-      { $set: { status: "expired" } },
-      { new: true }
-    );
-    if (!claimed) continue;
-
-    await Departure.updateOne(
-      { _id: claimed.departureId },
-      { $inc: { reservedSeats: -Number(claimed.seats || 0) } }
-    );
-
-    await Payment.updateMany(
-      { holdId: claimed._id, status: "pending" },
-      { $set: { status: "expired", failedAt: now } }
-    );
-
-    released += 1;
+  const now=new Date();
+  const expired=await CheckoutHold.find({status:"active",expiresAt:{$lte:now}})
+    .select("_id").sort({expiresAt:1}).limit(limit);
+  let released=0;
+  for(const hold of expired){
+    if(await releaseCheckoutHold(hold._id,{status:"expired",expiredBefore:now}))released++;
   }
   return released;
 }
@@ -227,10 +186,6 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
   ]);
   if (!departure || !inventorySellable) {
     await releaseHold(hold, "released");
-    await Payment.updateMany(
-      { holdId: hold._id, status: { $in: ["created", "pending"] } },
-      { $set: { status: "cancelled", failedAt: new Date() } }
-    );
     throw Object.assign(new Error("Departure is no longer available"), { statusCode: 409 });
   }
 
