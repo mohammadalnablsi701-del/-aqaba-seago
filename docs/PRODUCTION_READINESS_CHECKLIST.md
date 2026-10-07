@@ -140,17 +140,19 @@ These must be complete before public real-money launch.
 - ✅ `/health` reports deployed commit SHA on both Railway and Render environments.
 - ✅ Graceful shutdown exists.
 - ✅ Production Smoke checks deployed commit identity and critical public endpoints after `main` releases.
-- ✅ Scheduled production uptime workflow checks API readiness/health, public trips, customer app, provider app and admin app every 15 minutes with retries and timeouts.
-- 🟡 Persistent uptime failures fail the GitHub Actions monitor and create an error signal; a guaranteed external escalation channel is not configured yet.
+- 🟡 Scheduled production uptime workflow is present on `main` and configured for 15-minute checks with retries/timeouts, but an actual GitHub `schedule` execution has not yet been observed and verified.
+- 🟡 Persistent uptime failures are designed to fail the GitHub Actions monitor and open/update an incident issue; a real scheduled execution and guaranteed external escalation channel are still unverified.
 - ✅ Protected admin operations queue surfaces `needs_review` payments, notification failures from the last 24 hours and open/in-progress support workload.
 - ✅ Operations-queue authorization and counts are covered by an integration test on a disposable MongoDB replica set.
 - ✅ Payment webhook processing failures emit bounded structured logs without intentionally logging raw webhook payloads or signatures.
+- ✅ Central production API error logging is privacy-safe and regression-tested: request bodies, query/auth data, stack traces, arbitrary error properties and sensitive error messages are not emitted by the central production logger.
+- ✅ Internal 5xx error details are not disclosed to API clients; 5xx responses return a generic error while controlled 4xx messages are bounded and normalized.
 - ⬜ Alert on repeated payment webhook failures above a defined threshold after the real gateway is integrated.
 - ⬜ Alert on email delivery failures above a defined threshold after the production sender is configured.
-- ⬜ Define production log-retention period and complete repository-wide PII/logging review.
+- ⬜ Define production log-retention period and complete any remaining external/platform logging review.
 - ✅ Monitoring response procedure is documented in `docs/MONITORING_RUNBOOK.md`.
 
-**Exit criterion:** important failures are discovered automatically and routed to an operator. **Core discovery is implemented; guaranteed external escalation and final threshold/log-retention policy remain open.**
+**Exit criterion:** important failures are discovered automatically and routed to an operator. **Core discovery/operations visibility is implemented; first scheduled uptime execution, guaranteed external escalation and final threshold/log-retention policy remain open.**
 
 ## 8. Domain, HTTPS and production URLs
 
@@ -253,7 +255,7 @@ These can be completed before or during a small invited pilot, but should be don
 A senior/security reviewer should review this section before broad public launch.
 
 - ✅ Helmet is implemented.
-- ✅ CORS is implemented and production configuration is smoke-tested.
+- ✅ CORS is implemented, fails closed for an empty production allowlist, and allowed/hostile origins are covered by automated and Production Smoke validation.
 - ✅ API rate limiting is implemented.
 - ✅ Auth endpoints have a separate stricter rate limiter.
 - ✅ Provider ownership/capability boundaries have automated negative tests.
@@ -262,17 +264,18 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Gitleaks scans the complete Git history in CI and the current scan passes.
 - ⬜ Review final rate-limit thresholds by endpoint.
 - ⬜ Add payment-specific abuse/rate-limit review once real gateway is selected.
-- ⬜ Validate request bodies consistently with schemas.
-- ⬜ Review Mongo query injection risks.
-- ⬜ Review XSS exposure in rendered customer/provider/admin data.
-- ⬜ Review CSRF assumptions for bearer-token flows.
+- ✅ Request bodies on security-sensitive/mutating flows have explicit validation, with regression coverage added across booking/payment/support/media paths.
+- ✅ Mongo query/operator injection risks are centrally hardened: unsafe `$` operators, dotted keys and prototype-pollution keys are rejected before application routes, with regression tests.
+- ✅ XSS exposure was reviewed for the current React customer/provider/admin rendering path; no unsafe raw-HTML rendering path was found in the reviewed UI code. Re-review if raw HTML/content rendering is introduced later.
+- ✅ CSRF assumptions were reviewed for the current bearer-token model: API auth uses bearer JWTs rather than ambient session cookies, CORS credentials are disabled, and the assumption is documented for future re-review if cookie auth is introduced.
 - ✅ Mock/payment webhook duplicate/replay behavior is covered by integration tests.
 - ⬜ Review real gateway webhook replay/signature protections after integration.
-- ⬜ Review file/image upload restrictions and MIME validation.
-- ⬜ Review dependency vulnerabilities.
-- ⬜ Run dependency audit in CI.
-- ⬜ Add security headers verification test.
-- 🟡 New webhook monitoring logs avoid raw bodies/signatures and bound messages; full repository-wide PII/logging review remains open.
+- ✅ File/image upload restrictions include MIME/signature verification before accepted image content is stored, with regression coverage.
+- ✅ Dependency vulnerabilities are reviewed automatically through CI dependency-audit jobs for backend, customer, provider and admin packages.
+- ✅ Dependency audit runs in CI and currently passes.
+- ✅ Security headers have both automated app-level regression coverage and live Production Smoke verification on Render; the current runtime check passes.
+- ✅ Central production error logging and webhook failure logging are privacy-hardened and regression-tested against accidental sensitive-detail leakage; production log-retention/platform policy still remains to be defined.
+- ✅ Internal server errors fail closed to generic 5xx client responses; controlled 4xx messages are bounded and normalized.
 - ⬜ Perform external security/code review before wide public launch.
 
 ---
@@ -296,8 +299,8 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Refund + settlement tests exist.
 - ✅ Cancellation/inventory rollback and retry tests exist.
 - ✅ Public admin-registration privilege-escalation regression test exists and passes in CI.
-- ✅ Production Smoke runs on `main` and validates production endpoints and deployed commit identity.
-- ✅ Staging Smoke validates exact Staging commit, readiness, public trips endpoint and `PUBLIC_LAUNCH=false`.
+- ✅ Production Smoke runs on `main` and validates production endpoints, deployed backend/frontend commit identity, CORS/hostile-origin behavior and live security headers.
+- ✅ Staging Smoke validates readiness, public trips, `PUBLIC_LAUNCH=false`, and verifies the deployed API is at or after the latest backend-affecting commit instead of falsely requiring docs/workflow-only commits to redeploy the API.
 - ✅ Staging promotion flow is documented in `docs/STAGING_TO_PRODUCTION.md`.
 - 🟡 Operational rollback procedure exists at platform level, but a formal written application rollback/runbook is still recommended.
 
@@ -311,14 +314,15 @@ A senior/security reviewer should review this section before broad public launch
 - ✅ Dedicated Railway Staging MongoDB replica set exists.
 - ✅ Production and staging environment variables are separated.
 - ✅ `staging -> CI -> Staging Smoke -> PR -> main -> Production -> Production Smoke` release flow is established.
-- ✅ Each promoted `main` release is validated by Production Smoke against the deployed commit identity.
-- 🟡 Render is configured with Auto Deploy from `main`, but multiple 2026-10-07 promotions required manual deploys because the automatic deploy event did not fire; investigate before relying on it operationally.
+- ✅ Each promoted `main` release is validated by Production Smoke against the latest backend/frontend-affecting commit identity as appropriate.
+- ✅ Railway Staging follows the `staging` branch without a stale commit pin; workflow/docs-only changes no longer create false Staging Smoke failures.
+- 🟡 Render is configured with Auto Deploy from `main`, but multiple 2026-10-07 application promotions required manual deploys because the automatic deploy event did not fire; investigate before relying on it operationally.
 - ⬜ Decide whether GitHub Pages remains final hosting for customer/provider/admin.
 - ⬜ Configure production custom domain.
 - ⬜ Confirm Render service plan is sufficient for expected traffic.
 - ⬜ Confirm no sleep/cold-start behavior is acceptable for paid bookings.
 - ⬜ Confirm production MongoDB plan/storage/connection limits.
-- 🟡 Scheduled uptime workflow is implemented and validated in Staging; mark fully complete after promotion to `main` and first production execution.
+- 🟡 Scheduled uptime workflow is implemented on `main`, but no actual GitHub `schedule` run has yet been observed in Actions; keep this open until the first scheduled production execution is verified.
 - ⬜ Document ownership/access to GitHub, Render, domain, database and payment provider.
 
 ---
@@ -356,7 +360,7 @@ Do not work on this list randomly.
 ## Sprint 2 — Production foundation — in progress
 1. ✅ Production/staging separation.
 2. 🟡 Application-level backup/restore validated; provider-native backups/retention still need verification.
-3. 🟡 Core monitoring implemented; guaranteed external escalation, thresholds and log-retention policy remain.
+3. 🟡 Core monitoring implemented; first scheduled uptime execution, guaranteed external escalation, thresholds and log-retention policy remain.
 4. ⬜ Official domain + final HTTPS/CORS/OAuth cleanup.
 5. ⬜ Production email sender.
 6. ⬜ Legal/policy pages.
@@ -389,13 +393,14 @@ Based on the repository and validated deployments on 2026-10-07:
 - Provider operations: **strong automated permission coverage; final operational rehearsal remains**
 - Admin/financial operations: **core commission/refund/settlement logic plus protected operational exception queue are covered by integration tests**
 - Staging/production separation: **implemented and validated**
-- CI + Staging Smoke + Production Smoke: **implemented and passing**
+- CI + Staging Smoke + Production Smoke: **implemented and passing; smoke checks now distinguish backend-affecting commits from workflow/docs-only changes**
 - JWT/security baseline: **production expiry/secret policy enforced; full-history secret scan passes**
+- Security hardening: **request validation, Mongo operator-key rejection, CORS fail-closed, image MIME/signature checks, dependency audit, live security-header verification, privacy-safe production error logs and generic 5xx client responses are implemented and automated; external review and real-gateway-specific review remain**
 - Database recovery: **application-level backup/restore tooling and automated restore drill validated; provider-native production backups/retention still unverified**
-- Production monitoring: **scheduled uptime checks + protected operations queue implemented in Staging; external escalation/threshold alerts and log-retention policy remain**
+- Production monitoring: **uptime workflow and protected operations queue are implemented; the first actual scheduled GitHub Actions uptime execution, external escalation/threshold alerts and log-retention policy remain open**
 - Real payment: **not yet production-ready**
 - Legal/policies/domain: **incomplete**
-- Security review: **not yet externally reviewed**
+- Security review: **internal hardening substantially completed; external independent review still required before wide public launch**
 - Public real-money launch: **not ready yet**
 - Controlled non-real-money pilot: **technically much closer; final real-device/operational checks remain**
 
