@@ -19,7 +19,7 @@ jobs:
         run: npm install
       - name: Install isolated MongoDB test runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
-      - name: Test payment, checkout and ticket transactions on a disposable replica set
+      - name: Test payment, checkout, ticket and settlement transactions on a disposable replica set
         run: |
           node <<'JS'
           const {MongoMemoryReplSet}=require(process.env.RUNNER_TEMP+'/seago-mongo/node_modules/mongodb-memory-server');
@@ -32,7 +32,8 @@ jobs:
                 '--test',
                 'test/payment-transitions.integration.test.js',
                 'test/checkout-capacity.integration.test.js',
-                'test/ticket-checkin.integration.test.js'
+                'test/ticket-checkin.integration.test.js',
+                'test/settlement-ledger.integration.test.js'
               ],{
                 env:{...process.env,SEAGO_TEST_MONGODB_URI:db.getUri()},stdio:'inherit'
               });
