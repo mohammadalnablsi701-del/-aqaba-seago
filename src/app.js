@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { rejectUnsafeRequestKeys } from "./middleware/requestSecurity.js";
+import { logRequestError } from "./utils/errorLogging.js";
 import authRoutes from "./routes/auth.js";
 import providerRoutes from "./routes/providers.js";
 import adminRoutes from "./routes/admin.js";
@@ -104,7 +105,7 @@ export function createApp() {
   app.use("/api/support", supportRoutes);
 
   app.use((err, _req, res, _next) => {
-    console.error(err);
+    logRequestError(err);
     res.status(err.statusCode || 500).json({
       error: err.statusCode ? err.message : "Internal server error"
     });
