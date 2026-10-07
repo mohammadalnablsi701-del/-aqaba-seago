@@ -233,7 +233,10 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
   return {status:error?.statusCode||status,result,error};
  }
  await t.test('QR inspect and check-in reject another departure of the same provider',async()=>{
-  const f=await confirmed();const other=await Departure.create({tripId:f.hold.tripId,startsAt:new Date(Date.now()+3600000),capacity:5});
+  const f=await confirmed();
+  const original=await Trip.findById(f.hold.tripId);
+  const otherTrip=await Trip.create({...original.toObject(),_id:new mongoose.Types.ObjectId(),titleEn:'Different trip, same operator'});
+  const other=await Departure.create({tripId:otherTrip._id,startsAt:f.dep.startsAt,capacity:5});
   for(const path of ['/inspect','/check-in'])assert.equal((await ticketCall(f,path,{departureId:String(other._id)})).status,409);
   assert.equal((await Booking.findById(f.booking._id)).checkedInAt,undefined);
  });
