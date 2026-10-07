@@ -16,7 +16,7 @@ async function listPaymentIndexes() {
 async function repairLegacyPaymentIndex() {
   const indexes = await listPaymentIndexes();
   const bookingIndex = indexes.find(i => i.name === "bookingId_1");
-  if (bookingIndex && !bookingIndex.sparse) {
+  if (bookingIndex && (!bookingIndex.sparse || !bookingIndex.unique)) {
     await Payment.collection.dropIndex("bookingId_1");
   }
   const refreshed = await listPaymentIndexes();
