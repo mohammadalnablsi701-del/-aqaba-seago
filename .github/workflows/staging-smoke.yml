@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Wait for expected staging API commit
+      - name: Wait for expected staging API content
         shell: bash
         run: |
           set -euo pipefail
@@ -32,15 +32,21 @@ jobs:
           for i in {1..36}; do
             ready_code="$(curl -sS -o /tmp/ready.json -w "%{http_code}" "$STAGING_API/ready" || true)"
             deployed="$(curl -fsS "$STAGING_API/health" | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
-            echo "API required: $expected"
-            echo "API deployed: $deployed"
-            if [ "$ready_code" = "200" ] && grep -q '"ok":true' /tmp/ready.json && [ -n "$deployed" ] && git cat-file -e "$deployed^{commit}" 2>/dev/null && git merge-base --is-ancestor "$expected" "$deployed"; then
-              cat /tmp/ready.json
-              exit 0
+            echo "Backend required from: $expected"
+            echo "API deployed commit:  $deployed"
+
+            if [ "$ready_code" = "200" ] && grep -q '"ok":true' /tmp/ready.json && [ -n "$deployed" ]; then
+              if ! git cat-file -e "$deployed^{commit}" 2>/dev/null; then
+                git fetch --no-tags --depth=1 origin "$deployed" || true
+              fi
+              if git cat-file -e "$deployed^{commit}" 2>/dev/null && git diff --quiet "$expected" "$deployed" -- src package.json package-lock.json; then
+                cat /tmp/ready.json
+                exit 0
+              fi
             fi
             sleep 10
           done
-          echo "Staging did not converge to expected API commit $expected"
+          echo "Staging backend content did not converge to the expected tree from $expected"
           cat /tmp/ready.json || true
           exit 1
 
