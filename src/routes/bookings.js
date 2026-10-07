@@ -1,11 +1,14 @@
 import express from "express";
+import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { validateAllowedFields, isBoundedString } from "../middleware/validation.js";
 import { signTicketToken } from "../services/tickets.js";
 import { cancelBooking, cancellationPolicyFor } from "../services/cancellations.js";
 import { salePricing, tripForAudience } from "../services/pricingVisibility.js";
 
 const router = express.Router();
+const CANCELLATION_FIELDS = new Set(["reason"]);
 
 router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
@@ -35,6 +38,7 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
 
 router.get("/:bookingId/cancellation-policy", requireAuth, requireRole("customer"), async (req,res,next)=>{
   try{
+    if(!mongoose.isValidObjectId(req.params.bookingId))return res.status(400).json({error:"Invalid bookingId"});
     const booking=await Booking.findOne({_id:req.params.bookingId,customerId:req.user._id,status:"confirmed"}).populate("departureId","startsAt");
     if(!booking)return res.status(404).json({error:"Confirmed booking not found"});
     const policy=cancellationPolicyFor(booking.departureId?.startsAt||new Date());
@@ -55,11 +59,18 @@ router.get("/:bookingId/cancellation-policy", requireAuth, requireRole("customer
 
 router.post("/:bookingId/cancel", requireAuth, requireRole("customer"), async (req,res,next)=>{
   try{
+    if(!mongoose.isValidObjectId(req.params.bookingId))return res.status(400).json({error:"Invalid bookingId"});
+    const fieldError=validateAllowedFields(req.body,CANCELLATION_FIELDS);
+    if(fieldError)return res.status(400).json({error:fieldError});
+    if(req.body.reason!==undefined&&!isBoundedString(req.body.reason,{min:1,max:500})){
+      return res.status(400).json({error:"Cancellation reason must be a string between 1 and 500 characters"});
+    }
+    const reason=req.body.reason?.trim()||"Customer cancellation";
     const result=await cancelBooking({
       bookingId:req.params.bookingId,
       customerId:req.user._id,
       source:"customer",
-      reason:req.body.reason||"Customer cancellation"
+      reason
     });
     res.json({
       ok:true,
