@@ -1,13 +1,15 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { connectDb } from "./config/db.js";
+import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
-if(!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
+const {expiry:jwtExpiry}=validateJwtSecurity(process.env);
+if(!process.env.JWT_EXPIRES_IN)process.env.JWT_EXPIRES_IN=jwtExpiry;
 
 const publicLaunch=process.env.PUBLIC_LAUNCH==="true";
 const isProduction=process.env.NODE_ENV==="production";
