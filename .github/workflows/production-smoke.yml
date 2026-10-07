@@ -62,6 +62,25 @@ jobs:
             exit 1
           fi
 
+      - name: Verify production security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          curl -sS -D "$headers" -o /dev/null https://aqaba-seago-api.onrender.com/health
+          grep -qi '^x-content-type-options: nosniff' "$headers"
+          grep -qi '^x-frame-options: SAMEORIGIN' "$headers"
+          grep -qi '^referrer-policy: no-referrer' "$headers"
+          grep -qi '^x-dns-prefetch-control: off' "$headers"
+          grep -qi '^x-download-options: noopen' "$headers"
+          grep -qi '^x-permitted-cross-domain-policies: none' "$headers"
+          grep -qi '^strict-transport-security: .*max-age=' "$headers"
+          if grep -qi '^x-powered-by:' "$headers"; then
+            echo "Production exposed the Express X-Powered-By fingerprint"
+            cat "$headers"
+            exit 1
+          fi
+
       - name: Verify public app pages
         shell: bash
         run: |
