@@ -11,7 +11,9 @@ import Trip from '../src/models/Trip.js';
 import Provider from '../src/models/Provider.js';
 import User from '../src/models/User.js';
 import Notice from '../src/models/InAppNotification.js';
-import {processPaymentWebhook} from '../src/services/payments.js';
+import {cancelBooking, cancelDepartureBookings} from '../src/services/cancellations.js';
+import {releaseCheckoutHold} from '../src/services/inventory.js';
+import {processPaymentWebhook, releaseExpiredCheckoutHolds} from '../src/services/payments.js';
 const uri=process.env.SEAGO_TEST_MONGODB_URI;
 test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/, 'Only a local disposable replica set is allowed');
@@ -71,4 +73,61 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
  await t.test('wrong amount is reviewed without confirming a booking',async()=>{
   const f=await setup();await send(f,'paid',crypto.randomUUID(),19);assert.equal((await Payment.findById(f.payment._id)).status,'needs_review');assert.equal(await Booking.countDocuments({departureId:f.dep._id}),0);
  });
+ await t.test('expiry failure rolls back and concurrent retries release once',async sub=>{
+  const f=await setup();await Hold.updateOne({_id:f.hold._id},{$set:{expiresAt:new Date(Date.now()-1000)}});
+  const stub=sub.mock.method(Departure,'updateOne',async()=>{throw new Error('Injected expiry failure')});
+  await assert.rejects(releaseExpiredCheckoutHolds(),/Injected/);stub.mock.restore();
+  assert.equal((await Hold.findById(f.hold._id)).status,'active');assert.equal((await Payment.findById(f.payment._id)).status,'pending');assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+  await Promise.all([releaseExpiredCheckoutHolds(),releaseExpiredCheckoutHolds()]);
+  assert.equal((await Hold.findById(f.hold._id)).status,'expired');assert.equal((await Payment.findById(f.payment._id)).status,'expired');assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
+ });
+ await t.test('cleanup preserves a fresh hold while checkout has no payment yet',async()=>{
+  const f=await setup();await Payment.deleteOne({_id:f.payment._id});await releaseExpiredCheckoutHolds();
+  assert.equal((await Hold.findById(f.hold._id)).status,'active');assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+ });
+ await t.test('cleanup cannot release paid inventory even with an inconsistent active hold',async()=>{
+  const f=await setup();await send(f,'paid');await Hold.updateOne({_id:f.hold._id},{$set:{status:'active'}});
+  await assert.rejects(releaseCheckoutHold(f.hold._id),/reconciliation/);
+  assert.equal((await Hold.findById(f.hold._id)).status,'active');assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+ });
+ await t.test('expiry racing payment failure never releases twice',async()=>{
+  const f=await setup();await Hold.updateOne({_id:f.hold._id},{$set:{expiresAt:new Date(Date.now()-1000)}});
+  await Promise.all([releaseExpiredCheckoutHolds(),send(f,'failed')]);
+  assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
+ });
+ async function confirmed(){const f=await setup();await send(f,'paid');f.booking=await Booking.findOne({departureId:f.dep._id});return f}
+ const cancel=f=>cancelBooking({bookingId:f.booking._id,customerId:f.booking.customerId,source:'customer',forceFullRefund:true});
+ await t.test('cancellation inventory failure rolls back refund and booking; duplicate retries are safe',async sub=>{
+  const f=await confirmed();const stub=sub.mock.method(Departure,'updateOne',async()=>{throw new Error('Injected cancellation failure')});
+  await assert.rejects(cancel(f),/Injected/);stub.mock.restore();
+  assert.equal((await Booking.findById(f.booking._id)).status,'confirmed');assert.equal((await Payment.findById(f.payment._id)).status,'paid');assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+  const results=await Promise.all([cancel(f),cancel(f)]);await cancel(f);
+  assert.equal(results[0].booking.cancellation.cancelledAt.getTime(),results[1].booking.cancellation.cancelledAt.getTime());
+  const p=await Payment.findById(f.payment._id);assert.equal(p.status,'refunded');assert.equal(p.refundedAmount,20);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
+  await assert.rejects(cancelBooking({bookingId:f.booking._id,customerId:new mongoose.Types.ObjectId(),source:'customer'}),{statusCode:404});
+ });
+ await t.test('inconsistent inventory rejects cancellation without refunding payment',async()=>{
+  const f=await confirmed();await Departure.updateOne({_id:f.dep._id},{$set:{reservedSeats:0}});
+  await assert.rejects(cancel(f),{statusCode:409});assert.equal((await Payment.findById(f.payment._id)).status,'paid');assert.equal((await Booking.findById(f.booking._id)).status,'confirmed');
+ });
+ await t.test('customer cannot cancel an already used ticket',async()=>{
+  const f=await confirmed();await Booking.updateOne({_id:f.booking._id},{$set:{checkedInAt:new Date()}});
+  await assert.rejects(cancel(f),{statusCode:409});assert.equal((await Payment.findById(f.payment._id)).status,'paid');
+ });
+ await t.test('departure cancellation resumes remaining bookings after partial batch failure',async sub=>{
+  const f=await confirmed();
+  const hold=await Hold.create({...f.hold.toObject(),_id:new mongoose.Types.ObjectId(),idempotencyKey:crypto.randomUUID(),status:'active'});
+  const payment=await Payment.create({holdId:hold._id,customerId:hold.customerId,provider:'mock',externalPaymentId:crypto.randomUUID(),amount:20,currency:'JOD',status:'pending'});
+  await Departure.updateOne({_id:f.dep._id},{$inc:{reservedSeats:1}});await send({payment},'paid');
+  const bookings=await Booking.find({departureId:f.dep._id}).sort({_id:1});
+  const original=Departure.updateOne;let count=0;
+  const stub=sub.mock.method(Departure,'updateOne',function(...args){if(++count===2)throw new Error('Injected second cancellation failure');return original.apply(this,args)});
+  const args={departureId:f.dep._id,providerId:f.hold.providerId};
+  await assert.rejects(cancelDepartureBookings(args),/Injected/);stub.mock.restore();
+  assert.equal(await Booking.countDocuments({departureId:f.dep._id,status:'cancelled'}),1);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+  await cancelDepartureBookings(args);await cancelDepartureBookings(args);
+  assert.equal(await Booking.countDocuments({departureId:f.dep._id,status:'cancelled'}),2);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
+  assert.equal((await Payment.find({bookingId:{$in:bookings.map(b=>b._id)}})).reduce((sum,p)=>sum+p.refundedAmount,0),40);
+ });
+
 });
