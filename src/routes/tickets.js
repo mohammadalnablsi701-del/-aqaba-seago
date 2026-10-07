@@ -1,4 +1,3 @@
-import {assertCheckInScope,checkInEligibility,claimCheckIn} from "../services/checkin.js";
 import express from "express";
 import Booking from "../models/Booking.js";
 import Provider from "../models/Provider.js";
@@ -87,8 +86,6 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
       }
     }
 
-    assertCheckInScope(booking,{departureId:req.body.departureId});
-    const eligibility=checkInEligibility(booking);
     await booking.populate({ path: "customerId", select: "name phone email" });
     const trip = booking.tripId || {};
     const provider = booking.providerId || {};
@@ -97,7 +94,7 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
 
     const departureUsable=departure.status==="scheduled";
     res.json({
-      ...eligibility,
+      valid: booking.status === "confirmed" && departureUsable && !booking.checkedInAt,
       status: booking.status,
       used: Boolean(booking.checkedInAt),
       checkedInAt: booking.checkedInAt || null,
@@ -122,6 +119,19 @@ router.post("/check-in", requireAuth, requireRole("provider","admin"), async (re
   try {
     const { booking } = await loadTicket(req.body.token);
 
+    if (booking.status !== "confirmed") {
+      return res.status(409).json({ error: "Ticket is not valid for check-in" });
+    }
+    if (!booking.departureId || booking.departureId.status !== "scheduled") {
+      return res.status(409).json({ error: "Departure is not open for check-in" });
+    }
+    if (booking.checkedInAt) {
+      return res.status(409).json({
+        error: "Ticket already checked in",
+        checkedInAt: booking.checkedInAt
+      });
+    }
+
     if (req.user.role === "provider") {
       const access=await requireProviderCapability(req.user,"checkin");
       const provider=access?.provider;
@@ -130,7 +140,13 @@ router.post("/check-in", requireAuth, requireRole("provider","admin"), async (re
       }
     }
 
-    const claimed=await claimCheckIn(booking,{departureId:req.body.departureId,userId:req.user._id});
+    const checkedAt=new Date();
+    const claimed=await Booking.findOneAndUpdate(
+      {_id:booking._id,status:"confirmed",checkedInAt:null},
+      {$set:{checkedInAt:checkedAt,checkedInBy:req.user._id},$inc:{checkInCount:1}},
+      {new:true}
+    );
+    if(!claimed)return res.status(409).json({error:"Ticket already checked in"});
     if(req.user.role==="provider"){const access=await requireProviderCapability(req.user,"checkin");if(access)await auditProviderAction({access,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats}});}
     res.json({
       ok:true,

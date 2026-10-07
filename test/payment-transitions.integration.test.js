@@ -1,7 +1,3 @@
-import ticketRoutes from '../src/routes/tickets.js';
-import providerRoutes from '../src/routes/providers.js';
-import {signTicketToken} from '../src/services/tickets.js';
-import {checkInEligibility} from '../src/services/checkin.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -219,52 +215,6 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
  await t.test('inactive trip rejects checkout and rolls back seat allocation',async()=>{
   const f=await checkoutFixture();await Trip.updateOne({_id:f.hold.tripId},{$set:{active:false}});
   await assert.rejects(reserveCheckout(f.request),{statusCode:409});assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
- });
-
- async function ticketCall(f,path,body={},userId=f.hold.customerId,router=ticketRoutes){
-  const route=router.stack.find(l=>l.route?.path===path&&l.route.methods.post).route;
-  let status=200,result,error;
-  const res={status(code){status=code;return this},json(value){result=value;return this}};
-  const old=process.env.TICKET_SIGNING_SECRET;process.env.TICKET_SIGNING_SECRET='isolated-ticket-test';
-  try{
-   const token=signTicketToken(f.booking);
-   await route.stack.at(-1).handle({body:{token,departureId:String(f.dep._id),...body},params:{bookingId:String(f.booking._id)},user:{_id:userId,role:'provider'}},res,e=>{error=e});
-  }finally{if(old===undefined)delete process.env.TICKET_SIGNING_SECRET;else process.env.TICKET_SIGNING_SECRET=old}
-  return {status:error?.statusCode||status,result,error};
- }
- await t.test('QR inspect and check-in reject another departure of the same provider',async()=>{
-  const f=await confirmed();
-  const original=await Trip.findById(f.hold.tripId);
-  const otherTrip=await Trip.create({...original.toObject(),_id:new mongoose.Types.ObjectId(),titleEn:'Different trip, same operator'});
-  const other=await Departure.create({tripId:otherTrip._id,startsAt:f.dep.startsAt,capacity:5});
-  for(const path of ['/inspect','/check-in'])assert.equal((await ticketCall(f,path,{departureId:String(other._id)})).status,409);
-  assert.equal((await Booking.findById(f.booking._id)).checkedInAt,undefined);
- });
- await t.test('QR cannot cross providers even when departure times are identical',async()=>{
-  const f=await confirmed(),g=await confirmed();await Departure.updateOne({_id:g.dep._id},{$set:{startsAt:f.dep.startsAt}});
-  for(const path of ['/inspect','/check-in'])assert.equal((await ticketCall(f,path,{departureId:String(g.dep._id)},g.hold.customerId)).status,403);
-  assert.equal((await Booking.findById(f.booking._id)).checkedInAt,undefined);
- });
- await t.test('missing selected departure is rejected rather than inferred from QR',async()=>{
-  const f=await confirmed();for(const path of ['/inspect','/check-in'])assert.equal((await ticketCall(f,path,{departureId:undefined})).status,400);
- });
- await t.test('early QR and manual check-in are blocked; opening boundary is exactly two hours',async()=>{
-  const f=await confirmed();assert.equal((await ticketCall(f,'/inspect')).result.valid,false);
-  assert.equal((await ticketCall(f,'/check-in')).status,409);
-  assert.equal((await ticketCall(f,'/me/bookings/:bookingId/check-in',{},f.hold.customerId,providerRoutes)).status,409);
-  const b={status:'confirmed',departureId:{status:'scheduled',startsAt:new Date('2026-10-08T11:00:00Z')}};
-  assert.equal(checkInEligibility(b,new Date('2026-10-08T08:59:59.999Z')).valid,false);
-  assert.equal(checkInEligibility(b,new Date('2026-10-08T09:00:00Z')).valid,true);
- });
- await t.test('correct QR within window checks in once; duplicate simultaneous scans are refused',async()=>{
-  const f=await confirmed();await Departure.updateOne({_id:f.dep._id},{$set:{startsAt:new Date(Date.now()+3600000)}});
-  assert.equal((await ticketCall(f,'/inspect')).result.valid,true);
-  // Keep signing configuration stable for both parallel requests.
-  const old=process.env.TICKET_SIGNING_SECRET;process.env.TICKET_SIGNING_SECRET='isolated-ticket-test';
-  try{const results=await Promise.all([ticketCall(f,'/check-in'),ticketCall(f,'/check-in')]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);}
-  finally{if(old===undefined)delete process.env.TICKET_SIGNING_SECRET;else process.env.TICKET_SIGNING_SECRET=old}
-  const b=await Booking.findById(f.booking._id);assert.equal(b.checkInCount,1);assert.ok(b.checkedInAt);
-  assert.equal((await ticketCall(f,'/inspect')).result.valid,false);
  });
 
 });

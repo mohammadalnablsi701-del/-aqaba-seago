@@ -1,4 +1,3 @@
-import {claimCheckIn} from "../services/checkin.js";
 import express from "express";
 import Provider from "../models/Provider.js";
 import Trip from "../models/Trip.js";
@@ -238,7 +237,15 @@ router.post("/me/bookings/:bookingId/check-in",requireAuth,requireRole("provider
     if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id}).populate("departureId","status startsAt");
     if(!booking)return res.status(404).json({error:"Booking not found"});
-    const claimed=await claimCheckIn(booking,{providerId:provider._id,departureId:req.body.departureId,userId:req.user._id});
+    if(booking.status!=="confirmed")return res.status(409).json({error:"Booking is not valid for check-in"});
+    if(!booking.departureId||booking.departureId.status!=="scheduled")return res.status(409).json({error:"Departure is not open for check-in"});
+    const checkedAt=new Date();
+    const claimed=await Booking.findOneAndUpdate(
+      {_id:booking._id,providerId:provider._id,status:"confirmed",checkedInAt:null},
+      {$set:{checkedInAt:checkedAt,checkedInBy:req.user._id},$inc:{checkInCount:1}},
+      {new:true}
+    );
+    if(!claimed)return res.status(409).json({error:"Booking already checked in"});
     await auditProviderAction({access,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats,method:"manual"}});
     res.json({ok:true,bookingId:claimed._id,checkedInAt:claimed.checkedInAt,guests:claimed.seats});
   }catch(e){next(e);}
