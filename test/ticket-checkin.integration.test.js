@@ -58,7 +58,7 @@ test('ticket provider isolation and exactly-once check-in',{skip:!uri},async t=>
     const r=await call(token2);
     assert.equal(r.status,403);
     const fresh=await Booking.findById(booking._id);
-    assert.equal(fresh.checkedInAt,null);
+    assert.equal(fresh.checkedInAt??null,null);
     assert.equal(fresh.checkInCount,0);
   });
 
