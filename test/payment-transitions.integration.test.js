@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
+import {reserveCheckout} from '../src/services/checkout.js';
 import Settlement from '../src/models/ProviderSettlement.js';
 import {settlementLedger,recordSettlement} from '../src/services/settlements.js';
 import Payment from '../src/models/Payment.js';
@@ -15,7 +16,7 @@ import User from '../src/models/User.js';
 import Notice from '../src/models/InAppNotification.js';
 import {cancelBooking, cancelDepartureBookings} from '../src/services/cancellations.js';
 import {releaseCheckoutHold} from '../src/services/inventory.js';
-import {processPaymentWebhook, releaseExpiredCheckoutHolds} from '../src/services/payments.js';
+import {processPaymentWebhook, releaseExpiredCheckoutHolds, createCheckoutForHold} from '../src/services/payments.js';
 const uri=process.env.SEAGO_TEST_MONGODB_URI;
 test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/, 'Only a local disposable replica set is allowed');
@@ -174,6 +175,46 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
   const f=await confirmed();await payout(f);const g=await confirmed();await Booking.updateOne({_id:g.booking._id},{$set:{providerId:f.hold.providerId}});
   const s=await payout(f);assert.equal(s.grossSales,20);assert.equal(s.providerNet,16);assert.equal(s.amountPaid,16);assert.equal(s.items.length,1);
   const {breakdown:[row]}=await ledger(f);assert.equal(row.paid,32);assert.equal(row.outstanding,0);
+ });
+
+ async function checkoutFixture(){
+  const f=await setup();await Hold.deleteOne({_id:f.hold._id});await Payment.deleteOne({_id:f.payment._id});
+  await Departure.updateOne({_id:f.dep._id},{$set:{reservedSeats:0,capacity:1}});
+  f.request={customerId:f.hold.customerId,key:crypto.randomUUID(),departureId:f.dep._id,adults:1,children:0,mealPlan:'without_buffet'};return f;
+ }
+ await t.test('hold creation failure rolls back inventory and retry succeeds',async sub=>{
+  const f=await checkoutFixture();const stub=sub.mock.method(Hold,'create',async()=>{throw new Error('Injected hold failure')});
+  await assert.rejects(reserveCheckout(f.request),/Injected/);stub.mock.restore();
+  assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);assert.equal(await Hold.countDocuments({departureId:f.dep._id}),0);
+  const h=await reserveCheckout(f.request);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);assert.equal(await Payment.countDocuments({holdId:h._id}),1);
+ });
+ await t.test('payment identity failure rolls back both hold and seat',async sub=>{
+  const f=await checkoutFixture();const stub=sub.mock.method(Payment,'create',async()=>{throw new Error('Injected payment failure')});
+  await assert.rejects(reserveCheckout(f.request),/Injected/);stub.mock.restore();
+  assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);assert.equal(await Hold.countDocuments({departureId:f.dep._id}),0);
+  await reserveCheckout(f.request);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+ });
+ await t.test('concurrent identical checkout requests share one hold, seat and gateway checkout',async()=>{
+  const f=await checkoutFixture();const holds=await Promise.all([reserveCheckout(f.request),reserveCheckout(f.request)]);
+  assert.equal(String(holds[0]._id),String(holds[1]._id));
+  const payments=await Promise.all(holds.map(hold=>createCheckoutForHold({hold,customerId:f.request.customerId,baseUrl:'https://example.test'})));
+  assert.equal(String(payments[0]._id),String(payments[1]._id));assert.equal(payments[0].checkoutUrl,payments[1].checkoutUrl);
+  assert.equal(await Hold.countDocuments({departureId:f.dep._id}),1);assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);
+ });
+ await t.test('two customers competing for the last seat produce one winner',async()=>{
+  const f=await checkoutFixture();const results=await Promise.allSettled([reserveCheckout(f.request),reserveCheckout({...f.request,customerId:new mongoose.Types.ObjectId(),key:crypto.randomUUID()})]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.statusCode,409);
+  assert.equal((await Departure.findById(f.dep._id)).reservedSeats,1);assert.equal(await Hold.countDocuments({departureId:f.dep._id}),1);
+ });
+ await t.test('same key with different departures never leaks the losing seat',async()=>{
+  const f=await checkoutFixture(),g=await checkoutFixture();
+  const results=await Promise.allSettled([reserveCheckout(f.request),reserveCheckout({...f.request,departureId:g.dep._id})]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.statusCode,409);
+  const deps=await Departure.find({_id:{$in:[f.dep._id,g.dep._id]}});assert.equal(deps.reduce((sum,d)=>sum+d.reservedSeats,0),1);
+ });
+ await t.test('inactive trip rejects checkout and rolls back seat allocation',async()=>{
+  const f=await checkoutFixture();await Trip.updateOne({_id:f.hold.tripId},{$set:{active:false}});
+  await assert.rejects(reserveCheckout(f.request),{statusCode:409});assert.equal((await Departure.findById(f.dep._id)).reservedSeats,0);
  });
 
 });
