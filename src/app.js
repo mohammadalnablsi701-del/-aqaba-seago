@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
+import { rejectUnsafeRequestKeys } from "./middleware/requestSecurity.js";
 import authRoutes from "./routes/auth.js";
 import providerRoutes from "./routes/providers.js";
 import adminRoutes from "./routes/admin.js";
@@ -57,6 +58,7 @@ export function createApp() {
   }));
   app.use(cors(buildCorsOptions()));
   app.use(express.json({ limit: "1mb" }));
+  app.use(rejectUnsafeRequestKeys);
 
   const apiLimiter=rateLimit({
     windowMs:15*60*1000,
