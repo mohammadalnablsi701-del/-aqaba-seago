@@ -4,7 +4,7 @@ import Trip from "../models/Trip.js";
 const SEA_BREEZE_PROVIDER_RE=/(sea\s*breeze|aqua\s*marina|aquamarina)/i;
 const AYLA_RE=/(ayla|أيلة)/i;
 const SUNSET_RE=/(sunset|غروب)/i;
-const TARGET_VESSEL="Breeze Wooden Boat";
+const TARGET_VESSEL="بريز الخشبي";
 
 export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){
   return SEA_BREEZE_PROVIDER_RE.test(String(providerName))
