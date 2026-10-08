@@ -11,12 +11,12 @@ const LEGACY_SEA_BREEZE_VESSEL="بريز الخشبي";
 export const FUN_N_SUN_VESSEL="White Prince";
 
 export const SEA_BREEZE_PROVIDER_DEFAULTS={defaultCapacity:10,defaultDepartureTime:"17:00",departureLocation:{name:"Ayla Marina",address:"Aqaba, Jordan",googleMapsUrl:"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"}};
-export const SEA_BREEZE_PILOT_TRIP={titleAr:"رحلة غروب الشمس",titleEn:"Sunset Cruise",vesselName:TARGET_VESSEL,category:"sunset",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"fixed_per_person",commissionValue:3,adultCommission:3,childCommission:2,buffetAdultCommission:3,buffetChildCommission:2},departureLocation:{...SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation},active:true};
+export const SEA_BREEZE_PILOT_TRIP={titleAr:"رحلة غروب الشمس",titleEn:"Sunset Cruise",vesselName:TARGET_VESSEL,category:"sunset",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"percentage",commissionValue:20},departureLocation:{...SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation},active:true};
 
 export const ALADDIN_PILOT_TRIPS=[
  {titleAr:"علاء الدين 8",titleEn:"Aladdin 8",vesselName:"Aladdin 8"},
  {titleAr:"سكر",titleEn:"Sukar",vesselName:"Sukar"}
-].map(base=>({...base,category:"yacht",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:14,adultPrice:14,childPrice:8,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:10,commissionType:"fixed_per_person",commissionValue:3,adultCommission:3,childCommission:2,buffetAdultCommission:3,buffetChildCommission:2},active:true}));
+].map(base=>({...base,category:"yacht",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:14,adultPrice:14,childPrice:8,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:10,commissionType:"percentage",commissionValue:20},active:true}));
 
 export function resolveSeaBreezeDefaultDepartureTime(current){const value=String(current||"").trim();return !value||value==="09:00"?SEA_BREEZE_PROVIDER_DEFAULTS.defaultDepartureTime:value;}
 export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){return SEA_BREEZE_PROVIDER_RE.test(String(providerName))&&String(trip.category||"")==="sunset"&&Number(trip.durationMinutes)===120&&AYLA_RE.test(String(trip.departureLocation?.name||""))&&(SUNSET_RE.test(String(trip.titleEn||""))||SUNSET_RE.test(String(trip.titleAr||"")));}
