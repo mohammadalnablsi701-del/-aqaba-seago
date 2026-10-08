@@ -2,6 +2,8 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import PushSubscription from "../models/PushSubscription.js";
+import NativePushToken from "../models/NativePushToken.js";
 import { requireAuth } from "../middleware/auth.js";
 import { normalizeJordanPhone } from "../services/phoneOtp.js";
 import { issuePasswordReset, claimPasswordResetToken, invalidatePasswordResetTokens } from "../services/passwordRecovery.js";
@@ -138,6 +140,28 @@ router.patch("/phone",requireAuth,async(req,res,next)=>{
     const user=await User.findByIdAndUpdate(req.user._id,{$set:{phone,phoneNormalized:phone}},{new:true});
     if(!user||!user.isActive)return res.status(401).json({error:"Invalid account"});
     res.json({user:safe(user),token:sign(user)});
+  }catch(e){next(e);}
+});
+
+router.delete("/account",requireAuth,async(req,res,next)=>{
+  try{
+    if(req.user.role!=="customer")return res.status(403).json({error:"Customer account deletion only"});
+    const userId=req.user._id;
+    const result=await User.updateOne(
+      {_id:userId,role:"customer",isActive:true},
+      {
+        $set:{name:"Deleted SeaGo account",isActive:false},
+        $unset:{email:"",phone:"",phoneNormalized:"",passwordHash:"",googleSub:""},
+        $inc:{authVersion:1}
+      }
+    );
+    if(!result.matchedCount)return res.status(404).json({error:"Account not found"});
+    await Promise.all([
+      PushSubscription.deleteMany({userId}),
+      NativePushToken.deleteMany({userId}),
+      invalidatePasswordResetTokens(userId)
+    ]);
+    res.json({ok:true,message:"Account deleted"});
   }catch(e){next(e);}
 });
 
