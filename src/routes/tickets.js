@@ -20,7 +20,7 @@ function escapeHtml(value) {
 async function loadTicket(token) {
   const payload = verifyTicketToken(token);
   const booking = await Booking.findById(payload.bookingId)
-    .populate({ path: "tripId", select: "titleAr titleEn category durationMinutes departureLocation" })
+    .populate({ path: "tripId", select: "titleAr titleEn vesselName category durationMinutes departureLocation" })
     .populate({ path: "providerId", select: "businessName ownerUserId" })
     .populate({ path: "departureId", select: "startsAt status" });
   if (!booking) throw Object.assign(new Error("Ticket not found"), { statusCode: 404 });
@@ -43,6 +43,7 @@ router.get("/validate", async (req, res, next) => {
       checkedInAt: booking.checkedInAt || null,
       bookingReference: "SG-" + String(booking._id).slice(-8).toUpperCase(),
       trip: trip.titleEn || trip.titleAr || "Aqaba Sea Experience",
+      vesselName: trip.vesselName || null,
       provider: provider.businessName || null,
       departureAt: departure.startsAt || null,
       guests: booking.seats
@@ -67,6 +68,7 @@ h1{margin:8px 0 20px}.row{padding:10px 0;border-top:1px solid #edf2f6;display:fl
 <body><div class="card"><small>AQABA SEAGO · TICKET CHECK</small><h1 class="${stateClass}">${headline}</h1>
 <div class="row"><span>Reference</span><b>${escapeHtml(response.bookingReference)}</b></div>
 <div class="row"><span>Trip</span><b>${escapeHtml(response.trip)}</b></div>
+${response.vesselName?`<div class="row"><span>Vessel</span><b>${escapeHtml(response.vesselName)}</b></div>`:""}
 <div class="row"><span>Provider</span><b>${escapeHtml(response.provider || "-")}</b></div>
 <div class="row"><span>Guests</span><b>${escapeHtml(response.guests)}</b></div>
 <div class="row"><span>Status</span><b>${escapeHtml(used ? "USED" : response.status.toUpperCase())}</b></div>
@@ -100,6 +102,7 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
       checkedInAt: booking.checkedInAt || null,
       bookingReference: "SG-" + String(booking._id).slice(-8).toUpperCase(),
       trip: trip.titleEn || trip.titleAr || "Aqaba Sea Experience",
+      vesselName: trip.vesselName || null,
       provider: provider.businessName || null,
       departureAt: departure.startsAt || null,
       guests: booking.seats,
