@@ -1,0 +1,39 @@
+{
+  "providerName": "Sea Breeze / Aquamarina",
+  "stage": "real_pilot",
+  "sourceStatus": "operator_data_confirmed_for_pilot",
+  "trips": [
+    {
+      "titleEn": "Sunset Cruise",
+      "category": "sunset",
+      "vesselName": "بريز الخشبي",
+      "durationMinutes": 120,
+      "typicalTimeWindows": [
+        "17:00-19:00",
+        "18:00-20:00"
+      ],
+      "scheduleAdjustable": true,
+      "capacity": 10,
+      "capacityAdjustable": true,
+      "departureLocation": {
+        "name": "Ayla Marina",
+        "nameAr": "مارينا أيلة",
+        "googleMapsUrl": "https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"
+      },
+      "pricing": {
+        "currency": "JOD",
+        "adultPrice": 15,
+        "childPrice": 10,
+        "buffetEnabled": true,
+        "buffetAdultPrice": 17,
+        "buffetChildPrice": 12,
+        "commission": {
+          "adultWithoutFood": 3,
+          "adultWithFood": 3,
+          "childWithoutFood": 2,
+          "childWithFood": 2
+        }
+      }
+    }
+  ]
+}
