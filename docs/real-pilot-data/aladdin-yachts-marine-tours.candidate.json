@@ -3,6 +3,7 @@
   "providerNameAr": "علاء الدين لليخت والرحلات البحرية",
   "stage": "real_pilot_candidate",
   "status": "needs_operator_confirmation_before_booking_activation",
+  "active": false,
   "publicContact": {
     "phone": "+962786772167",
     "departureLocation": {
@@ -14,7 +15,7 @@
     "services": ["daily_group_trip", "sunset_cruise", "private_yachts"],
     "mainDailyVessel": "علاء الدين 8",
     "operatorAdvertisedVesselCapacities": [10, 40, 55, 120],
-    "notes": "The capacities are advertised across the operator's private-yacht fleet and are not assigned to Aladdin 8 until the operator confirms the exact vessel capacity."
+    "notes": "The capacities are advertised across the operator's private-yacht fleet and are not assigned to Aladdin 8 until the operator confirms the exact group-trip capacity."
   },
   "candidateTrips": [
     {
@@ -23,7 +24,9 @@
       "category": "sunset",
       "vesselName": "علاء الدين 8",
       "durationMinutes": 120,
-      "candidateTimeWindows": ["17:30-19:30", "18:00-20:00"],
+      "candidateTimeWindows": ["17:30-19:30", "18:00-20:00", "19:00-21:00"],
+      "scheduleConfidence": "medium",
+      "scheduleNote": "Published 2026 evidence shows the sunset time shifting with season/date. Keep the departure time adjustable and do not create scheduled departures until the operator confirms the current time.",
       "departureLocation": {
         "name": "Ayla Marina – Yacht Terminal",
         "nameAr": "مرسى أيلا – العقبة"
@@ -35,22 +38,52 @@
         "childWithoutFood": 10,
         "childWithFood": 13,
         "childAgeBand": "5-10",
-        "under5Free": true
+        "under5Free": true,
+        "confidence": "medium"
       },
-      "commission": null,
+      "commission": {
+        "adultWithoutFood": null,
+        "adultWithFood": null,
+        "childWithoutFood": null,
+        "childWithFood": null,
+        "status": "not_publicly_verified"
+      },
       "capacity": null,
       "activationBlockers": [
         "Confirm commission per adult and child",
         "Confirm exact Aladdin 8 group-trip capacity",
         "Confirm current child age band and child fares directly with operator",
-        "Confirm default sunset departure time",
+        "Reconfirm current adult and child prices directly with operator",
+        "Confirm current seasonal sunset departure time",
         "Confirm exact Google Maps link used for passenger meeting point"
       ],
-      "pricingConflictNote": "2026 public reseller posts show child prices 13 JOD with food and 10 JOD without food; older 2025 posts showed lower child fares. Treat 2026 values as candidates only until operator confirmation."
+      "pricingConflictNote": "March-May 2026 public posts promoting Shiraa Aladdin / Aladdin 8 show adult 17 JOD with food / 13 without and child 13 with / 10 without. Older 2025 child fares were lower, and the currently indexed operator profile does not expose fares. Treat the 2026 prices as candidate values until direct operator confirmation."
+    }
+  ],
+  "evidence": [
+    {
+      "type": "current_operator_profile",
+      "observed": "2026-10-08",
+      "facts": "Ayla Marina base, phone 0786772167, daily Aladdin 8 trips, sunset cruises, private yachts, and fleet/private capacities 10/40/55/120."
+    },
+    {
+      "type": "public_pricing_post",
+      "published": "2026-03-23",
+      "facts": "Aladdin 8 sunset 17:30-19:30 from Ayla; adult 17 JOD with food / 13 without; child 5-10 13 with / 10 without; under 5 free."
+    },
+    {
+      "type": "public_pricing_post",
+      "published": "2026-05-15",
+      "facts": "Sunset 18:00-20:00; adult 17 JOD with food / 13 without; child 5-10 13 with / 10 without."
+    },
+    {
+      "type": "customer_review",
+      "published": "2026-08-08",
+      "facts": "A customer review describes an Aladdin 8 sunset cruise running 19:00-21:00 with dinner, supporting a seasonal/adjustable schedule."
     }
   ],
   "sourceNotes": [
-    "Operator public page, September 2026: daily Aladdin 8 trip, sunset trips, private yachts, Ayla Marina, phone 0786772167, fleet capacities 10/40/55/120.",
-    "Public reseller posts, March-May 2026: two-hour sunset trip, adult 17 JOD with food / 13 without; child 13 with / 10 without; under 5 free."
+    "Direct/current operator evidence supports the vessel, Ayla base, phone and service types, but not a current public fare table or commission.",
+    "The 2026 fare evidence comes from public operator-related/reseller posts promoting Shiraa Aladdin / Aladdin 8 and therefore remains candidate pricing until direct confirmation."
   ]
 }
