@@ -1,7 +1,12 @@
 import React from"react";
 import{createRoot}from"react-dom/client";
 import App from"./App.jsx";
+import ProviderAccessManager from"./ProviderAccessManager.jsx";
 import"./styles.css";
+
+function storedAdmin(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
+const aladdinProvider={_id:"6ac246c040006c42831c7532",businessName:"Aladdin Yachts & Marine Tours / Alaa Aldeen",ownerUserId:{name:"Aladdin Yachts & Marine Tours / Alaa Aldeen",email:"aladdin@providers.seago.test"}};
+function AdminRoot(){const auth=storedAdmin();return <><App/>{auth?.token&&<div style={{position:"fixed",right:18,bottom:18,zIndex:9999}}><ProviderAccessManager provider={aladdinProvider} token={auth.token} onSaved={()=>Promise.resolve()}/></div>}</>}
 
 async function ensureFreshAdmin(){
   try{
@@ -22,7 +27,7 @@ async function ensureFreshAdmin(){
       return;
     }
   }catch{}
-  createRoot(document.getElementById("root")).render(<App/>);
+  createRoot(document.getElementById("root")).render(<AdminRoot/>);
 }
 
 ensureFreshAdmin();
