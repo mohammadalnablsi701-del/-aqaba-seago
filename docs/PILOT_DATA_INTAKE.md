@@ -31,18 +31,90 @@ These are public-source drafts only. Do not treat them as signed/confirmed provi
 
 - Display name: Fun N Sun
 - Public office address: Aqaba office, 2nd area, Islamic International Arab Bank Building, 3rd floor, Aqaba, Jordan
-- Provider login email: info@fun-n-sun.com
-- Provider login mobile: +962 79 577 3111
-- Additional public WhatsApp: +962 79 882 8802
+- Provider login email currently reserved for pilot setup: info@fun-n-sun.com
+- Reservations email supplied in current operating material: reservation@fun-n-sun.com
+- Provider login mobile / reservations mobile & WhatsApp: +962 79 577 3111
+- Public landline supplied in current operating material: 03 2033031
+- Additional public WhatsApp from earlier public-source draft: +962 79 882 8802
 - Provider status for pilot: approved
 - Publicly listed services include tourist boat cruises, snorkeling, fishing, night trips, diving and water sports.
 - Confirmed boarding points:
-  1. ساحة الثورة العربية — Arab Revolt Plaza
+  1. ساحة الثورة العربية — Arab Revolt Plaza / Flagpole area
   2. مارينا أيلة — Ayla Marina
+- Terminology confirmation: "سارية العلم" in Fun N Sun operating messages means the boarding point at ساحة الثورة العربية.
 - Boarding-point rule: do not force one provider-level default. Assign the correct boarding point on each trip because Fun N Sun operates from two confirmed locations.
 - Google Maps URLs: add per boarding point when confirmed/collected.
 
-### Sea Breeze / Aquamarina
+#### Fun N Sun — observed operating offers (sample dated 7 October 2026)
+
+Use these as real product/price references. The supplied date is historical relative to the current pilot-preparation work, so do not create these exact dates as future departures.
+
+**Trip template FNS-01 — White Prince / Arab Revolt Plaza**
+
+- Arabic title: رحلة White Prince
+- English title: White Prince Cruise
+- Recommended category: group_boat
+- Duration: 120 minutes
+- Observed time: 14:00–16:00
+- Observed price: 15 JOD per person
+- Boarding point: ساحة الثورة العربية / سارية العلم
+- Included/notes: swimming program and water slide
+- Family-only restriction: not stated in this offer
+- Capacity: TO CONFIRM
+- Child price/policy: TO CONFIRM
+- SeaGo commission: TO CONFIRM
+- Images: TO COLLECT
+
+**Trip template FNS-02 — Coral Whisper & White Prince / Arab Revolt Plaza**
+
+- Arabic title: رحلة Coral Whisper & White Prince
+- English title: Coral Whisper & White Prince Cruise
+- Recommended category: group_boat (combined marine product; review later if a dedicated combo type is needed)
+- Duration: 180 minutes
+- Supplied time text: `5:00-2:00`
+- Working interpretation for pilot data: 14:00–17:00 because that matches the stated 3-hour duration; requires provider confirmation before creating future departures
+- Observed price: 25 JOD per person
+- Boarding point: ساحة الثورة العربية / سارية العلم
+- Restriction/notes: families
+- Capacity: TO CONFIRM
+- Child price/policy: TO CONFIRM
+- SeaGo commission: TO CONFIRM
+- Images: TO COLLECT
+
+**Trip template FNS-03 — White Prince / Ayla Marina**
+
+- Arabic title: رحلة White Prince — أيلة
+- English title: White Prince Cruise — Ayla Marina
+- Recommended category: group_boat
+- Duration: 120 minutes
+- Observed time: 18:00–20:00
+- Observed price: 20 JOD per person
+- Boarding point: مارينا أيلة
+- Restriction/notes: families
+- Capacity: TO CONFIRM
+- Child price/policy: TO CONFIRM
+- SeaGo commission: TO CONFIRM
+- Images: TO COLLECT
+
+**Trip template FNS-04 — Rio Diving Club diving slots**
+
+- Arabic title: غطس — Rio Diving Club
+- English title: Rio Diving Club Diving
+- Recommended category: diving
+- Observed departure times: 10:30, 12:30, 14:30
+- Price: TO CONFIRM
+- Duration: TO CONFIRM
+- Boarding/meeting point: TO CONFIRM
+- Capacity: TO CONFIRM
+- Child/minimum-age policy: TO CONFIRM
+- SeaGo commission: TO CONFIRM
+- Images: TO COLLECT
+
+#### Fun N Sun — current data-model decision
+
+The current Trip model stores price and departure location on the trip, while Departure stores date/time/capacity/status. Because White Prince has different prices and boarding points for different operating products, keep FNS-01 and FNS-03 as separate Trip records instead of one shared trip with different departures. This avoids incorrect price/location combinations during booking.
+
+## Sea Breeze / Aquamarina
 
 - Draft display name: Aquamarina & Sea Breeze Company
 - Public address draft: Prs. Haya Cir., Aqaba, Jordan
@@ -52,7 +124,7 @@ These are public-source drafts only. Do not treat them as signed/confirmed provi
 - Pilot provider login mobile: TO CONFIRM
 - Meeting/boarding point: TO CONFIRM WITH PROVIDER
 
-### Aladdin Yachts & Marine Tours / Alaa Aldeen
+## Aladdin Yachts & Marine Tours / Alaa Aldeen
 
 - Draft display name: Aladdin Yachts & Marine Tours
 - Public address draft: Ayla Marina – Yacht Terminal, Aqaba 77110, Jordan
