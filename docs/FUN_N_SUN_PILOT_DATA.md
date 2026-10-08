@@ -122,13 +122,40 @@ Suggested Trip.pricing fields:
 - Category: group_boat
 - Duration: 120 minutes
 - Observed operating slot: 18:00–20:00
-- Observed adult sale price: 20 JOD
 - Boarding point: مارينا أيلة
 - Default capacity: 20, editable per departure
 - Family-oriented offer
-- Child pricing: pending confirmation
-- Meal pricing: pending confirmation
-- SeaGo commission: pending confirmation
+- Buffet/meal option: enabled
+- Commission model: fixed_per_person
+
+### Customer pricing / SeaGo commission
+
+| Guest | Meal plan | Sale price | SeaGo commission | Provider net |
+|---|---|---:|---:|---:|
+| Adult | With meal | 20 JOD | 5 JOD | 15 JOD |
+| Adult | Without meal | 15 JOD | 3 JOD | 12 JOD |
+| Child | Without meal | 10 JOD | 2 JOD | 8 JOD |
+| Child | With meal | 15 JOD | 3 JOD | 12 JOD |
+
+Suggested Trip.pricing fields:
+
+```json
+{
+  "currency": "JOD",
+  "pricePerPerson": 15,
+  "adultPrice": 15,
+  "childPrice": 10,
+  "buffetEnabled": true,
+  "buffetAdultPrice": 20,
+  "buffetChildPrice": 15,
+  "commissionType": "fixed_per_person",
+  "commissionValue": 3,
+  "adultCommission": 3,
+  "childCommission": 2,
+  "buffetAdultCommission": 5,
+  "buffetChildCommission": 3
+}
+```
 
 ---
 
@@ -150,8 +177,7 @@ Suggested Trip.pricing fields:
 ## Remaining Fun N Sun data required before actual pilot entry
 
 1. Confirm FNS-02 future operating time (working assumption 14:00–17:00).
-2. Confirm FNS-03 child / meal pricing and commissions.
-3. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
-4. Collect customer-facing images for each product.
-5. Add Google Maps links for Arab Revolt Plaza and Ayla Marina.
-6. Create only future departures; historical sample dates remain reference data only.
+2. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
+3. Collect customer-facing images for each product.
+4. Add Google Maps links for Arab Revolt Plaza and Ayla Marina.
+5. Create only future departures; historical sample dates remain reference data only.
