@@ -6,7 +6,6 @@ import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
 import { applyRealPilotData } from "./services/realPilotData.js";
-import { bootstrapSeaBreezeOwnerOnce } from "./services/bootstrapSeaBreezeOwner.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -40,10 +39,6 @@ if(isProduction){
 }
 
 await connectDb(process.env.MONGODB_URI);
-const seaBreezeOwnerBootstrap=await bootstrapSeaBreezeOwnerOnce();
-if(seaBreezeOwnerBootstrap){
-  console.log("Sea Breeze owner bootstrap result",JSON.stringify(seaBreezeOwnerBootstrap));
-}
 await applyRealPilotData();
 await releaseExpiredCheckoutHolds({limit:500});
 
