@@ -137,29 +137,15 @@ export async function sendBookingConfirmation(bookingId){
   }
 }
 
-
 export async function sendCancellationNotice(bookingId){
   const b=await loadBooking(bookingId); if(!b) return;
   const c=b.cancellation||{}; const ref=String(b._id).slice(-8).toUpperCase();
   await createInApp({key:`booking-cancelled:customer:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,userId:b.customerId?._id,type:"booking_cancelled",title:"Booking cancelled",body:`Booking SG-${ref} was cancelled. Refund: ${c.refundPercentage||0}% (${money(c.refundAmount,b.pricing?.currency)}).`,bookingId:b._id,data:{screen:"tickets"}});
-  await sendEmail({
-    key:`booking-cancelled:customer:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,
-    bookingId:b._id,type:"booking_cancelled_customer",to:b.customerId?.email,
-    subject:`SeaGo booking cancelled · SG-${ref}`,
-    html:shell("Booking cancelled",`<p>Your booking has been cancelled.</p>${bookingTable(b)}<p><b>Reason:</b> ${escapeHtml(c.reason||"Cancellation")}</p><p><b>Refund:</b> ${c.refundPercentage||0}% · ${money(c.refundAmount,b.pricing?.currency)} · ${c.refundStatus||"none"}</p>`)
-  });
-
+  await sendEmail({key:`booking-cancelled:customer:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,bookingId:b._id,type:"booking_cancelled_customer",to:b.customerId?.email,subject:`SeaGo booking cancelled · SG-${ref}`,html:shell("Booking cancelled",`<p>Your booking has been cancelled.</p>${bookingTable(b)}<p><b>Reason:</b> ${escapeHtml(c.reason||"Cancellation")}</p><p><b>Refund:</b> ${c.refundPercentage||0}% · ${money(c.refundAmount,b.pricing?.currency)} · ${c.refundStatus||"none"}</p>`)});
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
   if(owner?._id){await createInApp({key:`booking-cancelled:provider:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,userId:owner._id,type:"booking_cancelled",title:"Booking cancelled",body:`Booking SG-${ref} was cancelled.`,bookingId:b._id,data:{screen:"bookings"}});}
-  if(owner?.email){
-    await sendEmail({
-      key:`booking-cancelled:provider:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,
-      bookingId:b._id,type:"booking_cancelled_provider",to:owner.email,
-      subject:`SeaGo booking cancelled · SG-${ref}`,
-      html:shell("Booking cancelled",`<p>A booking for ${escapeHtml(provider.businessName)} was cancelled.</p>${bookingTable(b)}<p><b>Source:</b> ${escapeHtml(c.source||"-")}</p><p><b>Reason:</b> ${escapeHtml(c.reason||"Cancellation")}</p>`)
-    });
-  }
+  if(owner?.email){await sendEmail({key:`booking-cancelled:provider:${b._id}:${c.cancelledAt?new Date(c.cancelledAt).getTime():"x"}`,bookingId:b._id,type:"booking_cancelled_provider",to:owner.email,subject:`SeaGo booking cancelled · SG-${ref}`,html:shell("Booking cancelled",`<p>A booking for ${escapeHtml(provider.businessName)} was cancelled.</p>${bookingTable(b)}<p><b>Source:</b> ${escapeHtml(c.source||"-")}</p><p><b>Reason:</b> ${escapeHtml(c.reason||"Cancellation")}</p>`) });}
 }
 
 export async function processUpcomingReminders(){
@@ -173,14 +159,19 @@ export async function processUpcomingReminders(){
     const b=await loadBooking(row._id); if(!b) continue;
     await createInApp({key:`departure-reminder-24h:customer:${b._id}`,userId:b.customerId?._id,type:"departure_reminder_24h",title:"Your trip is tomorrow",body:`Reminder: ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} departs ${fmtDate(b.departureId?.startsAt)}.`,bookingId:b._id,data:{screen:"tickets"}});
     const provider=await Provider.findById(b.providerId?._id||b.providerId);
-    const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("_id"):null;
+    const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("_id email name"):null;
     if(owner?._id&&b.departureId?._id){await createInApp({key:`departure-reminder-24h:provider:${b.departureId._id}`,userId:owner._id,type:"provider_departure_reminder_24h",title:"Departure tomorrow",body:`${b.tripId?.titleEn||b.tripId?.titleAr||"Your trip"} departs ${fmtDate(b.departureId?.startsAt)}. Review the passenger manifest.`,data:{screen:"manifest",departureId:String(b.departureId._id)}});}
-    const log=await sendEmail({
-      key:`departure-reminder-24h:customer:${b._id}`,
-      bookingId:b._id,type:"departure_reminder_24h",to:b.customerId?.email,
-      subject:`SeaGo reminder · Your trip is tomorrow`,
-      html:shell("Your trip is tomorrow",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, here is your 24-hour reminder.</p>${bookingTable(b)}<p>Please arrive early enough for check-in.</p>`)
-    });
+    if(owner?.email&&b.departureId?._id){
+      await sendEmail({
+        key:`departure-reminder-24h:provider:${b.departureId._id}`,
+        bookingId:null,
+        type:"provider_departure_reminder_24h",
+        to:owner.email,
+        subject:`SeaGo reminder · Departure tomorrow`,
+        html:shell("Departure tomorrow",`<p>Hi ${escapeHtml(owner.name||provider?.businessName||"there")}, your ${escapeHtml(b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip")} departure is scheduled for <b>${escapeHtml(fmtDate(b.departureId?.startsAt))}</b>.</p><p>Please review the passenger manifest and prepare for check-in.</p>`)
+      });
+    }
+    const log=await sendEmail({key:`departure-reminder-24h:customer:${b._id}`,bookingId:b._id,type:"departure_reminder_24h",to:b.customerId?.email,subject:`SeaGo reminder · Your trip is tomorrow`,html:shell("Your trip is tomorrow",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, here is your 24-hour reminder.</p>${bookingTable(b)}<p>Please arrive early enough for check-in.</p>`)});
     if(log?.status==="sent") sent++;
   }
   return sent;
@@ -189,14 +180,7 @@ export async function processUpcomingReminders(){
 export async function sendTestEmail(to){
   const recipient=String(to||"").trim();
   if(!recipient) return null;
-  const log=await sendEmail({
-    key:`email-test:${recipient}`,
-    bookingId:null,
-    type:"email_test",
-    to:recipient,
-    subject:"Aqaba SeaGo — Email test successful",
-    html:shell("Email test successful",`<p>Your Aqaba SeaGo email delivery is configured correctly.</p><p>If you received this message, Resend and the SeaGo backend are connected successfully.</p>`)
-  });
+  const log=await sendEmail({key:`email-test:${recipient}`,bookingId:null,type:"email_test",to:recipient,subject:"Aqaba SeaGo — Email test successful",html:shell("Email test successful",`<p>Your Aqaba SeaGo email delivery is configured correctly.</p><p>If you received this message, Resend and the SeaGo backend are connected successfully.</p>`)});
   if(log?.status==="sent") console.log("SeaGo test email sent", recipient, log.externalId||"");
   else console.log("SeaGo test email status", recipient, log?.status||"unknown", log?.error||"");
   return log;
