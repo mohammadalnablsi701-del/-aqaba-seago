@@ -164,23 +164,7 @@ Suggested Trip.pricing fields:
 
 ---
 
-## FNS-04 — Rio Diving Club
-
-- Arabic title: غطس — Rio Diving Club
-- English title: Rio Diving Club Diving
-- Category: diving
-- Observed slots: 10:30, 12:30, 14:30
-- Default capacity: 20 only as provider default; actual diving slot capacity must be confirmed before use
-- Price: pending confirmation
-- Duration: pending confirmation
-- Meeting point: pending confirmation
-- Minimum-age / child policy: pending confirmation
-- SeaGo commission: pending confirmation
-
----
-
 ## Remaining Fun N Sun data required before actual pilot entry
 
-1. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
-2. Collect customer-facing images for each product.
-3. Create only future departures; historical sample dates remain reference data only.
+1. Collect customer-facing images for the three selected products.
+2. Create only future departures; historical sample dates remain reference data only.
