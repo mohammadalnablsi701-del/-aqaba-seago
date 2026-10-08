@@ -2,9 +2,11 @@ import Provider from "../models/Provider.js";
 import Trip from "../models/Trip.js";
 
 const SEA_BREEZE_PROVIDER_RE=/(sea\s*breeze|aqua\s*marina|aquamarina)/i;
+const FUN_N_SUN_PROVIDER_RE=/fun\s*(?:n|&|and)\s*sun/i;
 const AYLA_RE=/(ayla|أيلة)/i;
 const SUNSET_RE=/(sunset|غروب)/i;
 const TARGET_VESSEL="بريز الخشبي";
+export const FUN_N_SUN_VESSEL="White Prince";
 
 export const SEA_BREEZE_PROVIDER_DEFAULTS={
   defaultCapacity:10,
@@ -93,9 +95,7 @@ function safeTripDiagnostic(trip,providerName){
   };
 }
 
-export async function applyRealPilotData(){
-  if(process.env.APPLY_REAL_PILOT_DATA!=="true")return {skipped:true,reason:"disabled"};
-
+async function applySeaBreezePilot(){
   const providers=await Provider.find({businessName:SEA_BREEZE_PROVIDER_RE});
   if(!providers.length){
     console.warn("Real Pilot Data: no Sea Breeze / Aquamarina provider found; no changes applied");
@@ -142,4 +142,47 @@ export async function applyRealPilotData(){
   await trip.save();
   console.log(`Real Pilot Data: set vesselName=${JSON.stringify(TARGET_VESSEL)} on Sea Breeze trip ${trip._id}`);
   return {applied:true,action:"updated_vessel",providerSettingsUpdated:settingsResult.updated,tripId:String(trip._id),vesselName:TARGET_VESSEL};
+}
+
+async function applyFunNSunVesselBackfill(){
+  const providers=await Provider.find({businessName:FUN_N_SUN_PROVIDER_RE});
+  if(providers.length!==1){
+    console.warn(`Real Pilot Data: expected exactly one Fun N Sun provider, found ${providers.length}; no Fun N Sun vessel changes applied`);
+    return {applied:false,reason:providers.length?"ambiguous_provider":"provider_not_found",providerCount:providers.length};
+  }
+
+  const provider=providers[0];
+  const trips=await Trip.find({providerId:provider._id}).sort({createdAt:1});
+  if(trips.length!==3){
+    console.warn(`Real Pilot Data: expected exactly three Fun N Sun pilot trips, found ${trips.length}; no Fun N Sun vessel changes applied`);
+    console.warn(`Real Pilot Data Fun N Sun diagnostic: ${JSON.stringify(trips.map(t=>safeTripDiagnostic(t,provider.businessName)))}`);
+    return {applied:false,reason:"unexpected_trip_count",tripCount:trips.length};
+  }
+
+  const conflicts=trips.filter(t=>{
+    const current=String(t.vesselName||"").trim();
+    return current&&current!==FUN_N_SUN_VESSEL;
+  });
+  if(conflicts.length){
+    console.warn(`Real Pilot Data: ${conflicts.length} Fun N Sun trip(s) already have a different vesselName; refusing to overwrite any trip`);
+    console.warn(`Real Pilot Data Fun N Sun conflicts: ${JSON.stringify(conflicts.map(t=>safeTripDiagnostic(t,provider.businessName)))}`);
+    return {applied:false,reason:"existing_value_conflict",conflictCount:conflicts.length};
+  }
+
+  let updated=0;
+  for(const trip of trips){
+    if(String(trip.vesselName||"").trim()===FUN_N_SUN_VESSEL)continue;
+    trip.vesselName=FUN_N_SUN_VESSEL;
+    await trip.save();
+    updated+=1;
+  }
+  console.log(`Real Pilot Data: Fun N Sun vesselName=${JSON.stringify(FUN_N_SUN_VESSEL)} confirmed across ${trips.length} pilot trips; updated ${updated}`);
+  return {applied:updated>0,reason:updated?"updated_vessels":"already_applied",tripCount:trips.length,updatedCount:updated,vesselName:FUN_N_SUN_VESSEL};
+}
+
+export async function applyRealPilotData(){
+  if(process.env.APPLY_REAL_PILOT_DATA!=="true")return {skipped:true,reason:"disabled"};
+  const seaBreeze=await applySeaBreezePilot();
+  const funNSun=await applyFunNSunVesselBackfill();
+  return {applied:Boolean(seaBreeze?.applied||funNSun?.applied),seaBreeze,funNSun};
 }
