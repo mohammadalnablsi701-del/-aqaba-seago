@@ -121,7 +121,7 @@ router.get("/me/departures",requireAuth,requireRole("provider"),async(req,res,ne
     }else{
       query.startsAt={$gte:new Date()};
     }
-    const rows=await Departure.find(query).populate("tripId","titleEn titleAr category").sort({startsAt:1}).limit(200);
+    const rows=await Departure.find(query).populate("tripId","titleEn titleAr vesselName category").sort({startsAt:1}).limit(200);
     res.json(rows.map(d=>({
       id:d._id,tripId:d.tripId,startsAt:d.startsAt,capacity:d.capacity,reservedSeats:d.reservedSeats,
       availableSeats:Math.max(0,d.capacity-d.reservedSeats),status:d.status,salesClosed:Boolean(d.salesClosed)
@@ -142,7 +142,7 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
       query.departureId={$in:depIds};
     }
     const rows=await Booking.find(query)
-      .populate("tripId","titleEn titleAr category")
+      .populate("tripId","titleEn titleAr vesselName category")
       .populate("departureId","startsAt status")
       .populate("customerId","name phone email")
       .sort({createdAt:-1})
@@ -151,14 +151,13 @@ router.get("/me/bookings",requireAuth,requireRole("provider"),async(req,res,next
   }catch(e){next(e);}
 });
 
-
 router.get("/me/departures/:departureId/manifest",requireAuth,requireRole("provider"),async(req,res,next)=>{
   try{
     const access=await requireProviderCapability(req.user,"view_bookings");const provider=access?.provider;
     if(!provider)return res.status(403).json({error:"Approved provider access required"});
 
     const departure=await Departure.findById(req.params.departureId)
-      .populate("tripId","titleEn titleAr category durationMinutes departureLocation");
+      .populate("tripId","titleEn titleAr vesselName category durationMinutes departureLocation");
     if(!departure)return res.status(404).json({error:"Departure not found"});
 
     const ownsTrip=await Trip.exists({_id:departure.tripId._id,providerId:provider._id});
@@ -256,7 +255,7 @@ router.get("/me/bookings/:bookingId",requireAuth,requireRole("provider"),async(r
     const access=await requireProviderCapability(req.user,"view_bookings");const provider=access?.provider;
     if(!provider)return res.status(403).json({error:"Approved provider access required"});
     const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id})
-      .populate("tripId","titleEn titleAr category durationMinutes departureLocation")
+      .populate("tripId","titleEn titleAr vesselName category durationMinutes departureLocation")
       .populate("departureId","startsAt status capacity reservedSeats")
       .populate("customerId","name phone email");
     if(!booking)return res.status(404).json({error:"Booking not found"});
