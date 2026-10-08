@@ -1,50 +1,61 @@
 # Aqaba SeaGo Mobile
 
-The customer web app is prepared for iOS and Android with Capacitor.
+The customer app is prepared for native Android and iOS packaging with Capacitor.
 
 ## App identity
 
 - App name: `Aqaba SeaGo`
 - Bundle / package ID: `com.aqabaseago.app`
 - Web build directory: `dist`
+- Brand background: `#071F33`
+- Brand accent: `#18B8B0`
 
-## Requirements
+## Native assets
 
-Capacitor 8 requires Node.js 22 or newer. Native iOS builds require macOS with Xcode. Native Android builds require Android Studio and the Android SDK.
+The source artwork lives in `customer-app/assets/logo.svg`. The native workflow uses `@capacitor/assets` to generate the Android and iOS icon and splash resources from that source.
 
-## First native project generation
+## Build pipeline
 
-From `customer-app/`:
+`.github/workflows/mobile-native.yml` now verifies:
 
-```bash
-npm install
-npm run build
-npm run mobile:add:android
-npm run mobile:add:ios
-npm run mobile:sync
-```
+- Android debug APK
+- Android release AAB build (unsigned until the permanent Play upload key is configured)
+- iOS simulator app build without code signing
 
-Commit the generated `android/` and `ios/` projects after they are created and verified.
+Production store signing is intentionally not stored in the repository.
 
-## Daily development
+## Authentication policy
 
-After changing the React app:
+The web app can continue using Google Sign-In. The installed native app currently hides Google Sign-In and uses email/password authentication only. This avoids exposing a third-party social login on iOS before Sign in with Apple is configured. When native Google Sign-In is enabled, Sign in with Apple should be enabled in the same release.
 
-```bash
-npm run mobile:sync
-```
+## Notifications
 
-Open the native projects with:
+Web Push remains available to supported browsers. Native push registration plumbing is present using `@capacitor/push-notifications`, with authenticated API endpoints for storing Android/iOS device tokens. Native push should not be enabled in the UI until the production FCM/APNs credentials and native app configuration are installed.
 
-```bash
-npm run mobile:open:android
-npm run mobile:open:ios
-```
+## Account deletion and legal URLs
 
-## Production API
+Customer account deletion is available from:
 
-The mobile app continues to use the same production API as the web app. Native WebView origins are explicitly allowed by the backend CORS configuration.
+`Profile → Personal details → Delete my account`
 
-## Store readiness still pending
+Public pages included for store metadata:
 
-Before store submission, complete native app icons/splash assets, Sign in with Apple, native push notifications, privacy/terms/account-deletion review, signing certificates, store screenshots, TestFlight testing, and Google Play internal testing.
+- `privacy.html`
+- `terms.html`
+- `delete-account.html`
+
+The deletion endpoint anonymizes/disables the login identity, removes web/native push subscriptions, invalidates password-reset tokens, and leaves only records that may be needed for booking, payment, fraud-prevention, accounting or legal obligations.
+
+## Remaining external store credentials
+
+These cannot be committed before the corresponding store/provider accounts exist:
+
+- Google Play Console organization account
+- permanent Android upload keystore / Play App Signing setup
+- Apple Developer organization account
+- Apple distribution signing / App Store Connect access
+- Sign in with Apple capability and identifiers before enabling native Google login
+- Firebase Android configuration (`google-services.json`) for FCM
+- Apple APNs capability/credentials (or the selected iOS push provider configuration)
+
+Do not commit signing keys, Apple private keys, Firebase service-account secrets or other store credentials to GitHub.
