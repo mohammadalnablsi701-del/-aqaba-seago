@@ -13,6 +13,7 @@
     "mobile:sync": "npm run build && cap sync",
     "mobile:add:android": "cap add android",
     "mobile:add:ios": "cap add ios",
+    "mobile:assets": "capacitor-assets generate --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'",
     "mobile:open:android": "cap open android",
     "mobile:open:ios": "cap open ios"
   },
@@ -20,6 +21,8 @@
     "@capacitor/android": "8.5.2",
     "@capacitor/core": "8.5.2",
     "@capacitor/ios": "8.5.2",
+    "@capacitor/push-notifications": "8.1.3",
+    "@capacitor/splash-screen": "8.0.2",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.5",
     "typescript": "^5.7.2",
@@ -29,6 +32,7 @@
     "qrcode.react": "^4.2.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "3.0.5",
     "@capacitor/cli": "8.5.2"
   }
 }
