@@ -14,6 +14,19 @@ export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){
     && (SUNSET_RE.test(String(trip.titleEn||""))||SUNSET_RE.test(String(trip.titleAr||"")));
 }
 
+function safeTripDiagnostic(trip,providerName){
+  return {
+    id:String(trip._id),
+    providerName:String(providerName||""),
+    titleEn:String(trip.titleEn||""),
+    titleAr:String(trip.titleAr||""),
+    category:String(trip.category||""),
+    durationMinutes:Number(trip.durationMinutes||0),
+    departureName:String(trip.departureLocation?.name||""),
+    vesselName:String(trip.vesselName||"")
+  };
+}
+
 export async function applyRealPilotData(){
   if(process.env.APPLY_REAL_PILOT_DATA!=="true")return {skipped:true,reason:"disabled"};
 
@@ -24,19 +37,16 @@ export async function applyRealPilotData(){
   }
 
   const providerById=new Map(providers.map(p=>[String(p._id),p.businessName]));
-  const trips=await Trip.find({
-    providerId:{$in:providers.map(p=>p._id)},
-    category:"sunset",
-    durationMinutes:120
-  });
-
-  const candidates=trips.filter(trip=>isSeaBreezeSunsetCandidate({
+  const providerTrips=await Trip.find({providerId:{$in:providers.map(p=>p._id)}});
+  const candidates=providerTrips.filter(trip=>isSeaBreezeSunsetCandidate({
     providerName:providerById.get(String(trip.providerId))||"",
     trip
   }));
 
   if(candidates.length!==1){
+    const diagnostic=providerTrips.map(trip=>safeTripDiagnostic(trip,providerById.get(String(trip.providerId))));
     console.warn(`Real Pilot Data: expected exactly one Sea Breeze sunset candidate, found ${candidates.length}; no changes applied`);
+    console.warn(`Real Pilot Data diagnostic: ${JSON.stringify(diagnostic)}`);
     return {applied:false,reason:"ambiguous_candidate",candidateCount:candidates.length};
   }
 
