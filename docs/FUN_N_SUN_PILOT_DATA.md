@@ -28,6 +28,7 @@ Terminology: `سارية العلم` in Fun N Sun operating material means the A
 
 - Arabic title: رحلة White Prince
 - English title: White Prince Cruise
+- Vessel name: White Prince
 - Category: group_boat
 - Duration: 120 minutes
 - Observed operating slot: 14:00–16:00
@@ -77,6 +78,7 @@ This is one combined product: submarine/Coral Whisper experience + White Prince 
 
 - Arabic title: رحلة الغواصة Coral Whisper + White Prince
 - English title: Coral Whisper + White Prince
+- Vessel name: Coral Whisper + White Prince
 - Category: semi_submarine
 - Duration: 180 minutes
 - Default operating slot for pilot setup: 14:00–17:00
@@ -123,6 +125,7 @@ Suggested Trip.pricing fields:
 
 - Arabic title: رحلة White Prince — أيلة
 - English title: White Prince Cruise — Ayla Marina
+- Vessel name: White Prince
 - Category: group_boat
 - Duration: 120 minutes
 - Observed operating slot: 18:00–20:00
