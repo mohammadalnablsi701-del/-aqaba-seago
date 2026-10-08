@@ -5,7 +5,8 @@ const SEA_BREEZE_PROVIDER_RE=/(sea\s*breeze|aqua\s*marina|aquamarina)/i;
 const FUN_N_SUN_PROVIDER_RE=/fun\s*(?:n|&|and)\s*sun/i;
 const AYLA_RE=/(ayla|أيلة)/i;
 const SUNSET_RE=/(sunset|غروب)/i;
-const TARGET_VESSEL="بريز الخشبي";
+const TARGET_VESSEL="Breeze Wooden Boat";
+const LEGACY_SEA_BREEZE_VESSEL="بريز الخشبي";
 export const FUN_N_SUN_VESSEL="White Prince";
 
 export const SEA_BREEZE_PROVIDER_DEFAULTS={
@@ -129,7 +130,8 @@ async function applySeaBreezePilot(){
 
   const trip=candidates[0];
   const current=String(trip.vesselName||"").trim();
-  if(current&&current!==TARGET_VESSEL){
+  const allowedCurrentValues=new Set(["",TARGET_VESSEL,LEGACY_SEA_BREEZE_VESSEL]);
+  if(!allowedCurrentValues.has(current)){
     console.warn(`Real Pilot Data: target trip already has vesselName=${JSON.stringify(current)}; refusing to overwrite`);
     return {applied:settingsResult.updated,reason:"existing_value_conflict",providerSettingsUpdated:settingsResult.updated,tripId:String(trip._id)};
   }
