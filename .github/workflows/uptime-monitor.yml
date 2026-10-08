@@ -67,7 +67,7 @@ jobs:
           check_json \
             "API readiness" \
             "https://aqaba-seago-api.onrender.com/ready" \
-            'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.ok!==true || !["connected","healthy"].includes(String(x.database||"").toLowerCase())) process.exit(1)'
+            'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.ok!==true || !["ready","connected","healthy"].includes(String(x.database||"").toLowerCase())) process.exit(1)'
 
           check_json \
             "API health" \
