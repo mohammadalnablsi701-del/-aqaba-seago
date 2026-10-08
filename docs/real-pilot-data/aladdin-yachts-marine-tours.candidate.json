@@ -1,0 +1,56 @@
+{
+  "providerName": "Aladdin Yachts & Marine Tours",
+  "providerNameAr": "علاء الدين لليخت والرحلات البحرية",
+  "stage": "real_pilot_candidate",
+  "status": "needs_operator_confirmation_before_booking_activation",
+  "publicContact": {
+    "phone": "+962786772167",
+    "departureLocation": {
+      "name": "Ayla Marina – Yacht Terminal",
+      "nameAr": "مرسى أيلا – العقبة"
+    }
+  },
+  "confirmedPublicFacts": {
+    "services": ["daily_group_trip", "sunset_cruise", "private_yachts"],
+    "mainDailyVessel": "علاء الدين 8",
+    "operatorAdvertisedVesselCapacities": [10, 40, 55, 120],
+    "notes": "The capacities are advertised across the operator's private-yacht fleet and are not assigned to Aladdin 8 until the operator confirms the exact vessel capacity."
+  },
+  "candidateTrips": [
+    {
+      "titleEn": "Aladdin 8 Sunset Cruise",
+      "titleAr": "رحلة غروب علاء الدين 8",
+      "category": "sunset",
+      "vesselName": "علاء الدين 8",
+      "durationMinutes": 120,
+      "candidateTimeWindows": ["17:30-19:30", "18:00-20:00"],
+      "departureLocation": {
+        "name": "Ayla Marina – Yacht Terminal",
+        "nameAr": "مرسى أيلا – العقبة"
+      },
+      "candidatePricing": {
+        "currency": "JOD",
+        "adultWithoutFood": 13,
+        "adultWithFood": 17,
+        "childWithoutFood": 10,
+        "childWithFood": 13,
+        "childAgeBand": "5-10",
+        "under5Free": true
+      },
+      "commission": null,
+      "capacity": null,
+      "activationBlockers": [
+        "Confirm commission per adult and child",
+        "Confirm exact Aladdin 8 group-trip capacity",
+        "Confirm current child age band and child fares directly with operator",
+        "Confirm default sunset departure time",
+        "Confirm exact Google Maps link used for passenger meeting point"
+      ],
+      "pricingConflictNote": "2026 public reseller posts show child prices 13 JOD with food and 10 JOD without food; older 2025 posts showed lower child fares. Treat 2026 values as candidates only until operator confirmation."
+    }
+  ],
+  "sourceNotes": [
+    "Operator public page, September 2026: daily Aladdin 8 trip, sunset trips, private yachts, Ayla Marina, phone 0786772167, fleet capacities 10/40/55/120.",
+    "Public reseller posts, March-May 2026: two-hour sunset trip, adult 17 JOD with food / 13 without; child 13 with / 10 without; under 5 free."
+  ]
+}
