@@ -21,18 +21,28 @@ router.patch("/providers/:providerId/access",async(req,res,next)=>{
     if(!validEmail(email))return res.status(400).json({error:"Valid email is required"});
     if(password.length<12)return res.status(400).json({error:"Temporary password must be at least 12 characters"});
 
+    const currentOwner=provider.ownerUserId?await User.findById(provider.ownerUserId):null;
     let user=await User.findOne({email});
-    if(user){
+
+    if(currentOwner){
+      if(user&&String(user._id)!==String(currentOwner._id)){
+        return res.status(409).json({error:"Email is already used by another account"});
+      }
+      user=currentOwner;
+      user.email=email;
+    }else if(user){
       const otherProvider=await Provider.findOne({ownerUserId:user._id,_id:{$ne:provider._id}}).select("_id businessName");
       if(otherProvider)return res.status(409).json({error:"User is already linked to another provider"});
     }else{
       user=new User({email});
     }
 
+    const existingUser=!user.isNew;
     user.name=name;
     user.role="provider";
     user.isActive=true;
     user.passwordHash=await bcrypt.hash(password,12);
+    if(existingUser)user.authVersion=Number(user.authVersion||0)+1;
     await user.save();
 
     provider.ownerUserId=user._id;
@@ -45,7 +55,10 @@ router.patch("/providers/:providerId/access",async(req,res,next)=>{
       provider:{id:provider._id,businessName:provider.businessName,status:provider.status},
       user:{id:user._id,name:user.name,email:user.email,isActive:user.isActive}
     });
-  }catch(e){next(e);}
+  }catch(e){
+    if(e?.code===11000)return res.status(409).json({error:"Email is already used by another account"});
+    next(e);
+  }
 });
 
 export default router;
