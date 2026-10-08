@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SEA_BREEZE_PILOT_TRIP, SEA_BREEZE_PROVIDER_DEFAULTS, resolveSeaBreezeDefaultDepartureTime, isSeaBreezeSunsetCandidate } from "../src/services/realPilotData.js";
+import { FUN_N_SUN_VESSEL, SEA_BREEZE_PILOT_TRIP, SEA_BREEZE_PROVIDER_DEFAULTS, resolveSeaBreezeDefaultDepartureTime, isSeaBreezeSunsetCandidate } from "../src/services/realPilotData.js";
 
 test("matches the approved Sea Breeze sunset pilot trip",()=>{
   assert.equal(isSeaBreezeSunsetCandidate({
@@ -63,4 +63,8 @@ test("default departure time upgrades only missing or untouched generic defaults
   assert.equal(resolveSeaBreezeDefaultDepartureTime(""),"17:00");
   assert.equal(resolveSeaBreezeDefaultDepartureTime("09:00"),"17:00");
   assert.equal(resolveSeaBreezeDefaultDepartureTime("18:00"),"18:00");
+});
+
+test("Fun N Sun pilot vessel is the approved White Prince across all three trips",()=>{
+  assert.equal(FUN_N_SUN_VESSEL,"White Prince");
 });
