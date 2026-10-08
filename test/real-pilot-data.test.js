@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SEA_BREEZE_PILOT_TRIP, isSeaBreezeSunsetCandidate } from "../src/services/realPilotData.js";
+import { SEA_BREEZE_PILOT_TRIP, SEA_BREEZE_PROVIDER_DEFAULTS, resolveSeaBreezeDefaultDepartureTime, isSeaBreezeSunsetCandidate } from "../src/services/realPilotData.js";
 
 test("matches the approved Sea Breeze sunset pilot trip",()=>{
   assert.equal(isSeaBreezeSunsetCandidate({
@@ -50,4 +50,17 @@ test("Sea Breeze pilot spec preserves approved vessel, prices and commissions",(
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.childCommission,2);
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.buffetAdultCommission,3);
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.buffetChildCommission,2);
+});
+
+test("Sea Breeze provider defaults preserve capacity and Ayla departure point",()=>{
+  assert.equal(SEA_BREEZE_PROVIDER_DEFAULTS.defaultCapacity,10);
+  assert.equal(SEA_BREEZE_PROVIDER_DEFAULTS.defaultDepartureTime,"17:00");
+  assert.equal(SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation.name,"Ayla Marina");
+  assert.equal(SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation.googleMapsUrl,"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic");
+});
+
+test("default departure time upgrades only missing or untouched generic defaults",()=>{
+  assert.equal(resolveSeaBreezeDefaultDepartureTime(""),"17:00");
+  assert.equal(resolveSeaBreezeDefaultDepartureTime("09:00"),"17:00");
+  assert.equal(resolveSeaBreezeDefaultDepartureTime("18:00"),"18:00");
 });
