@@ -10,3 +10,8 @@ test("tiered fixed commissions support meal and age variants",()=>{
   assert.deepEqual(calculateTieredPricing({pricing,adults:1,children:1,mealPlan:"without_buffet"}),{currency:"JOD",unitPrice:15,adultUnitPrice:15,childUnitPrice:10,adultSubtotal:15,childSubtotal:10,grossAmount:25,commissionAmount:5,providerNetAmount:20});
   assert.deepEqual(calculateTieredPricing({pricing,adults:1,children:1,mealPlan:"with_buffet"}),{currency:"JOD",unitPrice:20,adultUnitPrice:20,childUnitPrice:15,adultSubtotal:20,childSubtotal:15,grossAmount:35,commissionAmount:8,providerNetAmount:27});
 });
+
+test("20 percent commission is calculated from the full booking gross",()=>{
+  const pricing={currency:"JOD",pricePerPerson:14,adultPrice:14,childPrice:8,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:10,commissionType:"percentage",commissionValue:20};
+  assert.deepEqual(calculateTieredPricing({pricing,adults:2,children:1,mealPlan:"with_buffet"}),{currency:"JOD",unitPrice:17,adultUnitPrice:17,childUnitPrice:10,adultSubtotal:34,childSubtotal:10,grossAmount:44,commissionAmount:8.8,providerNetAmount:35.2});
+});
