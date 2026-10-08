@@ -1,5 +1,5 @@
 const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");async function req(path,{token,...o}={}){
-  const r=await fetch(API+path,{...o,headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{}),...(o.headers||{})}});
+  const r=await fetch(API+path,{...o,headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{...{}}),...(o.headers||{})}});
   const j=await r.json().catch(()=>({}));
   if(!r.ok){
     if(r.status===401&&token){
@@ -34,6 +34,7 @@ export const demoCleanupPreview=token=>req("/api/admin/demo-cleanup-preview",{to
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
 
 export const setProviderStatus=(token,id,status)=>req("/api/admin/providers/"+id+"/status",{token,method:"PATCH",body:JSON.stringify({status})});
+export const setProviderAccess=(token,id,{email,name,temporaryPassword})=>req("/api/admin/providers/"+id+"/access",{token,method:"PATCH",body:JSON.stringify({email,name,temporaryPassword})});
 
 export const requestPhoneOtp=(phone,role,mode)=>req("/api/auth/otp/request",{method:"POST",body:JSON.stringify({phone,role,mode})});
 export const verifyPhoneOtp=(data)=>req("/api/auth/otp/verify",{method:"POST",body:JSON.stringify(data)});
