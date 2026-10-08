@@ -2,20 +2,23 @@ import React,{useEffect,useState}from"react";
 import{createPortal}from"react-dom";
 import ProviderAccessManager from"./ProviderAccessManager.jsx";
 
-export default function ProviderAccessPortal({provider,token}){
-  const[target,setTarget]=useState(null);
+export default function ProviderAccessPortal({providers,token}){
+  const[targets,setTargets]=useState([]);
   useEffect(()=>{
     function locate(){
       const rows=[...document.querySelectorAll(".provider-admin-row")];
-      const row=rows.find(el=>el.textContent?.includes(provider.businessName));
-      const actions=row?.querySelector(".provider-admin-actions")||null;
-      setTarget(current=>current===actions?current:actions);
+      const next=rows.map(row=>{
+        const name=row.querySelector(".provider-main h3")?.textContent?.trim();
+        const provider=providers.find(p=>p.businessName===name);
+        const target=row.querySelector(".provider-admin-actions");
+        return provider&&target?{provider,target}:null;
+      }).filter(Boolean);
+      setTargets(current=>current.length===next.length&&current.every((x,i)=>x.provider._id===next[i].provider._id&&x.target===next[i].target)?current:next);
     }
     locate();
     const observer=new MutationObserver(locate);
     observer.observe(document.body,{childList:true,subtree:true});
     return()=>observer.disconnect();
-  },[provider.businessName]);
-  if(!target)return null;
-  return createPortal(<ProviderAccessManager provider={provider} token={token} onSaved={()=>Promise.resolve()}/>,target);
+  },[providers]);
+  return <>{targets.map(({provider,target})=>createPortal(<ProviderAccessManager key={provider._id} provider={provider} token={token} onSaved={()=>Promise.resolve()}/>,target))}</>;
 }
