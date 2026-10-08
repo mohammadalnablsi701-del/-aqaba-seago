@@ -6,6 +6,16 @@ const AYLA_RE=/(ayla|أيلة)/i;
 const SUNSET_RE=/(sunset|غروب)/i;
 const TARGET_VESSEL="بريز الخشبي";
 
+export const SEA_BREEZE_PROVIDER_DEFAULTS={
+  defaultCapacity:10,
+  defaultDepartureTime:"17:00",
+  departureLocation:{
+    name:"Ayla Marina",
+    address:"Aqaba, Jordan",
+    googleMapsUrl:"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"
+  }
+};
+
 export const SEA_BREEZE_PILOT_TRIP={
   titleAr:"رحلة غروب الشمس",
   titleEn:"Sunset Cruise",
@@ -27,13 +37,14 @@ export const SEA_BREEZE_PILOT_TRIP={
     buffetAdultCommission:3,
     buffetChildCommission:2
   },
-  departureLocation:{
-    name:"Ayla Marina",
-    address:"Aqaba, Jordan",
-    googleMapsUrl:"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"
-  },
+  departureLocation:{...SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation},
   active:true
 };
+
+export function resolveSeaBreezeDefaultDepartureTime(current){
+  const value=String(current||"").trim();
+  return !value||value==="09:00"?SEA_BREEZE_PROVIDER_DEFAULTS.defaultDepartureTime:value;
+}
 
 export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){
   return SEA_BREEZE_PROVIDER_RE.test(String(providerName))
@@ -41,6 +52,32 @@ export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){
     && Number(trip.durationMinutes)===120
     && AYLA_RE.test(String(trip.departureLocation?.name||""))
     && (SUNSET_RE.test(String(trip.titleEn||""))||SUNSET_RE.test(String(trip.titleAr||"")));
+}
+
+async function ensureSeaBreezeProviderDefaults(provider){
+  if(!provider)return {updated:false};
+  const current=provider.settings||{};
+  const departure=current.departureLocation||{};
+  const defaultDepartureTime=resolveSeaBreezeDefaultDepartureTime(current.defaultDepartureTime);
+  const desiredLocation=SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation;
+  const changed=current.configured!==true
+    || Number(current.defaultCapacity)!==SEA_BREEZE_PROVIDER_DEFAULTS.defaultCapacity
+    || String(current.defaultDepartureTime||"")!==defaultDepartureTime
+    || String(departure.name||"")!==desiredLocation.name
+    || String(departure.address||"")!==desiredLocation.address
+    || String(departure.googleMapsUrl||"")!==desiredLocation.googleMapsUrl;
+
+  if(!changed)return {updated:false,defaultDepartureTime};
+
+  provider.settings={
+    configured:true,
+    defaultCapacity:SEA_BREEZE_PROVIDER_DEFAULTS.defaultCapacity,
+    defaultDepartureTime,
+    departureLocation:{...desiredLocation}
+  };
+  await provider.save();
+  console.log(`Real Pilot Data: updated Sea Breeze provider defaults capacity=${SEA_BREEZE_PROVIDER_DEFAULTS.defaultCapacity} defaultDepartureTime=${defaultDepartureTime}`);
+  return {updated:true,defaultDepartureTime};
 }
 
 function safeTripDiagnostic(trip,providerName){
@@ -59,51 +96,50 @@ function safeTripDiagnostic(trip,providerName){
 export async function applyRealPilotData(){
   if(process.env.APPLY_REAL_PILOT_DATA!=="true")return {skipped:true,reason:"disabled"};
 
-  const providers=await Provider.find({businessName:SEA_BREEZE_PROVIDER_RE}).select("_id businessName");
+  const providers=await Provider.find({businessName:SEA_BREEZE_PROVIDER_RE});
   if(!providers.length){
     console.warn("Real Pilot Data: no Sea Breeze / Aquamarina provider found; no changes applied");
     return {applied:false,reason:"provider_not_found"};
   }
 
-  const providerById=new Map(providers.map(p=>[String(p._id),p.businessName]));
-  const providerTrips=await Trip.find({providerId:{$in:providers.map(p=>p._id)}});
-
-  if(providerTrips.length===0){
-    if(providers.length!==1){
-      console.warn(`Real Pilot Data: found ${providers.length} Sea Breeze / Aquamarina providers and no trips; refusing to choose a provider automatically`);
-      console.warn(`Real Pilot Data providers: ${JSON.stringify(providers.map(p=>({id:String(p._id),businessName:String(p.businessName||"")})))}`);
-      return {applied:false,reason:"ambiguous_provider",providerCount:providers.length};
-    }
-    const created=await Trip.create({...SEA_BREEZE_PILOT_TRIP,providerId:providers[0]._id});
-    console.log(`Real Pilot Data: created Sea Breeze Sunset Cruise ${created._id} with vesselName=${JSON.stringify(TARGET_VESSEL)}`);
-    return {applied:true,action:"created_trip",tripId:String(created._id),vesselName:TARGET_VESSEL};
+  if(providers.length!==1){
+    console.warn(`Real Pilot Data: found ${providers.length} Sea Breeze / Aquamarina providers; refusing to choose a provider automatically`);
+    console.warn(`Real Pilot Data providers: ${JSON.stringify(providers.map(p=>({id:String(p._id),businessName:String(p.businessName||"")})))}`);
+    return {applied:false,reason:"ambiguous_provider",providerCount:providers.length};
   }
 
-  const candidates=providerTrips.filter(trip=>isSeaBreezeSunsetCandidate({
-    providerName:providerById.get(String(trip.providerId))||"",
-    trip
-  }));
+  const provider=providers[0];
+  const settingsResult=await ensureSeaBreezeProviderDefaults(provider);
+  const providerTrips=await Trip.find({providerId:provider._id});
+
+  if(providerTrips.length===0){
+    const created=await Trip.create({...SEA_BREEZE_PILOT_TRIP,providerId:provider._id});
+    console.log(`Real Pilot Data: created Sea Breeze Sunset Cruise ${created._id} with vesselName=${JSON.stringify(TARGET_VESSEL)}`);
+    return {applied:true,action:"created_trip",providerSettingsUpdated:settingsResult.updated,tripId:String(created._id),vesselName:TARGET_VESSEL};
+  }
+
+  const candidates=providerTrips.filter(trip=>isSeaBreezeSunsetCandidate({providerName:provider.businessName,trip}));
 
   if(candidates.length!==1){
-    const diagnostic=providerTrips.map(trip=>safeTripDiagnostic(trip,providerById.get(String(trip.providerId))));
-    console.warn(`Real Pilot Data: expected exactly one Sea Breeze sunset candidate, found ${candidates.length}; no changes applied`);
+    const diagnostic=providerTrips.map(trip=>safeTripDiagnostic(trip,provider.businessName));
+    console.warn(`Real Pilot Data: expected exactly one Sea Breeze sunset candidate, found ${candidates.length}; no trip changes applied`);
     console.warn(`Real Pilot Data diagnostic: ${JSON.stringify(diagnostic)}`);
-    return {applied:false,reason:"ambiguous_candidate",candidateCount:candidates.length};
+    return {applied:settingsResult.updated,reason:"ambiguous_candidate",providerSettingsUpdated:settingsResult.updated,candidateCount:candidates.length};
   }
 
   const trip=candidates[0];
   const current=String(trip.vesselName||"").trim();
   if(current&&current!==TARGET_VESSEL){
     console.warn(`Real Pilot Data: target trip already has vesselName=${JSON.stringify(current)}; refusing to overwrite`);
-    return {applied:false,reason:"existing_value_conflict",tripId:String(trip._id)};
+    return {applied:settingsResult.updated,reason:"existing_value_conflict",providerSettingsUpdated:settingsResult.updated,tripId:String(trip._id)};
   }
   if(current===TARGET_VESSEL){
     console.log(`Real Pilot Data: Sea Breeze vessel already set on trip ${trip._id}`);
-    return {applied:false,reason:"already_applied",tripId:String(trip._id)};
+    return {applied:settingsResult.updated,reason:settingsResult.updated?"updated_provider_defaults":"already_applied",providerSettingsUpdated:settingsResult.updated,tripId:String(trip._id)};
   }
 
   trip.vesselName=TARGET_VESSEL;
   await trip.save();
   console.log(`Real Pilot Data: set vesselName=${JSON.stringify(TARGET_VESSEL)} on Sea Breeze trip ${trip._id}`);
-  return {applied:true,action:"updated_vessel",tripId:String(trip._id),vesselName:TARGET_VESSEL};
+  return {applied:true,action:"updated_vessel",providerSettingsUpdated:settingsResult.updated,tripId:String(trip._id),vesselName:TARGET_VESSEL};
 }
