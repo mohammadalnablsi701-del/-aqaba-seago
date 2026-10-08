@@ -305,7 +305,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
       <section className="content-section">
         <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2><p>Trusted trips picked for an easy day on the Red Sea.</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
         {loading?<LoadingState label="Loading sea experiences..."/>:<div className="trip-strip">
-          {tripList.slice(0,3).map(trip => (
+          {tripList.map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
           ))}
         </div>}

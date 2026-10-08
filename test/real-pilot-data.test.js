@@ -38,7 +38,7 @@ test("rejects similar trips that are not the exact pilot shape",()=>{
 });
 
 test("Sea Breeze pilot spec preserves approved vessel, prices and commissions",()=>{
-  assert.equal(SEA_BREEZE_PILOT_TRIP.vesselName,"بريز الخشبي");
+  assert.equal(SEA_BREEZE_PILOT_TRIP.vesselName,"Breeze Wooden Boat");
   assert.equal(SEA_BREEZE_PILOT_TRIP.durationMinutes,120);
   assert.equal(SEA_BREEZE_PILOT_TRIP.departureLocation.name,"Ayla Marina");
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.adultPrice,15);
