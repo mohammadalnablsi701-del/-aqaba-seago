@@ -1,15 +1,20 @@
 # Sea Breeze / Aquamarina — Pilot Data
 
-Status: confirmed working trip/pricing data for pilot preparation. Provider contact/account details, boarding point, capacity and customer-facing images still need confirmation.
+Status: confirmed working trip/pricing data for pilot preparation. Publicly listed provider contact details are adopted provisionally for the pilot until provider onboarding confirms them directly. Boarding point, capacity and customer-facing images still need confirmation.
 
 ## Provider
 
 - Display name: Sea Breeze / Aquamarina
 - Pilot status: planned
-- Provider login email: pending confirmation
-- Provider mobile / WhatsApp: pending confirmation
+- Provisional provider login email from current public listings: info@aquamarina-aqaba.com
+- Alternate public contact email: info@seabreezeaqaba.com
+- Public phone/mobile: +962 79 088 7163
+- WhatsApp: not assumed from the phone listing; confirm with provider before marking as WhatsApp-enabled
+- Public address: Prs. Haya Cir., Aqaba, Jordan
+- Public website: www.seabreezeaqaba.com
 - Boarding / meeting point: pending confirmation
 - Default capacity: pending confirmation
+- Contact-data rule: these details are acceptable for pilot setup, but replace them with provider-confirmed onboarding details before public launch if the provider supplies different contact information.
 
 ---
 
@@ -59,8 +64,8 @@ Suggested Trip.pricing fields:
 
 ## Remaining Sea Breeze / Aquamarina data required before actual pilot entry
 
-1. Confirm provider login email and mobile/WhatsApp.
-2. Confirm boarding/meeting point and Google Maps link.
-3. Confirm default/actual capacity.
-4. Collect customer-facing images.
+1. Confirm boarding/meeting point and Google Maps link.
+2. Confirm default/actual capacity.
+3. Collect customer-facing images.
+4. Confirm whether the published mobile is also the preferred WhatsApp number.
 5. Create future departures using either 17:00–19:00 or 18:00–20:00 as appropriate for the day.
