@@ -13,7 +13,7 @@ const CANCELLATION_FIELDS = new Set(["reason"]);
 router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
     const rows = await Booking.find({ customerId: req.user._id, status: { $in: ["confirmed","cancelled","refunded"] } })
-      .populate({ path: "tripId", select: "titleAr titleEn category durationMinutes departureLocation pricing" })
+      .populate({ path: "tripId", select: "titleAr titleEn vesselName category durationMinutes departureLocation pricing" })
       .populate({ path: "providerId", select: "businessName phone ownerUserId", populate: { path: "ownerUserId", select: "phone phoneNormalized" } })
       .populate({ path: "departureId", select: "startsAt status" })
       .sort({ createdAt: -1 })
