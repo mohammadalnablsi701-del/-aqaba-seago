@@ -167,6 +167,7 @@ function normalizeTrip(raw, index = 0) {
     title: profile?.title || raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
+    vesselName: raw.vesselName || "",
     verifiedProvider: true,
     duration: formatDuration(raw.durationMinutes),
     price: Number(raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
@@ -326,6 +327,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
         <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
         <h3>{trip.title}</h3>
         <p>{trip.providerName || trip.subtitle}</p>
+        {trip.vesselName&&<p>Yacht: {trip.vesselName}</p>}
         <div className="trip-card__facts">
           <span><CalendarDays size={14}/>{trip.duration}</span>
           <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
@@ -423,6 +425,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
         <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
         <h1>{trip.title}</h1>
         <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified operator <span>{trip.providerName || "Approved SeaGo partner"}</span></div>
+        {trip.vesselName&&<div className="detail-kicker">Yacht / vessel · {trip.vesselName}</div>}
 
         <div className="detail-price-summary">
           <div><small>From</small><strong>{trip.price} JOD</strong><span>per adult</span></div>
