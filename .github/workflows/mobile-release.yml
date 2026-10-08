@@ -1,0 +1,111 @@
+name: Android Release Bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "customer-app/**"
+      - ".github/workflows/mobile-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-release:
+    name: Android release AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies
+        working-directory: customer-app
+        run: npm install --no-fund
+
+      - name: Build web app
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: npm run build
+
+      - name: Create Android project
+        working-directory: customer-app
+        run: npx cap add android
+
+      - name: Sync Android project
+        working-directory: customer-app
+        run: npx cap sync android
+
+      - name: Configure release identity and icon
+        working-directory: customer-app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, shutil
+
+          gradle = Path('android/app/build.gradle')
+          text = gradle.read_text()
+          text = re.sub(r'versionCode\s+\d+', 'versionCode 1', text)
+          text = re.sub(r'versionName\s+["\'][^"\']+["\']', 'versionName "1.0.0"', text)
+          gradle.write_text(text)
+
+          src = Path('public/customer-icon-512.png')
+          res = Path('android/app/src/main/res')
+          for folder in res.glob('mipmap-*'):
+              if not folder.is_dir():
+                  continue
+              for old in folder.glob('ic_launcher*'):
+                  if old.suffix.lower() in {'.png', '.webp'}:
+                      old.unlink()
+              if 'anydpi' not in folder.name:
+                  for name in ('ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png'):
+                      shutil.copyfile(src, folder / name)
+
+          values = res / 'values' / 'ic_launcher_background.xml'
+          if values.exists():
+              values.write_text('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#071F33</color>\n</resources>\n')
+          PY
+
+      - name: Build unsigned release bundle
+        working-directory: customer-app/android
+        run: ./gradlew bundleRelease --stacktrace
+
+      - name: Write release metadata
+        run: |
+          cat > customer-app/android/release-info.json <<EOF
+          {
+            "appName": "Aqaba SeaGo",
+            "applicationId": "com.aqabaseago.app",
+            "versionName": "1.0.0",
+            "versionCode": 1,
+            "commit": "${GITHUB_SHA}",
+            "signed": false
+          }
+          EOF
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-android-release-unsigned
+          path: |
+            customer-app/android/app/build/outputs/bundle/release/app-release.aab
+            customer-app/android/release-info.json
+          if-no-files-found: error
+          retention-days: 14
