@@ -5,6 +5,7 @@ import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
+import { applyRealPilotData } from "./services/realPilotData.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -38,6 +39,7 @@ if(isProduction){
 }
 
 await connectDb(process.env.MONGODB_URI);
+await applyRealPilotData();
 await releaseExpiredCheckoutHolds({limit:500});
 
 setInterval(()=>{
