@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
+import "./vessel-polish.css";
+import { enableVesselUiPolish } from "./vesselUiPolish.js";
 
 const params=new URLSearchParams(window.location.search);
 const recovery=Boolean(params.get("resetToken")||params.get("forgotPassword"));
@@ -47,6 +49,7 @@ createRoot(document.getElementById("root")).render(
   </React.StrictMode>
 );
 
+if(!recovery)enableVesselUiPolish();
 
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{
