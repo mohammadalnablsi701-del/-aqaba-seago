@@ -25,19 +25,22 @@ For each provider collect:
 
 ## Public draft provider details — confirm before data entry
 
-These are public-source drafts only. Do not treat them as signed/confirmed provider onboarding data.
+These are public-source drafts only. Do not treat them as signed/confirmed provider onboarding data unless marked CONFIRMED below.
 
-### Fun N Sun
+### Fun N Sun — CONFIRMED FOR PILOT SETUP
 
-- Draft display name: Fun N Sun
+- Display name: Fun N Sun
 - Public office address: Aqaba office, 2nd area, Islamic International Arab Bank Building, 3rd floor, Aqaba, Jordan
-- Public mobile: +962 79 577 3111
-- Public WhatsApp: +962 79 882 8802
-- Public email: info@fun-n-sun.com
+- Provider login email: info@fun-n-sun.com
+- Provider login mobile: +962 79 577 3111
+- Additional public WhatsApp: +962 79 882 8802
+- Provider status for pilot: approved
 - Publicly listed services include tourist boat cruises, snorkeling, fishing, night trips, diving and water sports.
-- Pilot provider login email: TO CONFIRM
-- Pilot provider login mobile: TO CONFIRM
-- Meeting/boarding point: TO CONFIRM WITH PROVIDER (office address is not assumed to be boarding point)
+- Confirmed boarding points:
+  1. ساحة الثورة العربية — Arab Revolt Plaza
+  2. مارينا أيلة — Ayla Marina
+- Boarding-point rule: do not force one provider-level default. Assign the correct boarding point on each trip because Fun N Sun operates from two confirmed locations.
+- Google Maps URLs: add per boarding point when confirmed/collected.
 
 ### Sea Breeze / Aquamarina
 
