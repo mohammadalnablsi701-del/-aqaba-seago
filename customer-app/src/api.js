@@ -189,3 +189,7 @@ export const listMySupportRequests=token=>request("/api/support/mine",{token});
 
 export const googleAuthConfig=()=>request("/api/auth/google/config");
 export const googleSignIn=(credential,role="customer")=>request("/api/auth/google",{method:"POST",body:JSON.stringify({credential,role})});
+
+export const deleteAccount=token=>request("/api/auth/account",{method:"DELETE",token});
+export const registerNativePushToken=({token:deviceToken,platform},token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken,platform})});
+export const unregisterNativePushToken=(deviceToken,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken})});
