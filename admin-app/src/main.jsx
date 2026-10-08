@@ -1,30 +1,7 @@
-import React,{useEffect,useState}from"react";
+import React from"react";
 import{createRoot}from"react-dom/client";
 import App from"./App.jsx";
-import ProviderAccessPortal from"./ProviderAccessPortal.jsx";
 import"./styles.css";
-
-function storedAdmin(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
-function AdminRoot(){
-  const auth=storedAdmin();
-  const[providerRows,setProviderRows]=useState([]);
-  useEffect(()=>{
-    if(!auth?.token)return;
-    let active=true;
-    async function load(){
-      try{
-        const r=await fetch("https://aqaba-seago-api.onrender.com/api/admin/providers",{headers:{Authorization:`Bearer ${auth.token}`}});
-        if(!r.ok)return;
-        const data=await r.json();
-        if(active)setProviderRows(Array.isArray(data)?data:(data.providers||[]));
-      }catch{}
-    }
-    load();
-    window.addEventListener("seago:providers-refresh",load);
-    return()=>{active=false;window.removeEventListener("seago:providers-refresh",load)};
-  },[auth?.token]);
-  return <><App/>{auth?.token&&providerRows.length>0&&<ProviderAccessPortal providers={providerRows} token={auth.token}/>}</>;
-}
 
 async function ensureFreshAdmin(){
   try{
@@ -45,7 +22,7 @@ async function ensureFreshAdmin(){
       return;
     }
   }catch{}
-  createRoot(document.getElementById("root")).render(<AdminRoot/>);
+  createRoot(document.getElementById("root")).render(<App/>);
 }
 
 ensureFreshAdmin();
