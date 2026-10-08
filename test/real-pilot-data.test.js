@@ -37,7 +37,7 @@ test("rejects similar trips that are not the exact pilot shape",()=>{
   }),false);
 });
 
-test("Sea Breeze pilot spec preserves approved vessel, prices and commissions",()=>{
+test("Sea Breeze pilot spec preserves approved vessel, prices and commission",()=>{
   assert.equal(SEA_BREEZE_PILOT_TRIP.vesselName,"Breeze Wooden Boat");
   assert.equal(SEA_BREEZE_PILOT_TRIP.durationMinutes,120);
   assert.equal(SEA_BREEZE_PILOT_TRIP.departureLocation.name,"Ayla Marina");
@@ -45,11 +45,8 @@ test("Sea Breeze pilot spec preserves approved vessel, prices and commissions",(
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.childPrice,10);
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.buffetAdultPrice,17);
   assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.buffetChildPrice,12);
-  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.commissionType,"fixed_per_person");
-  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.adultCommission,3);
-  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.childCommission,2);
-  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.buffetAdultCommission,3);
-  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.buffetChildCommission,2);
+  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.commissionType,"percentage");
+  assert.equal(SEA_BREEZE_PILOT_TRIP.pricing.commissionValue,20);
 });
 
 test("Sea Breeze provider defaults preserve capacity and Ayla departure point",()=>{
