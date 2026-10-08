@@ -61,6 +61,20 @@ export async function loginCustomer({ email, password }) {
   });
 }
 
+export async function requestPasswordReset(email) {
+  return request("/api/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+}
+
+export async function confirmPasswordReset(token, password) {
+  return request("/api/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token, password })
+  });
+}
+
 export async function createBooking({ departureId, seats, token }) {
   const key = globalThis.crypto?.randomUUID?.() ||
     `booking-${Date.now()}-${Math.random().toString(16).slice(2)}`;

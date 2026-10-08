@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
 import { normalizeJordanPhone } from "../services/phoneOtp.js";
+import { issuePasswordReset, claimPasswordResetToken, invalidatePasswordResetTokens } from "../services/passwordRecovery.js";
 
 const router=express.Router();
 
@@ -99,6 +100,35 @@ router.post("/login",async(req,res,next)=>{
   }catch(e){next(e);}
 });
 
+router.post("/password-reset/request",async(req,res,next)=>{
+  try{
+    const email=cleanEmail(req.body.email);
+    if(validEmail(email)){
+      const user=await User.findOne({email,isActive:true}).select("_id email passwordHash");
+      if(user?.passwordHash)await issuePasswordReset(user);
+    }
+    res.status(202).json({ok:true,message:"If an eligible account uses that email, a password reset link will be sent."});
+  }catch(e){next(e);}
+});
+
+router.post("/password-reset/confirm",async(req,res,next)=>{
+  try{
+    const password=req.body.password;
+    if(!validPassword(password))return res.status(400).json({error:"Password must be 8–128 characters"});
+
+    const claimed=await claimPasswordResetToken(req.body.token);
+    if(!claimed)return res.status(400).json({error:"Reset link is invalid or expired"});
+
+    const user=await User.findById(claimed.userId).select("_id isActive passwordHash authVersion");
+    if(!user||!user.isActive||!user.passwordHash)return res.status(400).json({error:"Reset link is invalid or expired"});
+
+    const passwordHash=await bcrypt.hash(password,12);
+    await User.updateOne({_id:user._id},{$set:{passwordHash},$inc:{authVersion:1}});
+    await invalidatePasswordResetTokens(user._id);
+    res.json({ok:true,message:"Password updated. Please sign in again."});
+  }catch(e){next(e);}
+});
+
 router.patch("/phone",requireAuth,async(req,res,next)=>{
   try{
     const phone=normalizeJordanPhone(req.body.phone);
@@ -121,7 +151,7 @@ router.post("/otp/verify",(_req,res)=>{
 
 function sign(u){
   if(!process.env.JWT_SECRET) throw new Error("JWT_SECRET is not configured");
-  return jwt.sign({sub:u._id.toString(),role:u.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||"7d"});
+  return jwt.sign({sub:u._id.toString(),role:u.role,ver:Number(u.authVersion||0)},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||"7d"});
 }
 function safe(u){
   return{id:u._id,name:u.name,email:u.email,phone:u.phone,role:u.role,isActive:u.isActive};
