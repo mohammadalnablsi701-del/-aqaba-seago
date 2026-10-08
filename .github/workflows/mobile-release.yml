@@ -30,7 +30,7 @@ jobs:
           node-version: 22
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -49,38 +49,34 @@ jobs:
         working-directory: customer-app
         run: npx cap add android
 
+      - name: Render native brand sources
+        working-directory: customer-app
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 1024 -h 1024 assets/logo.svg -o assets/icon-only.png
+          rsvg-convert -w 2732 -h 2732 assets/splash.svg -o assets/splash.png
+
+      - name: Generate branded Android assets
+        working-directory: customer-app
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'
+
       - name: Sync Android project
         working-directory: customer-app
         run: npx cap sync android
 
-      - name: Configure release identity and icon
+      - name: Configure release identity
         working-directory: customer-app
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re, shutil
+          import re
 
           gradle = Path('android/app/build.gradle')
           text = gradle.read_text()
           text = re.sub(r'versionCode\s+\d+', 'versionCode 1', text)
           text = re.sub(r'versionName\s+["\'][^"\']+["\']', 'versionName "1.0.0"', text)
           gradle.write_text(text)
-
-          src = Path('public/customer-icon-512.png')
-          res = Path('android/app/src/main/res')
-          for folder in res.glob('mipmap-*'):
-              if not folder.is_dir():
-                  continue
-              for old in folder.glob('ic_launcher*'):
-                  if old.suffix.lower() in {'.png', '.webp'}:
-                      old.unlink()
-              if 'anydpi' not in folder.name:
-                  for name in ('ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png'):
-                      shutil.copyfile(src, folder / name)
-
-          values = res / 'values' / 'ic_launcher_background.xml'
-          if values.exists():
-              values.write_text('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#071F33</color>\n</resources>\n')
           PY
 
       - name: Build unsigned release bundle
