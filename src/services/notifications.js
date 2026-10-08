@@ -154,22 +154,27 @@ export async function processUpcomingReminders(){
   const to=new Date(now+25*3600000);
   const rows=await Booking.find({status:"confirmed"}).populate("departureId","startsAt");
   const due=rows.filter(b=>b.departureId?.startsAt && new Date(b.departureId.startsAt)>=from && new Date(b.departureId.startsAt)<=to);
+  const providerDeparturesAttempted=new Set();
   let sent=0;
   for(const row of due){
     const b=await loadBooking(row._id); if(!b) continue;
     await createInApp({key:`departure-reminder-24h:customer:${b._id}`,userId:b.customerId?._id,type:"departure_reminder_24h",title:"Your trip is tomorrow",body:`Reminder: ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} departs ${fmtDate(b.departureId?.startsAt)}.`,bookingId:b._id,data:{screen:"tickets"}});
     const provider=await Provider.findById(b.providerId?._id||b.providerId);
     const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("_id email name"):null;
-    if(owner?._id&&b.departureId?._id){await createInApp({key:`departure-reminder-24h:provider:${b.departureId._id}`,userId:owner._id,type:"provider_departure_reminder_24h",title:"Departure tomorrow",body:`${b.tripId?.titleEn||b.tripId?.titleAr||"Your trip"} departs ${fmtDate(b.departureId?.startsAt)}. Review the passenger manifest.`,data:{screen:"manifest",departureId:String(b.departureId._id)}});}
-    if(owner?.email&&b.departureId?._id){
-      await sendEmail({
-        key:`departure-reminder-24h:provider:${b.departureId._id}`,
-        bookingId:null,
-        type:"provider_departure_reminder_24h",
-        to:owner.email,
-        subject:`SeaGo reminder · Departure tomorrow`,
-        html:shell("Departure tomorrow",`<p>Hi ${escapeHtml(owner.name||provider?.businessName||"there")}, your ${escapeHtml(b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip")} departure is scheduled for <b>${escapeHtml(fmtDate(b.departureId?.startsAt))}</b>.</p><p>Please review the passenger manifest and prepare for check-in.</p>`)
-      });
+    const departureKey=b.departureId?._id?String(b.departureId._id):null;
+    if(owner?._id&&departureKey&&!providerDeparturesAttempted.has(departureKey)){
+      providerDeparturesAttempted.add(departureKey);
+      await createInApp({key:`departure-reminder-24h:provider:${departureKey}`,userId:owner._id,type:"provider_departure_reminder_24h",title:"Departure tomorrow",body:`${b.tripId?.titleEn||b.tripId?.titleAr||"Your trip"} departs ${fmtDate(b.departureId?.startsAt)}. Review the passenger manifest.`,data:{screen:"manifest",departureId:departureKey}});
+      if(owner.email){
+        await sendEmail({
+          key:`departure-reminder-24h:provider:${departureKey}`,
+          bookingId:null,
+          type:"provider_departure_reminder_24h",
+          to:owner.email,
+          subject:`SeaGo reminder · Departure tomorrow`,
+          html:shell("Departure tomorrow",`<p>Hi ${escapeHtml(owner.name||provider?.businessName||"there")}, your ${escapeHtml(b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip")} departure is scheduled for <b>${escapeHtml(fmtDate(b.departureId?.startsAt))}</b>.</p><p>Please review the passenger manifest and prepare for check-in.</p>`)
+        });
+      }
     }
     const log=await sendEmail({key:`departure-reminder-24h:customer:${b._id}`,bookingId:b._id,type:"departure_reminder_24h",to:b.customerId?.email,subject:`SeaGo reminder · Your trip is tomorrow`,html:shell("Your trip is tomorrow",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, here is your 24-hour reminder.</p>${bookingTable(b)}<p>Please arrive early enough for check-in.</p>`)});
     if(log?.status==="sent") sent++;
