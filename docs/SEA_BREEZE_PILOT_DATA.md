@@ -1,6 +1,6 @@
 # Sea Breeze / Aquamarina — Pilot Data
 
-Status: confirmed working trip/pricing data for pilot preparation. Publicly listed provider contact details are adopted provisionally for the pilot until provider onboarding confirms them directly. Boarding point and default capacity are confirmed for pilot use; customer-facing images still need confirmation.
+Status: confirmed working trip/pricing data for pilot preparation. Publicly listed provider contact details are adopted provisionally for the pilot until provider onboarding confirms them directly. Boarding point and default capacity are confirmed for pilot use; customer-facing images and the exact sunset-cruise vessel name still need confirmation.
 
 ## Provider
 
@@ -24,6 +24,8 @@ Status: confirmed working trip/pricing data for pilot preparation. Publicly list
 
 - Arabic title: رحلة غروب — Sea Breeze / Aquamarina
 - English title: Sunset Cruise — Sea Breeze / Aquamarina
+- Vessel name: TO CONFIRM
+- Vessel-name rule: do not infer the sunset-cruise vessel from public fleet lists because the provider publishes multiple boat/yacht names and the current public booking page does not identify which one operates this specific sunset product.
 - Category: sunset
 - Duration: 120 minutes
 - Operating pattern: near-daily / شبه يومية
@@ -68,6 +70,7 @@ Suggested Trip.pricing fields:
 
 ## Remaining Sea Breeze / Aquamarina data required before actual pilot entry
 
-1. Collect customer-facing images.
-2. Confirm whether the published mobile is also the preferred WhatsApp number.
-3. Create future departures using either 17:00–19:00 or 18:00–20:00 as appropriate for the day.
+1. Confirm the exact vessel/yacht name used for the Sunset Cruise.
+2. Collect customer-facing images.
+3. Confirm whether the published mobile is also the preferred WhatsApp number.
+4. Create future departures using either 17:00–19:00 or 18:00–20:00 as appropriate for the day.
