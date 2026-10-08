@@ -6,6 +6,35 @@ const AYLA_RE=/(ayla|أيلة)/i;
 const SUNSET_RE=/(sunset|غروب)/i;
 const TARGET_VESSEL="بريز الخشبي";
 
+export const SEA_BREEZE_PILOT_TRIP={
+  titleAr:"رحلة غروب الشمس",
+  titleEn:"Sunset Cruise",
+  vesselName:TARGET_VESSEL,
+  category:"sunset",
+  durationMinutes:120,
+  pricing:{
+    currency:"JOD",
+    pricePerPerson:15,
+    adultPrice:15,
+    childPrice:10,
+    buffetEnabled:true,
+    buffetAdultPrice:17,
+    buffetChildPrice:12,
+    commissionType:"fixed_per_person",
+    commissionValue:3,
+    adultCommission:3,
+    childCommission:2,
+    buffetAdultCommission:3,
+    buffetChildCommission:2
+  },
+  departureLocation:{
+    name:"Ayla Marina",
+    address:"Aqaba, Jordan",
+    googleMapsUrl:"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"
+  },
+  active:true
+};
+
 export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){
   return SEA_BREEZE_PROVIDER_RE.test(String(providerName))
     && String(trip.category||"")==="sunset"
@@ -38,6 +67,18 @@ export async function applyRealPilotData(){
 
   const providerById=new Map(providers.map(p=>[String(p._id),p.businessName]));
   const providerTrips=await Trip.find({providerId:{$in:providers.map(p=>p._id)}});
+
+  if(providerTrips.length===0){
+    if(providers.length!==1){
+      console.warn(`Real Pilot Data: found ${providers.length} Sea Breeze / Aquamarina providers and no trips; refusing to choose a provider automatically`);
+      console.warn(`Real Pilot Data providers: ${JSON.stringify(providers.map(p=>({id:String(p._id),businessName:String(p.businessName||"")})))}`);
+      return {applied:false,reason:"ambiguous_provider",providerCount:providers.length};
+    }
+    const created=await Trip.create({...SEA_BREEZE_PILOT_TRIP,providerId:providers[0]._id});
+    console.log(`Real Pilot Data: created Sea Breeze Sunset Cruise ${created._id} with vesselName=${JSON.stringify(TARGET_VESSEL)}`);
+    return {applied:true,action:"created_trip",tripId:String(created._id),vesselName:TARGET_VESSEL};
+  }
+
   const candidates=providerTrips.filter(trip=>isSeaBreezeSunsetCandidate({
     providerName:providerById.get(String(trip.providerId))||"",
     trip
@@ -64,5 +105,5 @@ export async function applyRealPilotData(){
   trip.vesselName=TARGET_VESSEL;
   await trip.save();
   console.log(`Real Pilot Data: set vesselName=${JSON.stringify(TARGET_VESSEL)} on Sea Breeze trip ${trip._id}`);
-  return {applied:true,tripId:String(trip._id),vesselName:TARGET_VESSEL};
+  return {applied:true,action:"updated_vessel",tripId:String(trip._id),vesselName:TARGET_VESSEL};
 }
