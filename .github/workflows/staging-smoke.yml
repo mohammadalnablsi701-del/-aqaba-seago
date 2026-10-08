@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: staging-smoke-${{ github.sha }}
@@ -41,16 +41,14 @@ jobs:
               fi
               if git cat-file -e "$deployed^{commit}" 2>/dev/null && git diff --quiet "$expected" "$deployed" -- src package.json package-lock.json; then
                 cat /tmp/ready.json
-                break
+                exit 0
               fi
-            fi
-            if [ "$i" = "36" ]; then
-              echo "Staging backend content did not converge to the expected tree from $expected"
-              cat /tmp/ready.json || true
-              exit 1
             fi
             sleep 10
           done
+          echo "Staging backend content did not converge to the expected tree from $expected"
+          cat /tmp/ready.json || true
+          exit 1
 
       - name: Verify staging public API
         shell: bash
@@ -67,41 +65,3 @@ jobs:
           body="$(curl -fsS "$STAGING_API/ready")"
           echo "$body"
           echo "$body" | grep -q '"publicLaunch":false'
-
-      - name: Apply forgot-password entry once
-        shell: python
-        run: |
-          from pathlib import Path
-          p=Path('customer-app/src/App.jsx')
-          s=p.read_text()
-          old='''      <button className="auth-switch" onClick={()=>switchMode(mode==="login"?"register":"login")}>
-        {mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in"}
-      </button>'''
-          new='''      {mode==="login"&&<button className="auth-switch" type="button" onClick={()=>{const url=new URL(window.location.href);url.searchParams.set("forgotPassword","1");window.location.href=url.pathname+"?"+url.searchParams.toString();}}>Forgot password?</button>}
-      <button className="auth-switch" type="button" onClick={()=>switchMode(mode==="login"?"register":"login")}>
-        {mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in"}
-      </button>'''
-          if new in s:
-              print('Forgot-password entry already present')
-          elif old in s:
-              p.write_text(s.replace(old,new,1))
-          else:
-              raise SystemExit('Expected AuthForm switch block not found; refusing to patch')
-
-      - name: Verify customer app builds after patch
-        working-directory: customer-app
-        run: npm install --no-fund && npm run build
-
-      - name: Commit forgot-password entry
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- customer-app/src/App.jsx; then
-            echo "No UI patch to commit."
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add customer-app/src/App.jsx
-          git commit -m 'Add forgot password entry to customer sign-in'
-          git push origin HEAD:staging
