@@ -1,6 +1,6 @@
 # Sea Breeze / Aquamarina — Pilot Data
 
-Status: confirmed working trip/pricing data for pilot preparation. Publicly listed provider contact details are adopted provisionally for the pilot until provider onboarding confirms them directly. Boarding point, capacity and customer-facing images still need confirmation.
+Status: confirmed working trip/pricing data for pilot preparation. Publicly listed provider contact details are adopted provisionally for the pilot until provider onboarding confirms them directly. Boarding point is confirmed for pilot use; capacity and customer-facing images still need confirmation.
 
 ## Provider
 
@@ -12,7 +12,8 @@ Status: confirmed working trip/pricing data for pilot preparation. Publicly list
 - WhatsApp: not assumed from the phone listing; confirm with provider before marking as WhatsApp-enabled
 - Public address: Prs. Haya Cir., Aqaba, Jordan
 - Public website: www.seabreezeaqaba.com
-- Boarding / meeting point: pending confirmation
+- Boarding / meeting point: مارينا أيلة — Ayla Marina
+- Google Maps: https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic
 - Default capacity: pending confirmation
 - Contact-data rule: these details are acceptable for pilot setup, but replace them with provider-confirmed onboarding details before public launch if the provider supplies different contact information.
 
@@ -29,6 +30,8 @@ Status: confirmed working trip/pricing data for pilot preparation. Publicly list
   - 17:00–19:00
   - 18:00–20:00
 - Time rule: departure time is not fixed at trip level; use an editable start/end time per Departure because the provider may operate either common slot depending on the day/season.
+- Boarding / meeting point: مارينا أيلة — Ayla Marina
+- Google Maps: https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic
 - Buffet/meal option: enabled
 - Commission model: fixed_per_person
 - Capacity: pending confirmation
@@ -64,8 +67,7 @@ Suggested Trip.pricing fields:
 
 ## Remaining Sea Breeze / Aquamarina data required before actual pilot entry
 
-1. Confirm boarding/meeting point and Google Maps link.
-2. Confirm default/actual capacity.
-3. Collect customer-facing images.
-4. Confirm whether the published mobile is also the preferred WhatsApp number.
-5. Create future departures using either 17:00–19:00 or 18:00–20:00 as appropriate for the day.
+1. Confirm default/actual capacity.
+2. Collect customer-facing images.
+3. Confirm whether the published mobile is also the preferred WhatsApp number.
+4. Create future departures using either 17:00–19:00 or 18:00–20:00 as appropriate for the day.
