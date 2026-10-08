@@ -37,7 +37,7 @@ function syncTripForm(){
     const input=document.createElement("input");
     input.dataset.seagoVesselInput="1";
     input.maxLength=120;
-    input.placeholder="Example: Breeze Wooden Boat";
+    input.placeholder="Example: بريز الخشبي";
     input.value=vesselDraft;
     input.addEventListener("input",()=>{vesselDraft=input.value;input.dataset.dirty="1";});
     label.appendChild(input);
