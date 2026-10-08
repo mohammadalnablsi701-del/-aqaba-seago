@@ -76,8 +76,8 @@ This is one combined product: submarine/Coral Whisper experience + White Prince 
 - English title: Coral Whisper + White Prince
 - Category: semi_submarine
 - Duration: 180 minutes
-- Supplied operating text: `5:00-2:00`
-- Working interpretation: 14:00–17:00 because that matches the stated 3-hour duration; confirm before future departures are created
+- Default operating slot for pilot setup: 14:00–17:00
+- Time rule: 14:00–17:00 is the default only; the start/end time must remain editable per departure because the provider may change the slot by day.
 - Boarding point: ساحة الثورة العربية / سارية العلم
 - Family-oriented offer
 - Default capacity: 20, editable per departure
@@ -176,8 +176,7 @@ Suggested Trip.pricing fields:
 
 ## Remaining Fun N Sun data required before actual pilot entry
 
-1. Confirm FNS-02 future operating time (working assumption 14:00–17:00).
-2. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
-3. Collect customer-facing images for each product.
-4. Add Google Maps links for Arab Revolt Plaza and Ayla Marina.
-5. Create only future departures; historical sample dates remain reference data only.
+1. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
+2. Collect customer-facing images for each product.
+3. Add Google Maps links for Arab Revolt Plaza and Ayla Marina.
+4. Create only future departures; historical sample dates remain reference data only.
