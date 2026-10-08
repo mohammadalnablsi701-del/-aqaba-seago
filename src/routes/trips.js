@@ -48,7 +48,6 @@ function validateTripPayload(body,{partial=false}={}){
   return errors;
 }
 
-
 function sanitizeImages(input){
   if(!Array.isArray(input)) return [];
   return input.slice(0,10).map(x=>{
@@ -86,6 +85,8 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
     const p=access?.provider;
     if(!p)return res.status(403).json({error:"Trip management permission required"});
 
+    const configuredCommission=Number(process.env.DEFAULT_COMMISSION_PERCENTAGE);
+    const defaultCommission=Number.isFinite(configuredCommission)&&configuredCommission>=0&&configuredCommission<=100?configuredCommission:20;
     const trip = await Trip.create({
       titleAr: cleanText(req.body.titleAr,120),
       titleEn: cleanText(req.body.titleEn,120),
@@ -98,7 +99,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       pricing: {
         ...salePriceUpdate(req.body.pricing),
         commissionType: "percentage",
-        commissionValue: Number(process.env.DEFAULT_COMMISSION_PERCENTAGE || 0)
+        commissionValue: defaultCommission
       },
       providerId: p._id
     });
@@ -130,8 +131,8 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
     }
 
     if (req.body.pricing) {
-      // Update sale fields individually: never overwrite the administrative
-      // agreement, including a concurrent commission edit made by an admin.
+      // Providers own sale prices only. Administrative commission fields are
+      // intentionally ignored even if a client tries to submit them.
       for (const [key, value] of Object.entries(salePriceUpdate(req.body.pricing, trip.pricing))) {
         trip.set(`pricing.${key}`, value);
       }
