@@ -1,8 +1,18 @@
 # Native asset sources
 
-The mobile build expects the following generated source files in this directory before running `capacitor-assets generate`:
+Editable brand masters:
+
+- `logo.svg` — square SeaGo wheel mark for the app icon
+- `splash.svg` — centered SeaGo wheel on the navy launch background
+
+The mobile GitHub Actions workflow renders these SVG masters into the PNG source sizes required by `@capacitor/assets` before generating Android and iOS resources:
 
 - `icon-only.png` — 1024×1024
 - `splash.png` — 2732×2732
 
-They use Aqaba SeaGo navy `#071F33` and teal `#18B8B0` branding. The SVG logo is retained as the editable master source.
+Brand colors:
+
+- Navy `#071F33`
+- Teal `#18B8B0`
+
+Generated PNG and native resource files do not need to be committed because the build pipeline reproduces them deterministically.
