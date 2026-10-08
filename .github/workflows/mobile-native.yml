@@ -11,7 +11,7 @@ on:
       build_ios:
         description: "Also build an unsigned iOS simulator app"
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -23,9 +23,9 @@ concurrency:
 
 jobs:
   android-debug:
-    name: Android debug APK
+    name: Android APK and AAB
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,6 +55,10 @@ jobs:
         working-directory: customer-app
         run: npx cap add android
 
+      - name: Generate branded Android assets
+        working-directory: customer-app
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'
+
       - name: Sync Android project
         working-directory: customer-app
         run: npx cap sync android
@@ -62,6 +66,10 @@ jobs:
       - name: Build debug APK
         working-directory: customer-app/android
         run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify release bundle builds
+        working-directory: customer-app/android
+        run: ./gradlew bundleRelease --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -71,11 +79,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload unsigned release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-android-release-unsigned
+          path: customer-app/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
   ios-simulator:
     name: iOS simulator build
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_ios }}
+    if: ${{ github.event_name == 'push' || inputs.build_ios }}
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -98,6 +114,10 @@ jobs:
       - name: Create iOS project
         working-directory: customer-app
         run: npx cap add ios
+
+      - name: Generate branded iOS assets
+        working-directory: customer-app
+        run: npx capacitor-assets generate --ios --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'
 
       - name: Sync iOS project
         working-directory: customer-app
