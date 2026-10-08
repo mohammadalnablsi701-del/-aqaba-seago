@@ -16,7 +16,9 @@ Status: confirmed working data for pilot preparation. Do not create public/live 
 ## Boarding points
 
 1. ساحة الثورة العربية — Arab Revolt Plaza / Flagpole area
+   - Google Maps: https://maps.app.goo.gl/JSwRqtx6Xw95ymLD8?g_st=ic
 2. مارينا أيلة — Ayla Marina
+   - Google Maps: pending confirmation
 
 Terminology: `سارية العلم` in Fun N Sun operating material means the Arab Revolt Plaza / flagpole boarding point.
 
@@ -30,6 +32,7 @@ Terminology: `سارية العلم` in Fun N Sun operating material means the A
 - Duration: 120 minutes
 - Observed operating slot: 14:00–16:00
 - Boarding point: ساحة الثورة العربية / سارية العلم
+- Google Maps: https://maps.app.goo.gl/JSwRqtx6Xw95ymLD8?g_st=ic
 - Includes: swimming program + water slide
 - Default capacity: 20, editable per departure
 - Buffet/meal option: enabled
@@ -79,6 +82,7 @@ This is one combined product: submarine/Coral Whisper experience + White Prince 
 - Default operating slot for pilot setup: 14:00–17:00
 - Time rule: 14:00–17:00 is the default only; the start/end time must remain editable per departure because the provider may change the slot by day.
 - Boarding point: ساحة الثورة العربية / سارية العلم
+- Google Maps: https://maps.app.goo.gl/JSwRqtx6Xw95ymLD8?g_st=ic
 - Family-oriented offer
 - Default capacity: 20, editable per departure
 - Buffet/meal option: enabled
@@ -123,6 +127,7 @@ Suggested Trip.pricing fields:
 - Duration: 120 minutes
 - Observed operating slot: 18:00–20:00
 - Boarding point: مارينا أيلة
+- Google Maps: pending confirmation
 - Default capacity: 20, editable per departure
 - Family-oriented offer
 - Buffet/meal option: enabled
@@ -178,5 +183,5 @@ Suggested Trip.pricing fields:
 
 1. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
 2. Collect customer-facing images for each product.
-3. Add Google Maps links for Arab Revolt Plaza and Ayla Marina.
+3. Add Google Maps link for Ayla Marina.
 4. Create only future departures; historical sample dates remain reference data only.
