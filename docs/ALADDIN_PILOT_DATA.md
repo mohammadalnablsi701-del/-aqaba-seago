@@ -18,8 +18,8 @@ Public-source rule: use these details only for pilot preparation. Provider-confi
 
 Current public material repeatedly references:
 
-- Aladdin Yacht / يخت علاء الدين
-- A three-deck yacht experience
+- Aladdin Yacht 8 / يخت علاء الدين 8 for the daily/group operation
+- A three-deck Aladdin yacht experience
 - Daily/group yacht trips
 - Sunset trips
 - Private yacht bookings
@@ -29,13 +29,13 @@ Do not map a published capacity to a specific sellable trip until the actual ves
 
 ---
 
-## Candidate pilot product ALD-01 — Aladdin Yacht Daily Cruise
+## Candidate pilot product ALD-01 — Aladdin Yacht 8 Daily Cruise
 
 This is a candidate product derived from current public operation and still needs commercial confirmation before actual pilot entry.
 
-- Arabic title: رحلة يخت علاء الدين
-- English title: Aladdin Yacht Daily Cruise
-- Vessel name: Aladdin Yacht
+- Arabic title: رحلة يخت علاء الدين 8
+- English title: Aladdin Yacht 8 Daily Cruise
+- Vessel name: Aladdin Yacht 8
 - Category: group_boat
 - Duration: TO CONFIRM
 - Boarding point: Ayla Marina – Yacht Terminal
@@ -49,13 +49,13 @@ This is a candidate product derived from current public operation and still need
 
 ---
 
-## Candidate pilot product ALD-02 — Aladdin Sunset Cruise
+## Candidate pilot product ALD-02 — Aladdin Yacht 8 Sunset Cruise
 
 This is a separate candidate because sunset trips are publicly promoted by the operator. Do not assume it has the same schedule, pricing or capacity as the daily cruise.
 
-- Arabic title: رحلة غروب — يخت علاء الدين
-- English title: Aladdin Yacht Sunset Cruise
-- Vessel name: Aladdin Yacht
+- Arabic title: رحلة غروب — يخت علاء الدين 8
+- English title: Aladdin Yacht 8 Sunset Cruise
+- Vessel name: Aladdin Yacht 8
 - Category: sunset
 - Duration: TO CONFIRM
 - Boarding point: Ayla Marina – Yacht Terminal
