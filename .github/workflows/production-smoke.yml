@@ -129,3 +129,18 @@ jobs:
           curl -fsS https://aqaba-seago-api.onrender.com/health | grep -q '"ok":true'
           curl -fsS https://aqaba-seago-api.onrender.com/api/trips > /tmp/trips.json
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/trips.json","utf8")); if(!Array.isArray(x)) process.exit(1); console.log("Public trips:",x.length)'
+
+      - name: Verify password recovery request is privacy-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          email="production-smoke-${GITHUB_RUN_ID}@example.test"
+          code="$(curl -sS --connect-timeout 8 --max-time 20 -o "$body" -w "%{http_code}" \
+            -X POST https://aqaba-seago-api.onrender.com/api/auth/password-reset/request \
+            -H 'Content-Type: application/json' \
+            --data "{\"email\":\"${email}\"}")"
+          echo "Password reset request -> HTTP $code"
+          cat "$body"
+          test "$code" = "202"
+          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.ok!==true || !String(x.message||"").includes("If an eligible account")) process.exit(1)' "$body"
