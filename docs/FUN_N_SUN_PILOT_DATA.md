@@ -18,7 +18,7 @@ Status: confirmed working data for pilot preparation. Do not create public/live 
 1. ساحة الثورة العربية — Arab Revolt Plaza / Flagpole area
    - Google Maps: https://maps.app.goo.gl/JSwRqtx6Xw95ymLD8?g_st=ic
 2. مارينا أيلة — Ayla Marina
-   - Google Maps: pending confirmation
+   - Google Maps: https://maps.app.goo.gl/4TGCyvHFxYtuopiz8?g_st=ic
 
 Terminology: `سارية العلم` in Fun N Sun operating material means the Arab Revolt Plaza / flagpole boarding point.
 
@@ -127,7 +127,7 @@ Suggested Trip.pricing fields:
 - Duration: 120 minutes
 - Observed operating slot: 18:00–20:00
 - Boarding point: مارينا أيلة
-- Google Maps: pending confirmation
+- Google Maps: https://maps.app.goo.gl/4TGCyvHFxYtuopiz8?g_st=ic
 - Default capacity: 20, editable per departure
 - Family-oriented offer
 - Buffet/meal option: enabled
@@ -183,5 +183,4 @@ Suggested Trip.pricing fields:
 
 1. Confirm Rio Diving Club price, duration, actual capacity, age rules, meeting point and commission.
 2. Collect customer-facing images for each product.
-3. Add Google Maps link for Ayla Marina.
-4. Create only future departures; historical sample dates remain reference data only.
+3. Create only future departures; historical sample dates remain reference data only.
