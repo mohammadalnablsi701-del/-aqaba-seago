@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Audit backend dependencies
         run: npm install --no-fund && npm audit --audit-level=high
       - name: Audit customer app dependencies
@@ -109,7 +109,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Install customer app dependencies
         working-directory: customer-app
         run: npm install

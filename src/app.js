@@ -30,6 +30,8 @@ function buildCorsOptions() {
   if (externalUrl) ownOrigins.add(externalUrl);
   if (externalHostname) ownOrigins.add(`https://${externalHostname}`);
   ownOrigins.add("https://aqaba-seago-api.onrender.com");
+  ownOrigins.add("capacitor://localhost");
+  ownOrigins.add("https://localhost");
   return {origin(origin, callback) {if (!origin || permissiveEmptyAllowlist || allowed.includes(origin) || ownOrigins.has(origin)) return callback(null, true);return callback(null, false);},credentials: false};
 }
 
