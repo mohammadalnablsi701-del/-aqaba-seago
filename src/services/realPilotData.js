@@ -38,7 +38,9 @@ async function applyFunNSunVesselBackfill(){const providers=await Provider.find(
 async function applyAladdinPilot(){
  const providers=await Provider.find({businessName:ALADDIN_PROVIDER_RE});if(providers.length!==1){console.warn(`Real Pilot Data: expected exactly one Aladdin provider, found ${providers.length}`);return {applied:false,reason:providers.length?"ambiguous_provider":"provider_not_found",providerCount:providers.length};}
  const provider=providers[0];let providerUpdated=false;if(provider.status!=="approved"){provider.status="approved";providerUpdated=true;}
- const settings=provider.settings||{};if(Number(settings.defaultCapacity)!==10||String(settings.defaultDepartureTime||"")!=="17:00"){provider.settings={...settings,configured:Boolean(settings.configured),defaultCapacity:10,defaultDepartureTime:"17:00",departureLocation:settings.departureLocation};providerUpdated=true;}if(providerUpdated)await provider.save();
+ if(Number(provider.settings?.defaultCapacity)!==10){provider.set("settings.defaultCapacity",10);providerUpdated=true;}
+ if(String(provider.settings?.defaultDepartureTime||"")!=="17:00"){provider.set("settings.defaultDepartureTime","17:00");providerUpdated=true;}
+ if(providerUpdated)await provider.save();
  const existing=await Trip.find({providerId:provider._id});const created=[];const present=[];
  for(const desired of ALADDIN_PILOT_TRIPS){const matches=existing.filter(t=>String(t.vesselName||"").trim().toLowerCase()===desired.vesselName.toLowerCase()||String(t.titleEn||"").trim().toLowerCase()===desired.titleEn.toLowerCase());if(matches.length>1){console.warn(`Real Pilot Data: duplicate Aladdin candidate for ${desired.vesselName}; skipped`);continue;}if(matches.length===1){present.push(String(matches[0]._id));continue;}const trip=await Trip.create({...desired,providerId:provider._id});created.push(String(trip._id));console.log(`Real Pilot Data: created Aladdin trip ${desired.vesselName} ${trip._id}`);}
  return {applied:providerUpdated||created.length>0,created,present,providerId:String(provider._id),defaultCapacity:10,defaultDepartureTime:"17:00"};
