@@ -1,5 +1,6 @@
 import express from "express";
 import PushSubscription from "../models/PushSubscription.js";
+import NativePushToken from "../models/NativePushToken.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getVapidPublicKey, isAllowedPushEndpoint, sendPushToUser } from "../services/push.js";
 
@@ -29,6 +30,29 @@ router.post("/unsubscribe",requireAuth,async(req,res,next)=>{
   try{
     const endpoint=String(req.body?.endpoint||"");
     if(endpoint)await PushSubscription.deleteOne({endpoint,userId:req.user._id});
+    res.json({ok:true});
+  }catch(e){next(e);}
+});
+
+router.post("/native-subscribe",requireAuth,async(req,res,next)=>{
+  try{
+    const token=String(req.body?.token||"").trim();
+    const platform=String(req.body?.platform||"").trim().toLowerCase();
+    if(!token||token.length<16||token.length>4096)return res.status(400).json({error:"Invalid native push token"});
+    if(!["android","ios"].includes(platform))return res.status(400).json({error:"Invalid native push platform"});
+    const row=await NativePushToken.findOneAndUpdate(
+      {token},
+      {$set:{userId:req.user._id,token,platform,appId:"com.aqabaseago.app",lastUsedAt:new Date()}},
+      {upsert:true,new:true,setDefaultsOnInsert:true}
+    );
+    res.json({ok:true,id:row._id,platform:row.platform});
+  }catch(e){next(e);}
+});
+
+router.post("/native-unsubscribe",requireAuth,async(req,res,next)=>{
+  try{
+    const token=String(req.body?.token||"").trim();
+    if(token)await NativePushToken.deleteOne({token,userId:req.user._id});
     res.json({ok:true});
   }catch(e){next(e);}
 });
