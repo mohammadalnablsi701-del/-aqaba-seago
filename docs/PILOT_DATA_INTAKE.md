@@ -23,6 +23,42 @@ For each provider collect:
 - Google Maps URL
 - Provider status for pilot: approved
 
+## Public draft provider details — confirm before data entry
+
+These are public-source drafts only. Do not treat them as signed/confirmed provider onboarding data.
+
+### Fun N Sun
+
+- Draft display name: Fun N Sun
+- Public office address: Aqaba office, 2nd area, Islamic International Arab Bank Building, 3rd floor, Aqaba, Jordan
+- Public mobile: +962 79 577 3111
+- Public WhatsApp: +962 79 882 8802
+- Public email: info@fun-n-sun.com
+- Publicly listed services include tourist boat cruises, snorkeling, fishing, night trips, diving and water sports.
+- Pilot provider login email: TO CONFIRM
+- Pilot provider login mobile: TO CONFIRM
+- Meeting/boarding point: TO CONFIRM WITH PROVIDER (office address is not assumed to be boarding point)
+
+### Sea Breeze / Aquamarina
+
+- Draft display name: Aquamarina & Sea Breeze Company
+- Public address draft: Prs. Haya Cir., Aqaba, Jordan
+- Public mobile draft: +962 79 088 7163
+- Public categories include boat tours/cruises, diving and water sports.
+- Pilot provider login email: TO CONFIRM
+- Pilot provider login mobile: TO CONFIRM
+- Meeting/boarding point: TO CONFIRM WITH PROVIDER
+
+### Aladdin Yachts & Marine Tours / Alaa Aldeen
+
+- Draft display name: Aladdin Yachts & Marine Tours
+- Public address draft: Ayla Marina – Yacht Terminal, Aqaba 77110, Jordan
+- Public mobile draft: +962 78 677 2167
+- Public category: boat tour agency / yacht and marine tours.
+- Pilot provider login email: TO CONFIRM
+- Pilot provider login mobile: TO CONFIRM
+- Meeting/boarding point: TO CONFIRM WITH PROVIDER
+
 ## Trip data required
 
 Create one row per sellable trip/product.
