@@ -21,8 +21,8 @@ const uri=process.env.SEAGO_TEST_MONGODB_URI;
 test('pilot customer -> payment -> ticket -> provider scan E2E',{skip:!uri},async t=>{
   assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'E2E is restricted to a local disposable MongoDB replica set');
   const saved={jwt:process.env.JWT_SECRET,webhook:process.env.MOCK_PAYMENT_WEBHOOK_SECRET};
-  process.env.JWT_SECRET='pilot-e2e-jwt-secret-at-least-32-characters';
-  process.env.MOCK_PAYMENT_WEBHOOK_SECRET='pilot-e2e-webhook-secret';
+  process.env.JWT_SECRET=crypto.randomBytes(48).toString('base64url');
+  process.env.MOCK_PAYMENT_WEBHOOK_SECRET=crypto.randomBytes(48).toString('base64url');
   await mongoose.connect(uri,{dbName:'seago_pilot_e2e_'+crypto.randomUUID().replaceAll('-','')});
   t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();if(saved.jwt===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=saved.jwt;if(saved.webhook===undefined)delete process.env.MOCK_PAYMENT_WEBHOOK_SECRET;else process.env.MOCK_PAYMENT_WEBHOOK_SECRET=saved.webhook;});
   await Promise.all([User,Provider,Trip,Departure,Hold,Payment,PaymentEvent,Booking,ProviderMember].map(m=>m.init()));
