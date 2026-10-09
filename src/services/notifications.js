@@ -5,8 +5,9 @@ import Payment from "../models/Payment.js";
 import NotificationLog from "../models/NotificationLog.js";
 import InAppNotification from "../models/InAppNotification.js";
 import { sendPushToUser } from "./push.js";
+import { signTicketToken } from "./tickets.js";
 
-const APP_URL = String(process.env.FRONTEND_BASE_URL || "https://mohammadalnablsi701-del.github.io/-aqaba-seago").replace(/\/$/,"");
+const API_URL = String(process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://aqaba-seago-api.onrender.com").replace(/\/$/,"");
 const FROM = process.env.EMAIL_FROM || "Aqaba SeaGo <onboarding@resend.dev>";
 
 function fmtDate(value){
@@ -114,6 +115,8 @@ export async function sendBookingConfirmation(bookingId){
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
   const payment=await Payment.findOne({bookingId:b._id}).select("_id");
+  const ticketToken=signTicketToken(b);
+  const ticketPdfUrl=`${API_URL}/api/tickets/pdf?token=${encodeURIComponent(ticketToken)}`;
 
   await createInApp({key:`booking-confirmed:customer:${b._id}`,userId:b.customerId?._id,type:"booking_confirmed",title:"Booking confirmed",body:`Your ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} booking SG-${ref} is confirmed.`,bookingId:b._id,data:{screen:"tickets"}});
   if(owner?._id){
@@ -124,7 +127,7 @@ export async function sendBookingConfirmation(bookingId){
     key:`booking-confirmed:customer:${b._id}`,
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
     subject:`SeaGo booking confirmed · SG-${ref}`,
-    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?open=tickets" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#ffffff!important;text-decoration:none;border-radius:10px;font-weight:700">View your ticket</a></p>`)
+    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${escapeHtml(ticketPdfUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#ffffff!important;text-decoration:none;border-radius:10px;font-weight:700">View ticket PDF</a></p><p style="font-size:12px;color:#7b8c99">This secure link opens your ticket directly without requiring sign-in. Keep it private.</p>`)
   }).catch(err=>console.error("Customer confirmation email failed",err));
 
   if(owner?.email){
