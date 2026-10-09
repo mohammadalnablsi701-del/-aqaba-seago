@@ -124,7 +124,7 @@ export async function sendBookingConfirmation(bookingId){
     key:`booking-confirmed:customer:${b._id}`,
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
     subject:`SeaGo booking confirmed · SG-${ref}`,
-    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?payment=success&amp;paymentId=${encodeURIComponent(payment?._id||"")}" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#fff;text-decoration:none;border-radius:10px">View your ticket</a></p>`)
+    html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${APP_URL}/?open=tickets" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#ffffff!important;text-decoration:none;border-radius:10px;font-weight:700">View your ticket</a></p>`)
   }).catch(err=>console.error("Customer confirmation email failed",err));
 
   if(owner?.email){
