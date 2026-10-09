@@ -1,5 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
+import { diagnosticReleaseReadOnlyStartup } from "./routes/productionDiagnostics.js";
 import { connectDb } from "./config/db.js";
 import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
@@ -39,6 +40,11 @@ if(isProduction){
   }
 }
 
+// Temporary diagnostic release: no startup/index/maintenance writes, even before
+// the diagnostic environment variables are configured or after they are disabled.
+if (diagnosticReleaseReadOnlyStartup) {
+  await mongoose.connect(process.env.MONGODB_URI,{autoIndex:false,autoCreate:false});
+} else {
 await connectDb(process.env.MONGODB_URI);
 await applyRealPilotData();
 await applyCommission20Migration();
@@ -51,6 +57,8 @@ setInterval(()=>{
 setInterval(()=>{
   processUpcomingReminders().catch(err=>console.error("Reminder email job failed",err));
 },15*60000).unref();
+
+}
 
 const app=createApp();
 
