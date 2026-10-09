@@ -13,7 +13,7 @@
     "mobile:sync": "npm run build && cap sync",
     "mobile:add:android": "cap add android",
     "mobile:add:ios": "cap add ios",
-    "mobile:assets": "capacitor-assets generate --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'",
+    "mobile:assets": "bash scripts/generate-native-assets.sh all",
     "mobile:open:android": "cap open android",
     "mobile:open:ios": "cap open ios"
   },
@@ -32,7 +32,6 @@
     "qrcode.react": "^4.2.0"
   },
   "devDependencies": {
-    "@capacitor/assets": "3.0.5",
-    "@capacitor/cli": "8.5.2"
+    "@capacitor/cli": "8.4.3"
   }
 }
