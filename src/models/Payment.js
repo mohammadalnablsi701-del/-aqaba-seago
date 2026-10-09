@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema({
-  bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", index: true, sparse: true },
+  bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", index: true, unique: true, sparse: true },
   holdId: { type: mongoose.Schema.Types.ObjectId, ref: "CheckoutHold", required: true, unique: true, index: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
   provider: { type: String, required: true, default: "mock", index: true },
