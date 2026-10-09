@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      STAGING_API: https://aqaba-seago-api-staging-staging.up.railway.app
+      STAGING_API: https://aqaba-seago-api-staging.onrender.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4
