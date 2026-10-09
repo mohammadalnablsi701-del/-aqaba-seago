@@ -1,5 +1,4 @@
 import express from "express";
-import { createProductionDiagnosticsRouter } from "./routes/productionDiagnostics.js";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -47,7 +46,6 @@ export function createApp() {
   app.use(rejectUnsafeRequestKeys);
   const apiLimiter=rateLimit({windowMs:15*60*1000,limit:Number(process.env.API_RATE_LIMIT||300),standardHeaders:"draft-8",legacyHeaders:false,message:{error:"Too many requests. Please try again shortly."}});
   const authLimiter=rateLimit({windowMs:15*60*1000,limit:Number(process.env.AUTH_RATE_LIMIT||25),standardHeaders:"draft-8",legacyHeaders:false,message:{error:"Too many sign-in attempts. Please try again later."}});
-  app.use("/internal/diagnostics",createProductionDiagnosticsRouter());
   app.use("/api",apiLimiter);
   app.use("/api/auth",authLimiter);
   app.get("/health", (_req, res) => res.json({ok:true,service:"aqaba-seago-api",version:"0.3.1",commit:process.env.RAILWAY_GIT_COMMIT_SHA||process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null}));
