@@ -7,6 +7,7 @@ import { logRequestError, publicErrorResponse } from "./utils/errorLogging.js";
 import authRoutes from "./routes/auth.js";
 import providerRoutes from "./routes/providers.js";
 import adminRoutes from "./routes/admin.js";
+import adminCommissionRoutes from "./routes/adminCommission.js";
 import providerAccessAdminRoutes from "./routes/providerAccessAdmin.js";
 import operationsRoutes from "./routes/operations.js";
 import tripRoutes from "./routes/trips.js";
@@ -20,7 +21,6 @@ import mediaRoutes from "./routes/media.js";
 import notificationRoutes from "./routes/notifications.js";
 import pushRoutes from "./routes/push.js";
 import supportRoutes from "./routes/support.js";
-import { createProductionDiagnosticsRouter } from "./routes/productionDiagnostics.js";
 
 function buildCorsOptions() {
   const allowed = String(process.env.ALLOWED_ORIGINS || "").split(",").map(v => v.trim()).filter(Boolean);
@@ -50,11 +50,11 @@ export function createApp() {
   app.use("/api",apiLimiter);
   app.use("/api/auth",authLimiter);
   app.get("/health", (_req, res) => res.json({ok:true,service:"aqaba-seago-api",version:"0.3.1",commit:process.env.RAILWAY_GIT_COMMIT_SHA||process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null}));
-  app.use("/internal/diagnostics", createProductionDiagnosticsRouter());
   app.use("/api/auth", authRoutes);
   app.use("/api/providers", providerRoutes);
   app.use("/api/admin/operations", operationsRoutes);
   app.use("/api/admin", providerAccessAdminRoutes);
+  app.use("/api/admin", adminCommissionRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/trips", tripRoutes);
   app.use("/api/departures", departureRoutes);
