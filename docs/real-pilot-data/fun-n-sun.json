@@ -1,0 +1,85 @@
+{
+  "providerName": "Fun N Sun",
+  "stage": "real_pilot",
+  "sourceStatus": "project_history_approved_and_applied",
+  "vesselName": "White Prince",
+  "trips": [
+    {
+      "titleEn": "White Prince Swimming Cruise",
+      "titleAr": "رحلة وايت برنس للسباحة",
+      "category": "yacht",
+      "durationMinutes": 120,
+      "vesselName": "White Prince",
+      "departureLocation": {
+        "name": "Flagpole Area",
+        "address": "Aqaba, Jordan"
+      },
+      "pricing": {
+        "currency": "JOD",
+        "adultPrice": 15,
+        "childPrice": 10,
+        "buffetEnabled": true,
+        "buffetAdultPrice": 20,
+        "buffetChildPrice": 15,
+        "buffetDescription": "Open buffet package",
+        "commissionType": "fixed_per_person",
+        "adultCommission": 3,
+        "childCommission": 2,
+        "buffetAdultCommission": 5,
+        "buffetChildCommission": 3
+      }
+    },
+    {
+      "titleEn": "White Prince Evening Cruise",
+      "titleAr": "رحلة وايت برنس المسائية",
+      "category": "sunset",
+      "durationMinutes": 120,
+      "vesselName": "White Prince",
+      "departureLocation": {
+        "name": "Ayla Marina",
+        "address": "Aqaba, Jordan"
+      },
+      "pricing": {
+        "currency": "JOD",
+        "adultPrice": 20,
+        "commissionType": "fixed_per_person",
+        "commissionValue": 5
+      }
+    },
+    {
+      "titleEn": "Coral Whisper + White Prince Experience",
+      "titleAr": "تجربة كورال ويسبر ووايت برنس",
+      "category": "group_boat",
+      "durationMinutes": 180,
+      "vesselName": "White Prince",
+      "departureLocation": {
+        "name": "Flagpole Area",
+        "address": "Aqaba, Jordan"
+      },
+      "pricing": {
+        "currency": "JOD",
+        "adultPrice": 25,
+        "commissionType": "fixed_per_person",
+        "commissionValue": 5
+      }
+    }
+  ],
+  "projectEvidence": [
+    {
+      "commit": "674658868a670189cccf3e8a3dcdd5b9cc2a6e50",
+      "facts": "Three approved Fun N Sun programs were seeded idempotently with the listed base adult prices, commissions and departure locations."
+    },
+    {
+      "commit": "6e108ec3886eee6c8598030cfb80c695bf457b68",
+      "facts": "White Prince Swimming Cruise adult/child buffet and non-buffet prices plus per-ticket commissions were applied."
+    },
+    {
+      "commit": "26f24dd54423017b6c518979a06932b6d07b5d03",
+      "facts": "The approved vesselName White Prince was backfilled safely across exactly three Fun N Sun pilot trips."
+    }
+  ],
+  "notes": [
+    "This file records already-approved/applied project values and does not perform any database mutation.",
+    "Child/package pricing is documented only where the project history contains an explicit approved value; unspecified fields are intentionally not invented."
+  ]
+}
