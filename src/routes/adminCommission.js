@@ -1,6 +1,8 @@
 import express from "express";
 import Trip from "../models/Trip.js";
+import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { commissionMatchesApprovedPlan, isFunNSunProviderName, resolveFunNSunCommissionPlan } from "../services/pilotCommissionRules.js";
 
 const router=express.Router();
 const TYPES=new Set(["percentage","fixed_per_person","fixed_per_booking"]);
@@ -52,6 +54,14 @@ router.patch("/trips/:tripId/commission",async(req,res,next)=>{
     const trip=await Trip.findById(req.params.tripId);
     if(!trip)return res.status(404).json({error:"Trip not found"});
     const update=buildCommissionUpdate(trip.pricing||{},req.body||{});
+    const provider=await Provider.findById(trip.providerId).select("businessName");
+    if(provider&&isFunNSunProviderName(provider.businessName)){
+      const approvedPlan=resolveFunNSunCommissionPlan(trip.titleEn);
+      if(!approvedPlan)fail("This Fun N Sun trip is not in the approved pilot commission plan.",409);
+      if(!commissionMatchesApprovedPlan(update,approvedPlan)){
+        fail("Fun N Sun pilot commission is locked to the approved fixed-per-person values.",409);
+      }
+    }
     for(const [key,value] of Object.entries(update))trip.set(`pricing.${key}`,value);
     await trip.save();
     res.json(trip);
