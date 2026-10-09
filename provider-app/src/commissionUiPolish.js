@@ -21,11 +21,14 @@ function polish(){
     if(!card){
       card=document.createElement("div");
       card.className="provider-commission-readonly";
+      card.innerHTML='<div><span>SeaGo commission</span><strong></strong></div><small>Managed by SeaGo admin · Read only</small>';
       const grid=form.querySelector(".form-grid");
       if(grid)grid.insertAdjacentElement("afterend",card);else form.prepend(card);
     }
     const rate=commissionForForm(form);
-    card.innerHTML=`<div><span>SeaGo commission</span><strong>${rate}% of total booking</strong></div><small>Managed by SeaGo admin · Read only</small>`;
+    const strong=card.querySelector("strong");
+    const next=`${rate}% of total booking`;
+    if(strong&&strong.textContent!==next)strong.textContent=next;
   });
 }
 
@@ -45,8 +48,13 @@ export function enableCommissionUiPolish(){
     }catch{}
     return response;
   };
-  const observer=new MutationObserver(polish);
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  document.addEventListener("input",e=>{if(e.target?.closest?.(".trip-form-simple"))polish()});
+  let raf=0;
+  const schedulePolish=()=>{
+    cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(polish);
+  };
+  const observer=new MutationObserver(schedulePolish);
+  observer.observe(document.getElementById("root")||document.body,{childList:true,subtree:true});
+  document.addEventListener("input",e=>{if(e.target?.closest?.(".trip-form-simple"))schedulePolish()});
   polish();
 }
