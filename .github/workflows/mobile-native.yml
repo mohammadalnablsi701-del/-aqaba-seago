@@ -6,6 +6,11 @@ on:
     paths:
       - "customer-app/**"
       - ".github/workflows/mobile-native.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/**"
+      - ".github/workflows/mobile-native.yml"
   workflow_dispatch:
     inputs:
       build_ios:
@@ -94,7 +99,7 @@ jobs:
 
   ios-simulator:
     name: iOS simulator build
-    if: ${{ github.event_name == 'push' || inputs.build_ios }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.build_ios }}
     runs-on: macos-26
     timeout-minutes: 35
     steps:
