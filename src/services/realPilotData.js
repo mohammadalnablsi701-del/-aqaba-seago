@@ -10,7 +10,7 @@ const LEGACY_SEA_BREEZE_VESSEL="بريز الخشبي";
 export const FUN_N_SUN_VESSEL="White Prince";
 
 export const SEA_BREEZE_PROVIDER_DEFAULTS={defaultCapacity:10,defaultDepartureTime:"17:00",departureLocation:{name:"Ayla Marina",address:"Aqaba, Jordan",googleMapsUrl:"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"}};
-export const SEA_BREEZE_PILOT_TRIP={titleAr:"رحلة غروب الشمس",titleEn:"Sunset Cruise",vesselName:TARGET_VESSEL,category:"sunset",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"percentage",commissionValue:20},departureLocation:{...SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation},active:true};
+export const SEA_BREEZE_PILOT_TRIP={titleAr:"رحلة غروب الشمس",titleEn:"Sunset Cruise",vesselName:TARGET_VESSEL,category:"sunset",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"fixed_per_person",commissionValue:3,adultCommission:3,childCommission:2,buffetAdultCommission:3,buffetChildCommission:2},departureLocation:{...SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation},active:true};
 
 export function getAladdinActivationGate(){
  return {allowed:false,reason:"operator_confirmation_required"};
