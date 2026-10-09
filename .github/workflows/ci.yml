@@ -83,6 +83,7 @@ jobs:
                 'test/admin-operations.integration.test.js',
                 'test/provider-access-admin.integration.test.js',
                 'test/pilot-financial-stage2b.integration.test.js',
+                'test/pilot-financial-stage2b-revision-restore.integration.test.js',
                 'test/pilot-booking-ticket.e2e.test.js',
                 'test/password-recovery.integration.test.js',
                 'test/database-backup-restore.integration.test.js'
