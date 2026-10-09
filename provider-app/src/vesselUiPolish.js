@@ -18,43 +18,6 @@ function ensureLine(parent,className,text){
   if(line.textContent!==next)line.textContent=next;
 }
 
-let activeForm=null;
-let vesselDraft="";
-function syncTripForm(){
-  const form=document.querySelector(".trip-form-simple form");
-  if(!form){activeForm=null;vesselDraft="";return;}
-  const tripLabel=[...form.querySelectorAll("label")].find(label=>String(label.childNodes?.[0]?.textContent||label.textContent||"").trim().startsWith("Trip name"));
-  if(!tripLabel)return;
-  const titleInput=tripLabel.querySelector("input");
-  if(form!==activeForm){
-    activeForm=form;
-    vesselDraft=vesselForText(titleInput?.value)||"";
-  }
-  let label=form.querySelector("[data-seago-vessel-field]");
-  if(!label){
-    label=document.createElement("label");
-    label.dataset.seagoVesselField="1";
-    label.appendChild(document.createTextNode("Vessel / boat name"));
-    const input=document.createElement("input");
-    input.dataset.seagoVesselInput="1";
-    input.maxLength=120;
-    input.value=vesselDraft;
-    input.addEventListener("input",()=>{vesselDraft=input.value;input.dataset.dirty="1";});
-    label.appendChild(input);
-    const help=document.createElement("small");
-    help.className="field-help";
-    help.textContent="Shown to customers on trip details, bookings and tickets.";
-    label.appendChild(help);
-    tripLabel.after(label);
-  }else{
-    const input=label.querySelector("[data-seago-vessel-input]");
-    if(input&&!input.dataset.dirty&&!input.value){
-      const cached=vesselForText(titleInput?.value);
-      if(cached){input.value=cached;vesselDraft=cached;}
-    }
-  }
-}
-
 function decorateTripCards(){
   document.querySelectorAll(".trip-card").forEach(card=>{
     const h3=card.querySelector("h3");
@@ -97,13 +60,7 @@ function decorateDetails(){
     ensureLine(h2?.parentElement,"seago-vessel-provider-line",vessel);
   });
 }
-function editTripFormOpen(){
-  const form=document.querySelector(".trip-form-simple");
-  return String(form?.querySelector(".manage-form-head small")?.textContent||"").trim()==="EDIT TRIP";
-}
 function polish(){
-  if(editTripFormOpen())return;
-  syncTripForm();
   decorateTripCards();
   decorateBookings();
   decorateManifest();
