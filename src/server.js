@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { diagnosticReleaseReadOnlyStartup } from "./routes/productionDiagnostics.js";
+import { runDiagnosticSelfCapture } from "./diagnostics/selfCapture.js";
 import { connectDb } from "./config/db.js";
 import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
@@ -75,6 +76,7 @@ app.get("/ready",(_req,res)=>{
 
 const server=app.listen(port,()=>{
   console.log(`Aqaba SeaGo API listening on port ${port}`);
+  runDiagnosticSelfCapture({port}).catch(err=>console.error(`Diagnostic self-capture unavailable: ${err.message}`));
 });
 
 let shuttingDown=false;
