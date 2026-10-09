@@ -17,6 +17,7 @@ export function validateGithubRepairClaims(payload={}){
   if(payload.repository!==REPOSITORY)throw new Error("Invalid repository claim");
   if(String(payload.repository_id||"")!==REPOSITORY_ID)throw new Error("Invalid repository id claim");
   if(String(payload.repository_owner_id||"")!==OWNER_ID)throw new Error("Invalid repository owner id claim");
+  if(String(payload.actor_id||"")!==OWNER_ID)throw new Error("Invalid actor claim");
   if(payload.ref!==RUN_REF)throw new Error("Invalid ref claim");
   if(payload.event_name!=="push")throw new Error("Invalid event claim");
   if(![LEGACY_SUB,IMMUTABLE_SUB].includes(String(payload.sub||"")))throw new Error("Invalid subject claim");
