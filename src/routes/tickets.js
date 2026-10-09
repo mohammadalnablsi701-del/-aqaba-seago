@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
 import { verifyTicketToken } from "../services/tickets.js";
+import { renderTicketPdf } from "../services/ticketPdf.js";
 
 const router = express.Router();
 
@@ -20,12 +21,35 @@ function escapeHtml(value) {
 async function loadTicket(token) {
   const payload = verifyTicketToken(token);
   const booking = await Booking.findById(payload.bookingId)
+    .populate({ path: "customerId", select: "name" })
     .populate({ path: "tripId", select: "titleAr titleEn vesselName category durationMinutes departureLocation" })
     .populate({ path: "providerId", select: "businessName ownerUserId" })
     .populate({ path: "departureId", select: "startsAt status" });
   if (!booking) throw Object.assign(new Error("Ticket not found"), { statusCode: 404 });
   return { payload, booking };
 }
+
+router.get("/pdf", async (req, res, next) => {
+  try {
+    const token = String(req.query.token || "").trim();
+    const { booking } = await loadTicket(token);
+    if (!["confirmed", "cancelled", "refunded"].includes(booking.status)) {
+      return res.status(404).json({ error: "Ticket not available" });
+    }
+
+    const pdf = await renderTicketPdf({ booking, token });
+    const ref = "SG-" + String(booking._id).slice(-8).toUpperCase();
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="SeaGo-${ref}-ticket.pdf"`,
+      "Cache-Control": "private, no-store, max-age=0",
+      "Pragma": "no-cache",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff"
+    });
+    res.status(200).send(pdf);
+  } catch (err) { next(err); }
+});
 
 router.get("/validate", async (req, res, next) => {
   try {
