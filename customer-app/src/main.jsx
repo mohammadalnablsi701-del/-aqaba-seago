@@ -9,6 +9,7 @@ import { enableVesselUiPolish } from "./vesselUiPolish.js";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 
 const params=new URLSearchParams(window.location.search);
+if(params.get("open")==="tickets") sessionStorage.setItem("seago_active_screen","tickets");
 const recovery=Boolean(params.get("resetToken")||params.get("forgotPassword"));
 const nativeApp=Capacitor.isNativePlatform();
 
