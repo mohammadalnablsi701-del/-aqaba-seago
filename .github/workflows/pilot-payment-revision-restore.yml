@@ -1,0 +1,77 @@
+name: Pilot Payment Revision Restore Runner
+
+on:
+  push:
+    branches:
+      - repair/pilot-payment-revision-restore-run
+    paths:
+      - ops/pilot-payment-revision-restore-mode.txt
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read mode
+        id: mode
+        shell: bash
+        run: |
+          MODE="$(tr -d '[:space:]' < ops/pilot-payment-revision-restore-mode.txt)"
+          case "$MODE" in
+            preview_production|apply_production|verify_staging_disabled|verify_production_disabled) ;;
+            *) echo "Unsupported mode: $MODE" >&2; exit 1 ;;
+          esac
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+      - name: Obtain GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set +x
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=aqaba-seago-payment-revision-restore")"
+          TOKEN="$(node -e 'const d=JSON.parse(process.argv[1]); if(!d.value) process.exit(2); process.stdout.write(d.value)' "$RESPONSE")"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+      - name: Run Production preview or apply
+        if: ${{ steps.mode.outputs.mode == 'preview_production' || steps.mode.outputs.mode == 'apply_production' }}
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set +x
+          case "$MODE" in
+            preview_production) ACTION="preview" ;;
+            apply_production) ACTION="apply" ;;
+          esac
+          BODY="{\"planId\":\"2026-10-09-stage2b-payment-revision-restore-v1\",\"mode\":\"${ACTION}\"}"
+          CODE="$(curl --silent --show-error -o payment-revision-response.json -w '%{http_code}' \
+            -X POST "https://aqaba-seago-api.onrender.com/internal/pilot-payment-revision-restore" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data "$BODY")"
+          cat payment-revision-response.json
+          test "$CODE" = "200"
+      - name: Verify endpoint disabled
+        if: ${{ startsWith(steps.mode.outputs.mode, 'verify_') }}
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set +x
+          case "$MODE" in
+            verify_staging_disabled) API_URL="https://aqaba-seago-api-staging.onrender.com" ;;
+            verify_production_disabled) API_URL="https://aqaba-seago-api.onrender.com" ;;
+          esac
+          CODE="$(curl --silent --show-error -o payment-revision-disabled.json -w '%{http_code}' \
+            -X POST "${API_URL}/internal/pilot-payment-revision-restore" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"planId":"2026-10-09-stage2b-payment-revision-restore-v1","mode":"preview"}')"
+          cat payment-revision-disabled.json
+          test "$CODE" = "404"
