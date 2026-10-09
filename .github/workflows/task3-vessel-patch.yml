@@ -1,0 +1,90 @@
+name: Task 3 vessel patch
+
+on:
+  push:
+    branches:
+      - fix/provider-vessel-stabilization
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Prepare Task 3 vessel stabilization patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/provider-vessel-stabilization
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply focused vessel state patch
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          app_path = Path('provider-app/src/App.jsx')
+          app = app_path.read_text()
+          api_import = 'import{login,registerProvider,me,createProviderProfile,updateProviderSettings,trips,departures,bookings,checkIn,inspectTicket,createTrip,updateTrip,createDeparture,createDeparturesBulk,updateDeparture,bookingDetail,manualCheckInBooking,departureManifest,uploadTripImage,deleteTripImage,listNotifications,markNotificationRead,markAllNotificationsRead,enablePushNotifications,pushNotificationStatus,sendTestPush,providerTeam,createProviderTeamMember,updateProviderTeamMember,providerAuditLog,googleAuthConfig,googleSignIn}from"./api.js";\n'
+          model_import = 'import{buildTripFormState,serializeTripForm}from"./tripFormModel.js";\n'
+          if model_import not in app:
+              assert api_import in app
+              app = app.replace(api_import, api_import + model_import, 1)
+
+          form_pattern = re.compile(r'const\[form,setForm\]=useState\(\(\)=>\(\{titleEn:trip\?\.titleEn.*?active:trip\?trip\.active!==false:true\}\)\);')
+          app, count = form_pattern.subn('const[form,setForm]=useState(()=>buildTripFormState({trip,duplicateFrom,defaults}));', app, count=1)
+          assert count == 1, f'form state replacement count={count}'
+
+          save_pattern = re.compile(r'async function save\(e\)\{e\.preventDefault\(\);setBusy\(true\);setError\(""\);const data=\{titleEn:form\.titleEn.*?,active:form\.active\};try\{let created=null;')
+          app, count = save_pattern.subn('async function save(e){e.preventDefault();setBusy(true);setError("");const data=serializeTripForm(form);try{let created=null;', app, count=1)
+          assert count == 1, f'payload replacement count={count}'
+
+          trip_name = '<label>Trip name<input value={form.titleEn} onChange={e=>setForm({...form,titleEn:e.target.value})} placeholder="Example: Red Sea Snorkeling" required/></label>\n'
+          vessel_field = '<label className="vessel-field">Vessel / boat name<input maxLength="120" value={form.vesselName} onChange={e=>setForm({...form,vesselName:e.target.value})} placeholder="Example: Sea Breeze"/><small className="field-help">Shown to customers on trip details, bookings and tickets.</small></label>\n'
+          assert trip_name in app
+          app = app.replace(trip_name, trip_name + vessel_field, 1)
+          app_path.write_text(app)
+
+          Path('provider-app/src/tripFormModel.js').write_text('''export function buildTripFormState({trip=null,duplicateFrom=null,defaults={}}={}){\n  const source=trip||duplicateFrom;\n  return{\n    titleEn:trip?.titleEn||(duplicateFrom?(String(duplicateFrom.titleEn||"")+" Copy"):""),\n    titleAr:trip?.titleAr||(duplicateFrom?String(duplicateFrom.titleAr||duplicateFrom.titleEn||""):""),\n    vesselName:String(source?.vesselName||""),\n    category:source?.category||defaults.category||"group_boat",\n    durationMinutes:source?.durationMinutes||defaults.durationMinutes||90,\n    adultPrice:source?.pricing?.adultPrice??source?.pricing?.pricePerPerson??defaults.adultPrice??15,\n    childPrice:source?.pricing?.childPrice??source?.pricing?.pricePerPerson??defaults.childPrice??10,\n    buffetEnabled:source?Boolean(source?.pricing?.buffetEnabled):Boolean(defaults.buffetEnabled),\n    buffetAdultPrice:source?.pricing?.buffetAdultPrice??source?.pricing?.adultPrice??source?.pricing?.pricePerPerson??defaults.buffetAdultPrice??20,\n    buffetChildPrice:source?.pricing?.buffetChildPrice??source?.pricing?.childPrice??defaults.buffetChildPrice??12,\n    buffetDescription:source?.pricing?.buffetDescription||defaults.buffetDescription||"",\n    images:Array.isArray(source?.images)?source.images:[],\n    imageUrl:"",\n    locationName:source?.departureLocation?.name||defaults.locationName||"",\n    address:source?.departureLocation?.address||defaults.address||"",\n    googleMapsUrl:source?.departureLocation?.googleMapsUrl||defaults.googleMapsUrl||"",\n    active:trip?trip.active!==false:true\n  };\n}\n\nexport function serializeTripForm(form){\n  return{\n    titleEn:form.titleEn,\n    titleAr:form.titleAr||form.titleEn,\n    vesselName:String(form.vesselName||"").trim(),\n    category:form.category,\n    durationMinutes:Number(form.durationMinutes),\n    pricing:{\n      currency:"JOD",\n      pricePerPerson:Number(form.adultPrice),\n      adultPrice:Number(form.adultPrice),\n      childPrice:Number(form.childPrice),\n      buffetEnabled:Boolean(form.buffetEnabled),\n      buffetAdultPrice:Number(form.buffetAdultPrice),\n      buffetChildPrice:Number(form.buffetChildPrice),\n      buffetDescription:form.buffetDescription\n    },\n    images:form.images,\n    departureLocation:{name:form.locationName,address:form.address,googleMapsUrl:form.googleMapsUrl},\n    active:form.active\n  };\n}\n''')
+
+          api_path = Path('provider-app/src/api.js')
+          api = api_path.read_text()
+          api, count = re.subn(r'function withVesselFromForm\(data\)\{.*?\}\n\nasync function req', 'async function req', api, count=1, flags=re.S)
+          assert count == 1, f'api DOM helper removal count={count}'
+          api = api.replace('JSON.stringify(withVesselFromForm(data))','JSON.stringify(data)')
+          assert 'withVesselFromForm' not in api
+          assert 'data-seago-vessel-input' not in api
+          api_path.write_text(api)
+
+          polish_path = Path('provider-app/src/vesselUiPolish.js')
+          polish = polish_path.read_text()
+          polish, count = re.subn(r'let activeForm=null;.*?function decorateTripCards', 'function decorateTripCards', polish, count=1, flags=re.S)
+          assert count == 1, f'form injection removal count={count}'
+          polish, count = re.subn(r'function editTripFormOpen\(\)\{.*?\}\nfunction polish\(\)\{\n  if\(editTripFormOpen\(\)\)return;\n  syncTripForm\(\);', 'function polish(){', polish, count=1, flags=re.S)
+          assert count == 1, f'polish cleanup count={count}'
+          assert 'data-seago-vessel-input' not in polish
+          assert 'data-seago-vessel-field' not in polish
+          assert 'syncTripForm' not in polish
+          polish_path.write_text(polish)
+
+          css_path = Path('provider-app/src/vessel-polish.css')
+          css = css_path.read_text().replace('.trip-form-simple [data-seago-vessel-field]{display:flex;flex-direction:column;gap:6px}.trip-form-simple [data-seago-vessel-input]{width:100%}', '.trip-form-simple .vessel-field{display:flex;flex-direction:column;gap:6px}.trip-form-simple .vessel-field input{width:100%}')
+          css_path.write_text(css)
+
+          Path('test/provider-vessel-state.test.js').write_text('''import test from "node:test";\nimport assert from "node:assert/strict";\nimport{buildTripFormState,serializeTripForm}from"../provider-app/src/tripFormModel.js";\n\nconst baseTrip={\n  _id:"trip-1",titleEn:"Sunset Cruise",titleAr:"رحلة الغروب",vesselName:"Sea Breeze",category:"sunset",durationMinutes:120,\n  pricing:{adultPrice:17,childPrice:12,buffetEnabled:false,buffetAdultPrice:17,buffetChildPrice:12,buffetDescription:""},\n  images:[{url:"https://example.test/trip.jpg"}],departureLocation:{name:"Ayla Marina",address:"Aqaba",googleMapsUrl:"https://maps.example.test"},active:true\n};\n\ntest("create serializes vesselName from form state",()=>{\n  const form=buildTripFormState();\n  form.titleEn="New Trip";form.titleAr="New Trip";form.vesselName="  Aqaba One  ";\n  assert.equal(serializeTripForm(form).vesselName,"Aqaba One");\n});\n\ntest("edit initializes and preserves existing vesselName",()=>{\n  const form=buildTripFormState({trip:baseTrip});\n  assert.equal(form.vesselName,"Sea Breeze");\n  assert.equal(serializeTripForm(form).vesselName,"Sea Breeze");\n});\n\ntest("edit change serializes the updated vesselName",()=>{\n  const form=buildTripFormState({trip:baseTrip});\n  form.vesselName="Aquamarina";\n  assert.equal(serializeTripForm(form).vesselName,"Aquamarina");\n});\n\ntest("duplicate carries vesselName with copied trip data",()=>{\n  const form=buildTripFormState({duplicateFrom:baseTrip});\n  assert.equal(form.titleEn,"Sunset Cruise Copy");\n  assert.equal(form.vesselName,"Sea Breeze");\n  assert.equal(serializeTripForm(form).vesselName,"Sea Breeze");\n});\n\ntest("empty vesselName is safe",()=>{\n  const form=buildTripFormState({trip:{...baseTrip,vesselName:""}});\n  assert.equal(form.vesselName,"");\n  assert.equal(serializeTripForm(form).vesselName,"");\n});\n''')
+          PY
+      - name: Run focused behavior tests
+        run: node --test test/provider-vessel-state.test.js
+      - name: Remove temporary patch workflow and commit
+        shell: bash
+        run: |
+          git rm .github/workflows/task3-vessel-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add provider-app/src/App.jsx provider-app/src/api.js provider-app/src/vesselUiPolish.js provider-app/src/vessel-polish.css provider-app/src/tripFormModel.js test/provider-vessel-state.test.js
+          git commit -m "Stabilize provider vessel form state"
+          git push origin HEAD:fix/provider-vessel-stabilization
