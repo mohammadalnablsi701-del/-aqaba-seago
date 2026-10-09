@@ -12,17 +12,30 @@ The customer app is prepared for native Android and iOS packaging with Capacitor
 
 ## Native assets
 
-The source artwork lives in `customer-app/assets/logo.svg`. The native workflow uses `@capacitor/assets` to generate the Android and iOS icon and splash resources from that source.
+The source artwork lives in `customer-app/assets/logo.svg`. The native workflows use `@capacitor/assets` to generate Android and iOS icon and splash resources from that source.
 
-## Build pipeline
+## Android build pipeline
 
-`.github/workflows/mobile-native.yml` now verifies:
+`.github/workflows/mobile-native.yml` verifies the native project with a debug Android build and iOS simulator build.
 
-- Android debug APK
-- Android release AAB build (unsigned until the permanent Play upload key is configured)
-- iOS simulator app build without code signing
+`.github/workflows/mobile-release.yml` is the store release pipeline:
 
-Production store signing is intentionally not stored in the repository.
+- Pushes to `main` build an unsigned release AAB as a regression check.
+- Manual `workflow_dispatch` builds can produce a Play-ready signed AAB and a signed release APK.
+- The manual release accepts `versionName` and `versionCode` inputs.
+- Signed artifacts are verified before upload and include SHA-256 checksums plus release metadata.
+- The signing keystore is written only to the temporary Actions runner and deleted at the end of the job.
+
+## Android signing secrets
+
+The permanent upload key must remain outside the repository. Add these four GitHub Actions repository secrets before requesting a signed release:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+The keystore itself, passwords and Apple signing material must never be committed. Root `.gitignore` blocks common signing-key file extensions as an additional guard.
 
 ## Authentication policy
 
@@ -50,8 +63,8 @@ The deletion endpoint anonymizes/disables the login identity, removes web/native
 
 These cannot be committed before the corresponding store/provider accounts exist:
 
-- Google Play Console organization account
-- permanent Android upload keystore / Play App Signing setup
+- Google Play Console organization account / Internal Testing track
+- GitHub Actions signing secrets for the Android upload key
 - Apple Developer organization account
 - Apple distribution signing / App Store Connect access
 - Sign in with Apple capability and identifiers before enabling native Google login

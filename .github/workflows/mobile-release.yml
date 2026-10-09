@@ -7,6 +7,22 @@ on:
       - "customer-app/**"
       - ".github/workflows/mobile-release.yml"
   workflow_dispatch:
+    inputs:
+      signed:
+        description: "Build a Play-ready signed AAB/APK using repository signing secrets"
+        required: true
+        default: true
+        type: boolean
+      version_name:
+        description: "Android versionName"
+        required: true
+        default: "1.0.0"
+        type: string
+      version_code:
+        description: "Android versionCode (positive integer)"
+        required: true
+        default: "1"
+        type: string
 
 permissions:
   contents: read
@@ -34,6 +50,48 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      - name: Resolve release mode
+        id: release
+        env:
+          INPUT_SIGNED: ${{ inputs.signed }}
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          VERSION_NAME="${INPUT_VERSION_NAME:-1.0.0}"
+          VERSION_CODE="${INPUT_VERSION_CODE:-1}"
+          if ! [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "version_code must be a positive integer" >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${INPUT_SIGNED:-false}" == "true" ]]; then
+            SIGNED=true
+            MODE=signed
+          else
+            SIGNED=false
+            MODE=unsigned
+          fi
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "signed=$SIGNED" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Validate signing secrets
+        if: steps.release.outputs.signed == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required repository secret: $name" >&2
+              exit 1
+            fi
+          done
 
       - name: Install dependencies
         working-directory: customer-app
@@ -65,43 +123,122 @@ jobs:
         working-directory: customer-app
         run: npx cap sync android
 
-      - name: Configure release identity
+      - name: Decode signing keystore
+        if: steps.release.outputs.signed == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          KEYSTORE_PATH="$RUNNER_TEMP/aqaba-seago-upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Configure release identity and signing
         working-directory: customer-app
+        env:
+          RELEASE_VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          RELEASE_VERSION_CODE: ${{ steps.release.outputs.version_code }}
+          RELEASE_SIGNED: ${{ steps.release.outputs.signed }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
+          import os, re, sys
 
           gradle = Path('android/app/build.gradle')
           text = gradle.read_text()
-          text = re.sub(r'versionCode\s+\d+', 'versionCode 1', text)
-          text = re.sub(r'versionName\s+["\'][^"\']+["\']', 'versionName "1.0.0"', text)
+          version_name = os.environ['RELEASE_VERSION_NAME']
+          version_code = os.environ['RELEASE_VERSION_CODE']
+          signed = os.environ.get('RELEASE_SIGNED') == 'true'
+
+          text = re.sub(r'versionCode\s+\d+', f'versionCode {version_code}', text, count=1)
+          text = re.sub(r'versionName\s+["\'][^"\']+["\']', f'versionName "{version_name}"', text, count=1)
+
+          if signed:
+              required = ['ANDROID_KEYSTORE_PATH','ANDROID_KEYSTORE_PASSWORD','ANDROID_KEY_ALIAS','ANDROID_KEY_PASSWORD']
+              missing = [name for name in required if not os.environ.get(name)]
+              if missing:
+                  raise SystemExit('Missing signing environment: ' + ', '.join(missing))
+              signing = '''
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("ANDROID_KEYSTORE_PATH"))
+                      storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                      keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+                  }
+              }
+          '''
+              if 'signingConfigs {' not in text:
+                  text = text.replace('android {', 'android {' + signing, 1)
+              pattern = r'(buildTypes\s*\{\s*release\s*\{)'
+              replacement = r'\1\n            signingConfig signingConfigs.release'
+              text, count = re.subn(pattern, replacement, text, count=1)
+              if count != 1:
+                  raise SystemExit('Could not configure release signing in android/app/build.gradle')
+
           gradle.write_text(text)
           PY
 
-      - name: Build unsigned release bundle
+      - name: Build release bundle
         working-directory: customer-app/android
-        run: ./gradlew bundleRelease --stacktrace
-
-      - name: Write release metadata
         run: |
-          cat > customer-app/android/release-info.json <<EOF
+          set -euo pipefail
+          ./gradlew bundleRelease --stacktrace
+          if [[ "${{ steps.release.outputs.signed }}" == "true" ]]; then
+            ./gradlew assembleRelease --stacktrace
+          fi
+
+      - name: Verify signed artifacts
+        if: steps.release.outputs.signed == 'true'
+        working-directory: customer-app/android
+        run: |
+          set -euo pipefail
+          jarsigner -verify -strict -certs app/build/outputs/bundle/release/app-release.aab
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+
+      - name: Prepare release artifacts
+        working-directory: customer-app/android
+        run: |
+          set -euo pipefail
+          VERSION_NAME="${{ steps.release.outputs.version_name }}"
+          VERSION_CODE="${{ steps.release.outputs.version_code }}"
+          MODE="${{ steps.release.outputs.mode }}"
+          OUT="release-artifacts"
+          mkdir -p "$OUT"
+          cp app/build/outputs/bundle/release/app-release.aab "$OUT/Aqaba-SeaGo-${VERSION_NAME}-${VERSION_CODE}-${MODE}.aab"
+          if [[ "$MODE" == "signed" ]]; then
+            cp app/build/outputs/apk/release/app-release.apk "$OUT/Aqaba-SeaGo-${VERSION_NAME}-${VERSION_CODE}-release.apk"
+          fi
+          (
+            cd "$OUT"
+            sha256sum * > SHA256SUMS.txt
+          )
+          cat > "$OUT/release-info.json" <<EOF
           {
             "appName": "Aqaba SeaGo",
             "applicationId": "com.aqabaseago.app",
-            "versionName": "1.0.0",
-            "versionCode": 1,
+            "versionName": "$VERSION_NAME",
+            "versionCode": $VERSION_CODE,
             "commit": "${GITHUB_SHA}",
-            "signed": false
+            "signed": ${{ steps.release.outputs.signed }}
           }
           EOF
 
-      - name: Upload release bundle
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-release-unsigned
-          path: |
-            customer-app/android/app/build/outputs/bundle/release/app-release.aab
-            customer-app/android/release-info.json
+          name: aqaba-seago-android-${{ steps.release.outputs.mode }}-${{ steps.release.outputs.version_name }}
+          path: customer-app/android/release-artifacts/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
+
+      - name: Remove signing keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/aqaba-seago-upload.jks"

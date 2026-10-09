@@ -3,3 +3,8 @@ node_modules/
 .DS_Store
 coverage/
 backups/
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
