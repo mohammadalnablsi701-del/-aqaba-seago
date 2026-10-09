@@ -13,8 +13,9 @@ function ensureLine(parent,className,text){
   if(!parent)return;
   let line=parent.querySelector(`:scope > .${className}`);
   if(!text){line?.remove();return;}
-  if(!line){line=document.createElement("span");line.className=className;parent.appendChild(line);}
-  line.textContent=`Vessel · ${text}`;
+  const next=`Vessel · ${text}`;
+  if(!line){line=document.createElement("span");line.className=className;line.textContent=next;parent.appendChild(line);return;}
+  if(line.textContent!==next)line.textContent=next;
 }
 
 let activeForm=null;
