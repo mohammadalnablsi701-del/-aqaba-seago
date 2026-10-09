@@ -12,10 +12,6 @@ export const FUN_N_SUN_VESSEL="White Prince";
 export const SEA_BREEZE_PROVIDER_DEFAULTS={defaultCapacity:10,defaultDepartureTime:"17:00",departureLocation:{name:"Ayla Marina",address:"Aqaba, Jordan",googleMapsUrl:"https://maps.app.goo.gl/oDBcHhKdzih9Y2RU8?g_st=ic"}};
 export const SEA_BREEZE_PILOT_TRIP={titleAr:"رحلة غروب الشمس",titleEn:"Sunset Cruise",vesselName:TARGET_VESSEL,category:"sunset",durationMinutes:120,pricing:{currency:"JOD",pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"fixed_per_person",commissionValue:3,adultCommission:3,childCommission:2,buffetAdultCommission:3,buffetChildCommission:2},departureLocation:{...SEA_BREEZE_PROVIDER_DEFAULTS.departureLocation},active:true};
 
-export function getAladdinActivationGate(){
- return {allowed:false,reason:"operator_confirmation_required"};
-}
-
 export function resolveSeaBreezeDefaultDepartureTime(current){const value=String(current||"").trim();return !value||value==="09:00"?SEA_BREEZE_PROVIDER_DEFAULTS.defaultDepartureTime:value;}
 export function isSeaBreezeSunsetCandidate({providerName="",trip={}}={}){return SEA_BREEZE_PROVIDER_RE.test(String(providerName))&&String(trip.category||"")==="sunset"&&Number(trip.durationMinutes)===120&&AYLA_RE.test(String(trip.departureLocation?.name||""))&&(SUNSET_RE.test(String(trip.titleEn||""))||SUNSET_RE.test(String(trip.titleAr||"")));}
 
@@ -33,10 +29,4 @@ async function applySeaBreezePilot(){
 }
 async function applyFunNSunVesselBackfill(){const providers=await Provider.find({businessName:FUN_N_SUN_PROVIDER_RE});if(providers.length!==1)return {applied:false,reason:providers.length?"ambiguous_provider":"provider_not_found",providerCount:providers.length};const provider=providers[0];const trips=await Trip.find({providerId:provider._id}).sort({createdAt:1});if(trips.length!==3)return {applied:false,reason:"unexpected_trip_count",tripCount:trips.length};const conflicts=trips.filter(t=>{const current=String(t.vesselName||"").trim();return current&&current!==FUN_N_SUN_VESSEL;});if(conflicts.length)return {applied:false,reason:"existing_value_conflict",conflictCount:conflicts.length};let updated=0;for(const trip of trips){if(String(trip.vesselName||"").trim()===FUN_N_SUN_VESSEL)continue;trip.vesselName=FUN_N_SUN_VESSEL;await trip.save();updated+=1;}return {applied:updated>0,reason:updated?"updated_vessels":"already_applied",tripCount:trips.length,updatedCount:updated};}
 
-async function applyAladdinPilot(){
- const gate=getAladdinActivationGate();
- console.warn(`Real Pilot Data: Aladdin activation blocked: ${gate.reason}`);
- return {applied:false,skipped:true,reason:gate.reason};
-}
-
-export async function applyRealPilotData(){if(process.env.APPLY_REAL_PILOT_DATA!=="true")return {skipped:true,reason:"disabled"};const seaBreeze=await applySeaBreezePilot();const funNSun=await applyFunNSunVesselBackfill();const aladdin=await applyAladdinPilot();return {applied:Boolean(seaBreeze?.applied||funNSun?.applied||aladdin?.applied),seaBreeze,funNSun,aladdin};}
+export async function applyRealPilotData(){if(process.env.APPLY_REAL_PILOT_DATA!=="true")return {skipped:true,reason:"disabled"};const seaBreeze=await applySeaBreezePilot();const funNSun=await applyFunNSunVesselBackfill();return {applied:Boolean(seaBreeze?.applied||funNSun?.applied),seaBreeze,funNSun};}
