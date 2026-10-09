@@ -5,6 +5,7 @@ import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
+import { STAGE2B_PLAN_ID,applyPilotRepairStage2b,previewPostRepairStage2b } from "./services/pilotRepairStage2b.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -39,8 +40,23 @@ if(isProduction){
 
 await connectDb(process.env.MONGODB_URI);
 
-// Business-data corrections and pilot migrations must never run implicitly on
-// normal service startup. They require an explicit, separately reviewed action.
+// Business-data corrections do not run during normal startup. Stage 2B is a
+// separately reviewed, explicitly authorized one-shot migration gated by both
+// an enable flag and the exact immutable plan id. It is idempotent after success.
+if(process.env.PILOT_REPAIR_STAGE2B_ENABLED==="true"){
+  if(String(process.env.PILOT_REPAIR_STAGE2B_PLAN_ID||"")!==STAGE2B_PLAN_ID){
+    throw new Error("PILOT_REPAIR_STAGE2B_PLAN_ID mismatch");
+  }
+  const alreadyCorrected=await previewPostRepairStage2b();
+  if(alreadyCorrected.ok){
+    console.log("Stage 2B financial correction already applied",{planId:STAGE2B_PLAN_ID,totals:alreadyCorrected.totals});
+  }else{
+    const repair=await applyPilotRepairStage2b();
+    if(!repair.after?.ok)throw new Error("Stage 2B post-repair verification failed");
+    console.log("Stage 2B financial correction applied",{planId:STAGE2B_PLAN_ID,modifiedBookings:repair.modifiedBookings,totals:repair.after.totals});
+  }
+}
+
 await releaseExpiredCheckoutHolds({limit:500});
 
 setInterval(()=>{
