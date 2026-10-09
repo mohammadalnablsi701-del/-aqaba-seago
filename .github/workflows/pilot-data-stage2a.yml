@@ -1,0 +1,70 @@
+name: Pilot Data Stage 2A Repair Runner
+
+on:
+  push:
+    branches:
+      - repair/pilot-data-stage2-run
+    paths:
+      - ops/pilot-data-stage2a-mode.txt
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read repair mode
+        id: mode
+        shell: bash
+        run: |
+          MODE="$(tr -d '[:space:]' < ops/pilot-data-stage2a-mode.txt)"
+          case "$MODE" in
+            preview|apply|verify_disabled) ;;
+            *) echo "Unsupported mode: $MODE" >&2; exit 1 ;;
+          esac
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+      - name: Obtain GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set +x
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=aqaba-seago-pilot-repair")"
+          TOKEN="$(node -e 'const d=JSON.parse(process.argv[1]); if(!d.value) process.exit(2); process.stdout.write(d.value)' "$RESPONSE")"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+      - name: Run preview or apply
+        if: steps.mode.outputs.mode != 'verify_disabled'
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          API_URL: https://aqaba-seago-api.onrender.com
+        shell: bash
+        run: |
+          set +x
+          BODY="{\"planId\":\"2026-10-09-pilot-business-data-stage2a-v1\",\"mode\":\"${MODE}\"}"
+          CODE="$(curl --silent --show-error -o repair-response.json -w '%{http_code}' \
+            -X POST "${API_URL}/internal/pilot-repair-stage2a" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data "$BODY")"
+          cat repair-response.json
+          test "$CODE" = "200"
+      - name: Verify endpoint is disabled
+        if: steps.mode.outputs.mode == 'verify_disabled'
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          API_URL: https://aqaba-seago-api.onrender.com
+        shell: bash
+        run: |
+          set +x
+          CODE="$(curl --silent --show-error -o disabled-response.json -w '%{http_code}' \
+            -X POST "${API_URL}/internal/pilot-repair-stage2a" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"planId":"2026-10-09-pilot-business-data-stage2a-v1","mode":"preview"}')"
+          cat disabled-response.json
+          test "$CODE" = "404"
