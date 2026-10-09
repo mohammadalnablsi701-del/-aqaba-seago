@@ -98,7 +98,12 @@ function decorateDetails(){
     ensureLine(h2?.parentElement,"seago-vessel-provider-line",vessel);
   });
 }
+function editTripFormOpen(){
+  const form=document.querySelector(".trip-form-simple");
+  return String(form?.querySelector(".manage-form-head small")?.textContent||"").trim()==="EDIT TRIP";
+}
 function polish(){
+  if(editTripFormOpen())return;
   syncTripForm();
   decorateTripCards();
   decorateBookings();
@@ -112,8 +117,7 @@ export function enableVesselUiPolish(){
   run();
   const root=document.getElementById("root")||document.body;
   const observer=new MutationObserver(run);
-  observer.observe(root,{childList:true,subtree:true,characterData:true});
+  observer.observe(root,{childList:true,subtree:true});
   window.addEventListener("seago:provider-vessels-updated",run);
-  const interval=setInterval(polish,500);
-  return()=>{observer.disconnect();window.removeEventListener("seago:provider-vessels-updated",run);clearInterval(interval);cancelAnimationFrame(raf);};
+  return()=>{observer.disconnect();window.removeEventListener("seago:provider-vessels-updated",run);cancelAnimationFrame(raf);};
 }
