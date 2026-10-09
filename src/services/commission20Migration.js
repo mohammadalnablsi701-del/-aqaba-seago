@@ -1,7 +1,10 @@
 import Provider from "../models/Provider.js";
 import Trip from "../models/Trip.js";
 
-const PILOT_PROVIDER_RE=/(fun\s*(?:n|&|and)\s*sun|sea\s*breeze|aqua\s*marina|aquamarina|aladdin|alaa\s*aldeen|علاء\s*الدين)/i;
+// Sea Breeze / Aquamarina has an explicitly agreed fixed per-person commission
+// and is corrected separately. Keep this legacy 20% migration scoped to the
+// pilot providers that still use percentage commission.
+const PILOT_PROVIDER_RE=/(fun\s*(?:n|&|and)\s*sun|aladdin|alaa\s*aldeen|علاء\s*الدين)/i;
 
 export async function applyCommission20Migration(){
   if(process.env.APPLY_COMMISSION_20_MIGRATION!=="true")return {skipped:true,reason:"disabled"};
@@ -23,6 +26,6 @@ export async function applyCommission20Migration(){
     updated+=1;
   }
 
-  console.log(`Commission migration: set ${updated} pilot trip(s) to 20% of booking gross`);
+  console.log(`Commission migration: set ${updated} percentage-based pilot trip(s) to 20% of booking gross`);
   return {applied:true,updated,providerCount:providers.length};
 }
