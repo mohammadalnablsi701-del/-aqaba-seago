@@ -7,6 +7,7 @@ import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
 import { applyRealPilotData } from "./services/realPilotData.js";
 import { applyCommission20Migration } from "./services/commission20Migration.js";
+import { applySeaBreezeCorrection } from "./services/seaBreezeCorrection.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -42,6 +43,7 @@ if(isProduction){
 await connectDb(process.env.MONGODB_URI);
 await applyRealPilotData();
 await applyCommission20Migration();
+await applySeaBreezeCorrection();
 await releaseExpiredCheckoutHolds({limit:500});
 
 setInterval(()=>{
