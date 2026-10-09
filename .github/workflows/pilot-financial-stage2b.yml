@@ -1,0 +1,79 @@
+name: Pilot Financial Stage 2B Runner
+
+on:
+  push:
+    branches:
+      - repair/pilot-financial-stage2b-run
+    paths:
+      - ops/pilot-financial-stage2b-mode.txt
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read mode
+        id: mode
+        shell: bash
+        run: |
+          MODE="$(tr -d '[:space:]' < ops/pilot-financial-stage2b-mode.txt)"
+          case "$MODE" in
+            preview_staging|apply_staging|preview_production|apply_production|verify_staging_disabled|verify_production_disabled) ;;
+            *) echo "Unsupported mode: $MODE" >&2; exit 1 ;;
+          esac
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+      - name: Obtain GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set +x
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=aqaba-seago-stage2b-financial-repair")"
+          TOKEN="$(node -e 'const d=JSON.parse(process.argv[1]); if(!d.value) process.exit(2); process.stdout.write(d.value)' "$RESPONSE")"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+      - name: Run preview or apply
+        if: ${{ !startsWith(steps.mode.outputs.mode, 'verify_') }}
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set +x
+          case "$MODE" in
+            preview_staging) API_URL="https://aqaba-seago-api-staging.onrender.com"; ACTION="preview" ;;
+            apply_staging) API_URL="https://aqaba-seago-api-staging.onrender.com"; ACTION="apply" ;;
+            preview_production) API_URL="https://aqaba-seago-api.onrender.com"; ACTION="preview" ;;
+            apply_production) API_URL="https://aqaba-seago-api.onrender.com"; ACTION="apply" ;;
+          esac
+          BODY="{\"planId\":\"2026-10-09-fun-n-sun-coral-financial-stage2b-v1\",\"mode\":\"${ACTION}\"}"
+          CODE="$(curl --silent --show-error -o stage2b-response.json -w '%{http_code}' \
+            -X POST "${API_URL}/internal/pilot-financial-stage2b" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data "$BODY")"
+          cat stage2b-response.json
+          test "$CODE" = "200"
+      - name: Verify endpoint disabled
+        if: ${{ startsWith(steps.mode.outputs.mode, 'verify_') }}
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set +x
+          case "$MODE" in
+            verify_staging_disabled) API_URL="https://aqaba-seago-api-staging.onrender.com" ;;
+            verify_production_disabled) API_URL="https://aqaba-seago-api.onrender.com" ;;
+          esac
+          CODE="$(curl --silent --show-error -o stage2b-disabled.json -w '%{http_code}' \
+            -X POST "${API_URL}/internal/pilot-financial-stage2b" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"planId":"2026-10-09-fun-n-sun-coral-financial-stage2b-v1","mode":"preview"}')"
+          cat stage2b-disabled.json
+          test "$CODE" = "404"

@@ -21,6 +21,7 @@ import mediaRoutes from "./routes/media.js";
 import notificationRoutes from "./routes/notifications.js";
 import pushRoutes from "./routes/push.js";
 import supportRoutes from "./routes/support.js";
+import pilotFinancialStage2bRoutes from "./routes/pilotFinancialStage2b.js";
 
 function buildCorsOptions() {
   const allowed = String(process.env.ALLOWED_ORIGINS || "").split(",").map(v => v.trim()).filter(Boolean);
@@ -50,6 +51,7 @@ export function createApp() {
   app.use("/api",apiLimiter);
   app.use("/api/auth",authLimiter);
   app.get("/health", (_req, res) => res.json({ok:true,service:"aqaba-seago-api",version:"0.3.1",commit:process.env.RAILWAY_GIT_COMMIT_SHA||process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null}));
+  app.use("/internal/pilot-financial-stage2b",pilotFinancialStage2bRoutes);
   app.use("/api/auth", authRoutes);
   app.use("/api/providers", providerRoutes);
   app.use("/api/admin/operations", operationsRoutes);
