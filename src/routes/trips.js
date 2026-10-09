@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
 import { tripForAudience } from "../services/pricingVisibility.js";
+import { isProviderPilotSalesAllowed } from "../services/pilotGuard.js";
 
 const router = express.Router();
 
@@ -146,8 +147,8 @@ router.patch("/:tripId", requireAuth, requireRole("provider"), async (req, res, 
 
 router.get("/", async (_req, res, next) => {
   try {
-    const approvedProviders = await Provider.find({ status: "approved" }).select("_id");
-    const providerIds = approvedProviders.map(p => p._id);
+    const approvedProviders = await Provider.find({ status: "approved" }).select("_id businessName");
+    const providerIds = approvedProviders.filter(p=>isProviderPilotSalesAllowed(p.businessName)).map(p => p._id);
     const trips = await Trip.find({ active: true, providerId: { $in: providerIds } })
       .populate("providerId", "businessName");
     res.json(trips.map(trip => tripForAudience(trip)));
