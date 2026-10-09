@@ -55,17 +55,14 @@ jobs:
         working-directory: customer-app
         run: npx cap add android
 
-      - name: Render native asset sources
-        working-directory: customer-app
+      - name: Install native image tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 1024 -h 1024 assets/logo.svg -o assets/icon-only.png
-          rsvg-convert -w 2732 -h 2732 assets/splash.svg -o assets/splash.png
+          sudo apt-get install -y imagemagick librsvg2-bin
 
       - name: Generate branded Android assets
         working-directory: customer-app
-        run: npx capacitor-assets generate --android --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'
+        run: bash scripts/generate-native-assets.sh android
 
       - name: Sync Android project
         working-directory: customer-app
@@ -123,16 +120,14 @@ jobs:
         working-directory: customer-app
         run: npx cap add ios
 
-      - name: Render native asset sources
-        working-directory: customer-app
+      - name: Install native image tools
         run: |
+          brew list imagemagick >/dev/null 2>&1 || brew install imagemagick
           brew list librsvg >/dev/null 2>&1 || brew install librsvg
-          rsvg-convert -w 1024 -h 1024 assets/logo.svg -o assets/icon-only.png
-          rsvg-convert -w 2732 -h 2732 assets/splash.svg -o assets/splash.png
 
       - name: Generate branded iOS assets
         working-directory: customer-app
-        run: npx capacitor-assets generate --ios --iconBackgroundColor '#071F33' --iconBackgroundColorDark '#071F33' --splashBackgroundColor '#071F33' --splashBackgroundColorDark '#071F33'
+        run: bash scripts/generate-native-assets.sh ios
 
       - name: Sync iOS project
         working-directory: customer-app
