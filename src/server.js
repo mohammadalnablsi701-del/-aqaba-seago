@@ -5,7 +5,6 @@ import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
-import { activateAladdinSukar } from "./services/aladdinSukarActivation.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -42,10 +41,6 @@ await connectDb(process.env.MONGODB_URI);
 
 // Business-data corrections and pilot migrations must never run implicitly on
 // normal service startup. They require an explicit, separately reviewed action.
-if(process.env.ACTIVATE_ALADDIN_SUKAR_ON_START==="true"){
-  const result=await activateAladdinSukar();
-  console.log(`Explicit Aladdin Sukar activation: ${JSON.stringify(result)}`);
-}
 await releaseExpiredCheckoutHolds({limit:500});
 
 setInterval(()=>{
