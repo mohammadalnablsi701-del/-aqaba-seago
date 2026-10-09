@@ -22,7 +22,7 @@ jobs:
         run: |
           MODE="$(tr -d '[:space:]' < ops/pilot-financial-stage2b-mode.txt)"
           case "$MODE" in
-            preview_staging|apply_staging|preview_production|apply_production|verify_staging_disabled|verify_production_disabled) ;;
+            preview_staging|apply_staging|preview_production|apply_production|restore_payment_revisions_production|verify_staging_disabled|verify_production_disabled) ;;
             *) echo "Unsupported mode: $MODE" >&2; exit 1 ;;
           esac
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
@@ -36,7 +36,7 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=aqaba-seago-stage2b-financial-repair")"
           TOKEN="$(node -e 'const d=JSON.parse(process.argv[1]); if(!d.value) process.exit(2); process.stdout.write(d.value)' "$RESPONSE")"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-      - name: Run preview or apply
+      - name: Run preview, apply, or remediation
         if: ${{ !startsWith(steps.mode.outputs.mode, 'verify_') }}
         env:
           MODE: ${{ steps.mode.outputs.mode }}
@@ -49,6 +49,7 @@ jobs:
             apply_staging) API_URL="https://aqaba-seago-api-staging.onrender.com"; ACTION="apply" ;;
             preview_production) API_URL="https://aqaba-seago-api.onrender.com"; ACTION="preview" ;;
             apply_production) API_URL="https://aqaba-seago-api.onrender.com"; ACTION="apply" ;;
+            restore_payment_revisions_production) API_URL="https://aqaba-seago-api.onrender.com"; ACTION="restore_payment_revisions" ;;
           esac
           BODY="{\"planId\":\"2026-10-09-fun-n-sun-coral-financial-stage2b-v1\",\"mode\":\"${ACTION}\"}"
           CODE="$(curl --silent --show-error -o stage2b-response.json -w '%{http_code}' \
