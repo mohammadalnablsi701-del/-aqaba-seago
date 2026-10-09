@@ -21,7 +21,7 @@ test("renderTicketPdf creates a readable PDF with a QR ticket", async () => {
     pricing: { grossAmount: 54, currency: "JOD" }
   };
 
-  const pdf = await renderTicketPdf({ booking, token: "2.507f1f77bcf86cd799439011.testsignature" });
+  const pdf = await renderTicketPdf({ booking, token: "test-token" });
   assert.ok(Buffer.isBuffer(pdf));
   assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
   assert.ok(pdf.length > 3000);
