@@ -121,6 +121,7 @@ export async function applyPilotFinancialStage2b(){
   let before;
   let changedBookings=0;
   let serializedPayments=0;
+  let restoredPayments=0;
   try{
     await session.withTransaction(async()=>{
       before=await loadState({session});
@@ -139,9 +140,20 @@ export async function applyPilotFinancialStage2b(){
       const payments=await Payment.find({bookingId:{$in:bookingIds}}).session(session);
       const paymentIds=payments.map(p=>p._id);
 
-      // Serialize with recordSettlement(), which writes settlementRevision on the
-      // same Payment rows inside its transaction before creating a payout.
-      const lock=await Payment.updateMany({_id:{$in:paymentIds}},{$inc:{settlementRevision:1}},{session});
+      // recordSettlement() serializes provider payouts by incrementing the same
+      // Payment rows. Touch them transactionally to create the same write conflict,
+      // then restore each raw value exactly before commit so Payment data/timestamps
+      // remain unchanged by this repair.
+      const rawPayments=await Payment.collection.find(
+        {_id:{$in:paymentIds}},
+        {session,projection:{settlementRevision:1}}
+      ).toArray();
+      if(rawPayments.length!==2)throw Object.assign(new Error("Could not snapshot target payment locks"),{statusCode:409});
+      const lock=await Payment.collection.updateMany(
+        {_id:{$in:paymentIds}},
+        {$inc:{settlementRevision:1}},
+        {session}
+      );
       serializedPayments=Number(lock.modifiedCount||0);
       if(serializedPayments!==2)throw Object.assign(new Error("Could not serialize target payments"),{statusCode:409});
 
@@ -163,6 +175,15 @@ export async function applyPilotFinancialStage2b(){
         changedBookings+=1;
       }
 
+      for(const raw of rawPayments){
+        const hasRevision=Object.prototype.hasOwnProperty.call(raw,"settlementRevision");
+        const update=hasRevision?{$set:{settlementRevision:raw.settlementRevision}}:{$unset:{settlementRevision:""}};
+        const restored=await Payment.collection.updateOne({_id:raw._id},update,{session});
+        if(Number(restored.matchedCount||0)!==1)throw Object.assign(new Error("Could not restore target payment lock"),{statusCode:409});
+        restoredPayments+=1;
+      }
+      if(restoredPayments!==2)throw Object.assign(new Error("Could not restore target payment locks"),{statusCode:409});
+
       const afterInside=await loadState({session});
       if(!afterInside.ok||!afterInside.alreadyCorrect||afterInside.totals.currentCommission!==30||afterInside.totals.currentProviderNet!==107){
         throw Object.assign(new Error("Stage 2B postcondition failed; transaction rolled back"),{statusCode:409});
@@ -174,6 +195,7 @@ export async function applyPilotFinancialStage2b(){
       applied:changedBookings===2,
       changedBookings,
       serializedPayments,
+      restoredPayments,
       before,
       after
     };

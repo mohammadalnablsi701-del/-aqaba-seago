@@ -11,9 +11,11 @@ router.use((req,res,next)=>{
 
 router.post("/",requireGithubActionsStage2bOidc,async(req,res,next)=>{
   try{
+    const keys=Object.keys(req.body||{});
+    if(keys.some(key=>!["planId","mode"].includes(key)))return res.status(400).json({error:"Unexpected request field"});
     const planId=String(req.body?.planId||"");
     const mode=String(req.body?.mode||"");
-    if(planId!==STAGE2B_PLAN_ID)return res.status(400).json({error:"Invalid repair plan"});
+    if(planId!==STAGE2B_PLAN_ID)return res.status(409).json({error:"Repair plan mismatch"});
     if(!["preview","apply"].includes(mode))return res.status(400).json({error:"Invalid repair mode"});
     const result=mode==="preview"?await previewPilotFinancialStage2b():await applyPilotFinancialStage2b();
     return res.json(result);
