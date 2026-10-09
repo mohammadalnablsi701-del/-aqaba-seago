@@ -1,1 +1,1 @@
-apply
+verify_disabled
