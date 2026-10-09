@@ -5,6 +5,7 @@ import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
+import { readProductionDiagnosticsEncrypted } from "../scripts/read-production-diagnostics.mjs";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -63,6 +64,10 @@ app.get("/ready",(_req,res)=>{
 
 const server=app.listen(port,()=>{
   console.log(`Aqaba SeaGo API listening on port ${port}`);
+  const diagnosticTimer=setTimeout(()=>{
+    readProductionDiagnosticsEncrypted().catch(err=>console.error(`Encrypted production diagnostic reader failed: ${err.message}`));
+  },1000);
+  diagnosticTimer.unref();
 });
 
 let shuttingDown=false;
