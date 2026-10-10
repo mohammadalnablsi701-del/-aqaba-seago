@@ -1,4 +1,5 @@
 import{runLockedSensitiveAction,runSensitiveAction}from"./sensitiveActionDialog.js";
+import{commissionConfirmationText,commissionPayloadPreview}from"./commissionEditorModel.js";
 
 const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");async function req(path,{token,...o}={}){
   const r=await fetch(API+path,{...o,headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{...{}}),...(o.headers||{})}});
@@ -37,16 +38,19 @@ export const setTripPlatformStatus=(token,id,platformStatus)=>runLockedSensitive
 });
 export const setCommission=(token,id,fees)=>runLockedSensitiveAction(`trip:${id}:commission`,async()=>{
   const t=await tripMeta(token,id);const pricing=t.pricing||{};const body=typeof fees==="number"?{percentage:fees}:{...fees};
-  const oldType=String(pricing.commissionType||"percentage");
-  const oldValue=Number.isFinite(Number(pricing.commissionValue))?`${Number(pricing.commissionValue)}${oldType==="percentage"?"%":" JOD"}`:"Not configured";
+  const oldType=String(pricing.commissionType||"");
   const nextType=body.percentage!==undefined?"percentage":String(body.commissionType||oldType);
-  const rawNext=body.percentage!==undefined?body.percentage:body.commissionValue;
-  const newValue=Number.isFinite(Number(rawNext))?`${Number(rawNext)}${nextType==="percentage"?"%":" JOD"}`:String(rawNext??"Not configured");
+  const typeChanged=Boolean(oldType)&&nextType!==oldType;
+  const requestBody={...body,...(typeChanged?{confirmTypeChange:true}:{})};
   return runSensitiveAction({
-    title:"Change trip commission",subject:tripName(t),confirmLabel:"Save commission",danger:true,reasonRequired:true,reasonLabel:"Commission change reason",
-    impact:"This affects future bookings only. Existing booking pricing snapshots will not change.",
-    details:[{label:"Old",value:`${oldType}: ${oldValue}`},{label:"New",value:`${nextType}: ${newValue}`}],
-    execute:reason=>req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({...body,reason})})
+    title:"Change trip commission",subject:tripName(t),confirmLabel:"Save commission",danger:true,reasonRequired:true,reasonLabel:"Reason for commission change",
+    impact:"This change applies to future bookings only. Existing booking pricing snapshots will remain unchanged.",
+    details:[
+      {label:"Current commission",value:commissionConfirmationText(pricing)},
+      {label:"New commission",value:commissionPayloadPreview(pricing,requestBody)},
+      ...(typeChanged?[{label:"Type change",value:"Explicit confirmation required"}]:[])
+    ],
+    execute:reason=>req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({...requestBody,reason})})
   });
 });
 export const refunds=(token,options={})=>req("/api/admin/refunds",{token,...options});
@@ -70,7 +74,8 @@ export const setProviderStatus=(token,id,status)=>runLockedSensitiveAction(`prov
   }[status];
   if(!config)return req("/api/admin/providers/"+id+"/status",{token,method:"PATCH",body:JSON.stringify({status})});
   return runSensitiveAction({
-    title:config.title,subject:providerName(p),confirmLabel:config.label,danger:config.danger,reasonRequired:config.reason,reasonLabel:"Operational reason",impact:config.impact,
+    title:config.title,subject:providerName(p),confirmLabel:config.label,danger:config.danger,reasonRequired:config.reason,reasonLabel:"Operational reason",
+    impact:config.impact,
     details:[{label:"Current status",value:p.status||"unknown"},{label:"New status",value:status}],
     execute:reason=>req("/api/admin/providers/"+id+"/status",{token,method:"PATCH",body:JSON.stringify({status,...(reason?{reason}:{})})})
   });
