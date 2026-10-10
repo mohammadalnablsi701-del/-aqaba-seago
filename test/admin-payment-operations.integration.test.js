@@ -32,7 +32,7 @@ test('admin payment operations are read-only, bounded, relation-aware and secret
   const customer=await User.create({name:'Payment Customer',email:'payment-customer@example.test',phone:'0791234567',phoneNormalized:'+962791234567',role:'customer'});
   const providerUser=await User.create({name:'Payment Provider',email:'payment-provider@example.test',role:'provider'});
   const provider=await Provider.create({ownerUserId:providerUser._id,businessName:'Payment Marine',status:'approved',settings:{configured:true,defaultCapacity:20,defaultDepartureTime:'09:00'}});
-  const trip=await Trip.create({providerId:provider._id,titleEn:'Payment Trip',category:'group_boat',durationMinutes:120,pricing:{currency:'JOD',pricePerPerson:21,commissionType:'percentage',commissionValue:10},active:true,platformStatus:'allowed'});
+  const trip=await Trip.create({providerId:provider._id,titleAr:'رحلة الدفع',titleEn:'Payment Trip',category:'group_boat',durationMinutes:120,pricing:{currency:'JOD',pricePerPerson:21,commissionType:'percentage',commissionValue:10},active:true,platformStatus:'allowed'});
   const departure=await Departure.create({tripId:trip._id,startsAt:new Date(Date.now()+86400000),capacity:30,reservedSeats:0,status:'scheduled'});
 
   const pricing={currency:'JOD',unitPrice:21,grossAmount:42,commissionAmount:4.2,providerNetAmount:37.8,adultUnitPrice:21,childUnitPrice:10,adultSubtotal:42,childSubtotal:0};
