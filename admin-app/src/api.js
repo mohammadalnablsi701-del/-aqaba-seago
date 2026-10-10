@@ -29,7 +29,7 @@ export const setTripPlatformStatus=(token,id,platformStatus)=>runLockedSensitive
   return runSensitiveAction({
     title:pausing?"Pause trip on platform":"Allow trip on platform",subject:tripName(t),confirmLabel:pausing?"Pause on platform":"Allow on platform",danger:pausing,reasonRequired:pausing,reasonLabel:"Operational reason",
     impact:pausing
-      ?"This will stop new SeaGo sales for this trip. It will not change the provider-controlled active state, delete departures, or cancel confirmed bookings."
+      ?"This will stop new checkout starts and public SeaGo sales entry points for this trip. Existing checkout holds are not released by this action. It will not change the provider-controlled active state, delete departures, or cancel confirmed bookings."
       :"This allows SeaGo platform sales for this trip. It does not change the provider-controlled active state or provider approval, so the trip may still remain not sellable.",
     details:[{label:"Provider",value:t.providerId?.businessName||"Provider"},{label:"Provider state",value:t.active?"Active":"Paused"},{label:"Platform",value:current}],
     execute:reason=>req("/api/admin/trips/"+id+"/platform-status",{token,method:"PATCH",body:JSON.stringify({platformStatus,...(reason?{reason}:{})})})
