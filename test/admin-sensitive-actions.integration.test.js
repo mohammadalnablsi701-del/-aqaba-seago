@@ -41,7 +41,7 @@ test("sensitive admin actions enforce safety without changing lifecycle semantic
   const departure=await Departure.create({tripId:trip._id,startsAt:new Date(Date.now()+86400000),capacity:10,reservedSeats:2,status:"scheduled"});
   const confirmed=await Booking.create({customerId:customer._id,customerSnapshot:{name:"Customer",phone:"+962790000000"},providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,status:"confirmed",holdExpiresAt:new Date(Date.now()+3600000),pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},idempotencyKey:"confirmed-before-suspend"});
   const hold=await CheckoutHold.create({customerId:customer._id,providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},status:"active",expiresAt:new Date(Date.now()+3600000),idempotencyKey:"open-hold-before-suspend"});
-  const paidHold=await CheckoutHold.create({customerId:customer._id,providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},status:"completed",expiresAt:new Date(Date.now()+3600000),idempotencyKey:"completed-hold-for-settlement"});
+  const paidHold=await CheckoutHold.create({customerId:customer._id,providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},status:"paid",expiresAt:new Date(Date.now()+3600000),idempotencyKey:"paid-hold-for-settlement"});
   await Payment.create({bookingId:confirmed._id,holdId:paidHold._id,customerId:customer._id,provider:"mock",externalPaymentId:"commission-sensitive-payment",status:"paid",amount:25,currency:"JOD",paidAt:new Date()});
 
   await t.test("K: customer and provider roles cannot invoke admin endpoints",async()=>{
@@ -66,7 +66,7 @@ test("sensitive admin actions enforce safety without changing lifecycle semantic
     const suspended=await requestJson(base,`/api/admin/providers/${provider._id}/status`,{token:adminToken,method:"PATCH",body:{status:"suspended",reason:"Temporary operational suspension"}});assert.equal(suspended.response.status,200);
     assert.equal((await Provider.findById(provider._id)).status,"suspended");
     assert.equal((await CheckoutHold.findById(hold._id)).status,"released");
-    assert.equal((await CheckoutHold.findById(paidHold._id)).status,"completed");
+    assert.equal((await CheckoutHold.findById(paidHold._id)).status,"paid");
     assert.equal((await Booking.findById(confirmed._id)).status,"confirmed");
     assert.equal((await Departure.findById(departure._id)).status,"scheduled");
   });
