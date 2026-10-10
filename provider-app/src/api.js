@@ -55,12 +55,12 @@ async function req(path,{token,...options}={}){
 }
 export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});
 export const registerProvider=data=>req("/api/auth/register",{method:"POST",body:JSON.stringify({...data,role:"provider"})});
-export const me=token=>req("/api/providers/me",{token});
+export const me=(token,{signal}={})=>req("/api/providers/me",{token,signal});
 export const createProviderProfile=(token,data)=>req("/api/providers",{token,method:"POST",body:JSON.stringify(data)});
 export const updateProviderSettings=(token,data)=>req("/api/providers/me/settings",{token,method:"PATCH",body:JSON.stringify(data)});
-export const trips=async token=>publishVessels(await req("/api/providers/me/trips",{token}));
-export const departures=async(token,date)=>publishVessels(await req("/api/providers/me/departures"+(date?"?date="+encodeURIComponent(date):""),{token}));
-export const bookings=async(token,date)=>publishVessels(await req("/api/providers/me/bookings"+(date?"?date="+encodeURIComponent(date):""),{token}));
+export const trips=async(token,{signal}={})=>publishVessels(await req("/api/providers/me/trips",{token,signal}));
+export const departures=async(token,date,{signal}={})=>publishVessels(await req("/api/providers/me/departures"+(date?"?date="+encodeURIComponent(date):""),{token,signal}));
+export const bookings=async(token,date,{signal}={})=>publishVessels(await req("/api/providers/me/bookings"+(date?"?date="+encodeURIComponent(date):""),{token,signal}));
 export const checkIn=(token,ticketToken)=>req("/api/tickets/check-in",{token,method:"POST",body:JSON.stringify({token:ticketToken})});
 
 export const inspectTicket=async(token,ticketToken)=>rememberInspected(await req("/api/tickets/inspect",{token,method:"POST",body:JSON.stringify({token:ticketToken})}));
@@ -88,7 +88,7 @@ export const markAllNotificationsRead=token=>req("/api/notifications/read-all",{
 function urlBase64ToUint8Array(base64String){const padding="=".repeat((4-base64String.length%4)%4);const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");const raw=atob(base64);return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)))}
 export async function enablePushNotifications(token){if(!("serviceWorker"in navigator)||!("PushManager"in window)||!("Notification"in window))throw new Error("Push notifications are not supported on this device/browser");const permission=await Notification.requestPermission();if(permission!=="granted")throw new Error("Notification permission was not granted");const registration=await navigator.serviceWorker.ready;let subscription=await registration.pushManager.getSubscription();if(!subscription){const{publicKey}=await req("/api/push/public-key");subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)})}await req("/api/push/subscribe",{token,method:"POST",body:JSON.stringify({subscription:subscription.toJSON()})});return{permission,subscribed:true}}
 export async function pushNotificationStatus(){if(!("serviceWorker"in navigator)||!("PushManager"in window)||!("Notification"in window))return{supported:false,permission:"unsupported",subscribed:false};const registration=await navigator.serviceWorker.ready;const subscription=await registration.pushManager.getSubscription();return{supported:true,permission:Notification.permission,subscribed:Boolean(subscription)}}
-export const sendTestPush=token=>req("/api/push/test",{token,method:"POST"});
+export const sendTestPush=token=>req("/api/push/test",{token});
 
 export const providerTeam=token=>req("/api/providers/me/team",{token});
 export const createProviderTeamMember=(token,data)=>req("/api/providers/me/team",{token,method:"POST",body:JSON.stringify(data)});
