@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validateAllowedFields, isBoundedString } from "../middleware/validation.js";
 import { signTicketToken } from "../services/tickets.js";
 import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
-import { cancelBooking, cancellationPolicyFor } from "../services/cancellations.js";
+import { cancelBooking, cancellationPolicyFor, customerCancellationEligibility } from "../services/cancellations.js";
 import { salePricing, tripForAudience } from "../services/pricingVisibility.js";
 
 const router = express.Router();
@@ -102,9 +102,13 @@ router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => 
 router.get("/:bookingId/cancellation-policy", requireAuth, requireRole("customer"), async (req,res,next)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.bookingId))return res.status(400).json({error:"Invalid bookingId"});
-    const booking=await Booking.findOne({_id:req.params.bookingId,customerId:req.user._id,status:"confirmed"}).populate("departureId","startsAt");
+    const booking=await Booking.findOne({_id:req.params.bookingId,customerId:req.user._id,status:"confirmed"}).populate("departureId","startsAt status");
     if(!booking)return res.status(404).json({error:"Confirmed booking not found"});
-    const policy=cancellationPolicyFor(booking.departureId?.startsAt||new Date());
+    const eligibility=customerCancellationEligibility(booking);
+    if(!eligibility.eligible){
+      return res.status(409).json({error:eligibility.reason==="checked_in"?"Checked-in bookings cannot be cancelled":"This booking can no longer be cancelled"});
+    }
+    const policy=cancellationPolicyFor(booking.departureId.startsAt);
     const gross=Number(booking.pricing?.grossAmount||0);
     res.json({
       refundPercentage:policy.refundPercentage,
