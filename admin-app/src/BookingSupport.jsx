@@ -30,6 +30,13 @@ export default function BookingSupport({token}){
 
   useEffect(()=>()=>{searchManager.current.cancel();detailManager.current.cancel()},[]);
   useEffect(()=>{searchManager.current.cancel();detailManager.current.cancel();setResults(null);setSelectedId("");setDetail(null);setSearchError("");setDetailError("")},[token]);
+  useEffect(()=>{
+    if(!token)return;
+    const target=sessionStorage.getItem("seago_booking_support_target");
+    if(!target)return;
+    sessionStorage.removeItem("seago_booking_support_target");
+    loadDetail(target);
+  },[token]);
 
   async function runSearch(event){
     event?.preventDefault();
