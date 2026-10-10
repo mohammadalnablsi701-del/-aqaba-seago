@@ -84,6 +84,7 @@ jobs:
                 'test/admin-sellability-semantics.integration.test.js',
                 'test/admin-sensitive-actions.integration.test.js',
                 'test/admin-operations.integration.test.js',
+                'test/admin-payment-operations.integration.test.js',
                 'test/provider-access-admin.integration.test.js',
                 'test/pilot-booking-ticket.e2e.test.js',
                 'test/password-recovery.integration.test.js',
