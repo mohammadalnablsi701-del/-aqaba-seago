@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
+import { deriveTicketLifecycle } from "./ticketLifecycle.js";
 
 function safeText(value, fallback = "-") {
   const raw = String(value ?? "").trim();
@@ -28,16 +29,22 @@ function money(value, currency = "JOD") {
   return `${Number(value || 0).toFixed(2)} ${safeText(currency, "JOD")}`;
 }
 
-function statusLabel(booking) {
-  if (booking.checkedInAt) return "USED";
+export function ticketPdfPresentation(booking) {
+  const lifecycle = deriveTicketLifecycle(booking);
   const labels = {
-    confirmed: "CONFIRMED",
-    cancelled: "CANCELLED",
+    ready: "READY FOR CHECK-IN",
+    checked_in: "USED",
+    booking_cancelled: "BOOKING CANCELLED",
     refunded: "REFUNDED",
-    expired: "EXPIRED",
-    pending_payment: "AWAITING PAYMENT"
+    departure_cancelled: "DEPARTURE CANCELLED",
+    trip_completed: "TRIP COMPLETED",
+    unavailable: "TICKET UNAVAILABLE"
   };
-  return labels[booking.status] || safeText(booking.status, "UNKNOWN").toUpperCase();
+  return {
+    lifecycle,
+    status: labels[lifecycle.state] || "TICKET UNAVAILABLE",
+    activeQr: lifecycle.usable
+  };
 }
 
 function detail(doc, label, value, x, y, width = 180) {
@@ -56,10 +63,10 @@ export async function renderTicketPdf({ booking, token }) {
   const customerName = booking.customerSnapshot?.name || booking.customerId?.name || "Guest";
   const title = trip.titleEn || trip.titleAr || "SeaGo Trip";
   const vessel = trip.vesselName || null;
-  const status = statusLabel(booking);
-  const activeQr = booking.status === "confirmed" && !booking.checkedInAt;
+  const presentation = ticketPdfPresentation(booking);
+  const status = presentation.status;
 
-  const qrDataUrl = activeQr
+  const qrDataUrl = presentation.activeQr
     ? await QRCode.toDataURL(`SG2:${token}`, { errorCorrectionLevel: "M", margin: 1, width: 360 })
     : null;
   const qrBuffer = qrDataUrl ? Buffer.from(qrDataUrl.split(",")[1], "base64") : null;
@@ -91,8 +98,8 @@ export async function renderTicketPdf({ booking, token }) {
     doc.font("Helvetica").fontSize(8).fillColor("#7b8c99").text("BOOKING REFERENCE", 42, 122);
     doc.font("Helvetica-Bold").fontSize(15).fillColor("#15364b").text(ref, 42, 136);
 
-    const statusColor = status === "CONFIRMED" ? "#027a48" : status === "USED" ? "#175cd3" : "#b42318";
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(statusColor).text(status, pageWidth - 155, 132, { width: 105, align: "right" });
+    const statusColor = presentation.activeQr ? "#027a48" : presentation.lifecycle.used ? "#175cd3" : "#b42318";
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(statusColor).text(status, pageWidth - 175, 132, { width: 125, align: "right" });
 
     doc.font("Helvetica-Bold").fontSize(19).fillColor("#15364b").text(safeText(title, "SeaGo Trip"), 30, 184, {
       width: pageWidth - 60,
@@ -121,13 +128,15 @@ export async function renderTicketPdf({ booking, token }) {
       doc.font("Helvetica-Bold").fontSize(8).fillColor("#15364b").text("SHOW AT CHECK-IN", 249, 503, { width: 140, align: "center" });
     } else {
       doc.roundedRect(249, 372, 140, 84, 12).fill("#fff2f0");
-      doc.font("Helvetica-Bold").fontSize(13).fillColor("#b42318").text(status, 259, 397, { width: 120, align: "center" });
-      doc.font("Helvetica").fontSize(8).fillColor("#7b8c99").text("QR check-in unavailable", 259, 420, { width: 120, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(11).fillColor("#b42318").text(status, 255, 393, { width: 128, align: "center" });
+      doc.font("Helvetica").fontSize(8).fillColor("#7b8c99").text("QR check-in unavailable", 259, 423, { width: 120, align: "center" });
     }
 
     doc.moveTo(30, 535).lineTo(pageWidth - 30, 535).strokeColor("#dbe7ee").stroke();
     doc.font("Helvetica").fontSize(8).fillColor("#7b8c99").text(
-      "Keep this ticket available for check-in. Ticket validity is verified live by Aqaba SeaGo.",
+      presentation.activeQr
+        ? "Keep this ticket available for check-in. Ticket validity is verified live by Aqaba SeaGo."
+        : "This booking remains in your history, but its QR is not available for check-in.",
       30,
       548,
       { width: pageWidth - 60, align: "center" }
