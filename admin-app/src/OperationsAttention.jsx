@@ -2,12 +2,13 @@ import React,{useEffect,useRef,useState}from"react";
 import{AlertTriangle,BellRing,CheckCircle2,CircleDollarSign,LifeBuoy,RefreshCw}from"lucide-react";
 import{operations}from"./api.js";
 import GlobalDepartures from"./GlobalDepartures.jsx";
+import PaymentOperations from"./PaymentOperations.jsx";
 import{createLatestRequestManager,isAbortError}from"./requestLifecycle.js";
 import{buildQueuePreview,getAttentionCategories,hasOperationalAttention}from"./operationsAttentionModel.js";
 import"./operations-attention.css";
 
 const iconFor=id=>id==="payment"?CircleDollarSign:id==="notification"?BellRing:LifeBuoy;
-const destinationLabel=destination=>destination==="support"?"Open Support":destination==="notifications"?"Open System":"";
+const destinationLabel=destination=>destination==="payments"?"Open Payment":destination==="support"?"Open Support":destination==="notifications"?"Open System":"";
 const formatTime=value=>{if(!value)return"";const date=new Date(value);return Number.isNaN(date.getTime())?"":date.toLocaleString([],{dateStyle:"medium",timeStyle:"short"})};
 
 export default function OperationsAttention({token,refreshKey=0,onNavigate}){
@@ -15,6 +16,9 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
   const[retryKey,setRetryKey]=useState(0);
+  const[showPayments,setShowPayments]=useState(false);
+  const[paymentIntent,setPaymentIntent]=useState(null);
+  const intentSequence=useRef(0);
   const managerRef=useRef(null);
   if(!managerRef.current)managerRef.current=createLatestRequestManager();
 
@@ -35,6 +39,21 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
     return()=>manager.cancel();
   },[token,refreshKey,retryKey]);
 
+  function openPayments(options={}){
+    intentSequence.current+=1;
+    setShowPayments(true);
+    setPaymentIntent({...options,nonce:intentSequence.current});
+    queueMicrotask(()=>document.getElementById("payment-operations")?.scrollIntoView({behavior:"smooth",block:"start"}));
+  }
+
+  function navigate(destination,{paymentId,needsReview}={}){
+    if(destination==="payments"){
+      openPayments(paymentId?{paymentId}:{needsReview:Boolean(needsReview)});
+      return;
+    }
+    onNavigate?.(destination);
+  }
+
   const categories=getAttentionCategories(data);
   const needsAttention=hasOperationalAttention(data);
   const preview=buildQueuePreview(data,5);
@@ -49,6 +68,7 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
           <p>Payments, delivery failures, and support signals that may need admin follow-up.</p>
         </div>
         <div className="operations-attention__freshness">
+          <button type="button" className="secondary" onClick={()=>openPayments()}>Payment Operations</button>
           {loading&&data?<span><RefreshCw className="spin" size={14}/> Refreshing</span>:generatedAt?<span>Updated {generatedAt}</span>:null}
         </div>
       </div>
@@ -64,15 +84,16 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
           {categories.map(category=>{const Icon=iconFor(category.id);return <article className={`operations-attention__category operations-attention__category--${category.id}`} key={category.id}>
             <Icon size={19}/>
             <div><b>{category.count}</b><span>{category.label}</span></div>
-            {category.destination&&category.count>0?<button type="button" className="operations-attention__link" onClick={()=>onNavigate?.(category.destination)}>{destinationLabel(category.destination)}</button>:null}
+            {category.destination&&category.count>0?<button type="button" className="operations-attention__link" onClick={()=>navigate(category.destination,{needsReview:category.id==="payment"})}>{category.id==="payment"?"Open Payments":destinationLabel(category.destination)}</button>:null}
           </article>})}
         </div>
         {preview.length?<div className="operations-attention__preview"><div className="operations-attention__preview-head"><b>Queue preview</b><span>Up to 5 current signals</span></div><ul>{preview.map(item=><li key={item.id}>
           <div className={`operations-attention__signal operations-attention__signal--${item.kind}`}><b>{item.title}</b>{item.details.length?<span>{item.details.join(" · ")}</span>:null}{item.time?<small>{formatTime(item.time)}</small>:null}</div>
-          {item.destination?<button type="button" className="secondary" onClick={()=>onNavigate?.(item.destination)}>{destinationLabel(item.destination)}</button>:<span className="operations-attention__readonly">Read only</span>}
+          {item.destination?<button type="button" className="secondary" onClick={()=>navigate(item.destination,{paymentId:item.targetId})}>{destinationLabel(item.destination)}</button>:<span className="operations-attention__readonly">Read only</span>}
         </li>)}</ul></div>:null}
       </>:null}
     </section>
     <GlobalDepartures token={token} refreshKey={refreshKey}/>
+    {showPayments?<PaymentOperations token={token} intent={paymentIntent} onClose={()=>setShowPayments(false)} onNavigate={onNavigate}/>:null}
   </>;
 }

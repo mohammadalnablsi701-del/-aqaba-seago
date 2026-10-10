@@ -14,6 +14,7 @@ import adminSensitiveActionGuard from "./routes/adminSensitiveActionGuard.js";
 import adminProviderLifecycleRoutes from "./routes/adminProviderLifecycle.js";
 import adminDeparturesRoutes from "./routes/adminDepartures.js";
 import adminBookingSupportRoutes from "./routes/adminBookingSupport.js";
+import adminPaymentRoutes from "./routes/adminPayments.js";
 import providerAccessAdminRoutes from "./routes/providerAccessAdmin.js";
 import operationsRoutes from "./routes/operations.js";
 import tripRoutes from "./routes/trips.js";
@@ -61,6 +62,7 @@ export function createApp() {
   app.use("/api/admin/operations", adminDeparturesRoutes);
   app.use("/api/admin/operations", operationsRoutes);
   app.use("/api/admin/bookings", adminBookingSupportRoutes);
+  app.use("/api/admin/payments", adminPaymentRoutes);
   app.use("/api/admin", adminAuditRoutes);
   app.use("/api/admin", providerAccessAdminRoutes);
   app.use("/api/admin", adminCommissionRoutes);
