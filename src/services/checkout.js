@@ -5,6 +5,7 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import Payment from "../models/Payment.js";
 import { calculateTieredPricing } from "./pricing.js";
+import { sellableTripFilter } from "./tripSales.js";
 
 function verifyRequest(hold,{departureId,adults,children,mealPlan}) {
   if(String(hold.departureId)!==String(departureId)||hold.adults!==adults||hold.children!==children||hold.mealPlan!==mealPlan)
@@ -26,7 +27,7 @@ export async function reserveCheckout({customerId,key,departureId,adults,childre
         $expr:{$lte:[{$add:["$reservedSeats",seats]},"$capacity"]}
       },{$inc:{reservedSeats:seats}},{new:true,session});
       if(!departure)throw Object.assign(new Error("Departure unavailable or not enough seats"),{statusCode:409});
-      const trip=await Trip.findOne({_id:departure.tripId,active:true}).session(session);
+      const trip=await Trip.findOne(sellableTripFilter({_id:departure.tripId})).session(session);
       const provider=trip&&await Provider.findOne({_id:trip.providerId,status:"approved"}).select("_id").session(session);
       if(!provider)throw Object.assign(new Error("Trip unavailable"),{statusCode:409});
       const pricing=calculateTieredPricing({pricing:trip.pricing,adults,children,mealPlan});

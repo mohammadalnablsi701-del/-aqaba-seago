@@ -9,6 +9,7 @@ import { calculateTieredPricing } from "../services/pricing.js";
 import { releaseExpiredCheckoutHolds, releaseCheckoutHoldsForDeparture } from "../services/payments.js";
 import { cancelDepartureBookings } from "../services/cancellations.js";
 import { salePricing } from "../services/pricingVisibility.js";
+import { sellableTripFilter } from "../services/tripSales.js";
 
 const router = express.Router();
 
@@ -92,7 +93,7 @@ router.get("/", async (req, res, next) => {
     await releaseExpiredCheckoutHolds({ limit: 200 });
     const approvedProviders=await Provider.find({status:"approved"}).select("_id");
     const approvedProviderIds=approvedProviders.map(p=>p._id);
-    const activeTrips=await Trip.find({active:true,providerId:{$in:approvedProviderIds}}).select("_id");
+    const activeTrips=await Trip.find(sellableTripFilter({providerId:{$in:approvedProviderIds}})).select("_id");
     const activeTripIds=activeTrips.map(t=>t._id);
     const query = {
       status: "scheduled",
@@ -230,7 +231,7 @@ router.get("/:departureId/quote", async (req, res, next) => {
       return res.status(409).json({ error: "Not enough seats" });
     }
 
-    const trip = await Trip.findOne({ _id: departure.tripId, active: true });
+    const trip = await Trip.findOne(sellableTripFilter({ _id: departure.tripId }));
     if (!trip) return res.status(404).json({ error: "Trip not found" });
     const provider = await Provider.findOne({ _id: trip.providerId, status: "approved" }).select("_id");
     if (!provider) return res.status(404).json({ error: "Trip not found" });

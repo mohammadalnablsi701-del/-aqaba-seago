@@ -1,10 +1,12 @@
 import express from "express";
+import mongoose from "mongoose";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
 import { tripForAudience } from "../services/pricingVisibility.js";
+import { PLATFORM_STATUS, sellableTripFilter, tripPlatformStatus } from "../services/tripSales.js";
 
 const router = express.Router();
 
@@ -85,6 +87,16 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
     const p=access?.provider;
     if(!p)return res.status(403).json({error:"Trip management permission required"});
 
+    let platformStatus=PLATFORM_STATUS.ALLOWED;
+    if(req.body.duplicateFromTripId!==undefined){
+      const sourceId=String(req.body.duplicateFromTripId||"").trim();
+      if(!mongoose.isValidObjectId(sourceId))return res.status(400).json({error:"Invalid duplicate source"});
+      const source=await Trip.findOne({_id:sourceId,providerId:p._id}).select("platformStatus");
+      if(!source)return res.status(404).json({error:"Duplicate source trip not found"});
+      // A deliberate duplicate of an Admin-held listing remains held. Normal new trips stay allowed.
+      platformStatus=tripPlatformStatus(source);
+    }
+
     const configuredCommission=Number(process.env.DEFAULT_COMMISSION_PERCENTAGE);
     const defaultCommission=Number.isFinite(configuredCommission)&&configuredCommission>=0&&configuredCommission<=100?configuredCommission:20;
     const trip = await Trip.create({
@@ -96,6 +108,7 @@ router.post("/", requireAuth, requireRole("provider"), async (req, res, next) =>
       departureLocation: req.body.departureLocation ? {...req.body.departureLocation,name:cleanText(req.body.departureLocation.name,120),address:cleanText(req.body.departureLocation.address,220),googleMapsUrl:cleanText(req.body.departureLocation.googleMapsUrl,500)} : undefined,
       images: sanitizeImages(req.body.images),
       active: req.body.active !== false,
+      platformStatus,
       pricing: {
         ...salePriceUpdate(req.body.pricing),
         commissionType: "percentage",
@@ -148,7 +161,7 @@ router.get("/", async (_req, res, next) => {
   try {
     const approvedProviders = await Provider.find({ status: "approved" }).select("_id");
     const providerIds = approvedProviders.map(p => p._id);
-    const trips = await Trip.find({ active: true, providerId: { $in: providerIds } })
+    const trips = await Trip.find(sellableTripFilter({ providerId: { $in: providerIds } }))
       .populate("providerId", "businessName");
     res.json(trips.map(trip => tripForAudience(trip)));
   } catch (e) { next(e); }

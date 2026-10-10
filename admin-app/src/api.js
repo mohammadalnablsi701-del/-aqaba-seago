@@ -7,7 +7,7 @@ export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:J
 export const providers=token=>req("/api/admin/providers",{token});
 export const approveProvider=(token,id)=>req("/api/admin/providers/"+id+"/approve",{token,method:"PATCH"});
 export const trips=token=>req("/api/admin/trips",{token});
-export const setTripActive=(token,id,active)=>req("/api/admin/trips/"+id+"/active",{token,method:"PATCH",body:JSON.stringify({active:Boolean(active)})});
+export const setTripPlatformStatus=(token,id,platformStatus)=>req("/api/admin/trips/"+id+"/platform-status",{token,method:"PATCH",body:JSON.stringify({platformStatus})});
 export const setCommission=(token,id,fees)=>{
   if(typeof fees==="number")return req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({percentage:fees})});
   return req("/api/admin/trips/"+id+"/fees",{token,method:"PATCH",body:JSON.stringify(fees)});
