@@ -3,6 +3,7 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { attachAdminActionReason } from "../services/adminActionReason.js";
+import { createAdminAuditEvent, withAdminAuditTransaction } from "../services/adminAudit.js";
 import { isTripSellable, PLATFORM_STATUS, tripPlatformStatus } from "../services/tripSales.js";
 
 const router=express.Router();
@@ -14,32 +15,41 @@ router.patch("/trips/:tripId/platform-status",async(req,res,next)=>{
     if(!Object.values(PLATFORM_STATUS).includes(platformStatus)){
       return res.status(400).json({error:"platformStatus must be allowed or paused"});
     }
-    const trip=await Trip.findById(req.params.tripId);
-    if(!trip)return res.status(404).json({error:"Trip not found"});
-    const provider=await Provider.findById(trip.providerId).select("businessName status");
-    if(!provider)return res.status(409).json({error:"Trip provider not found"});
 
-    const currentStatus=tripPlatformStatus(trip);
-    if(currentStatus===platformStatus){
-      return res.json({
-        id:trip._id,
-        active:trip.active,
-        platformStatus:currentStatus,
-        provider:{id:provider._id,businessName:provider.businessName,status:provider.status},
-        sellable:isTripSellable({trip,provider})
+    const result=await withAdminAuditTransaction(async session=>{
+      const trip=await Trip.findById(req.params.tripId).session(session);
+      if(!trip)throw Object.assign(new Error("Trip not found"),{statusCode:404});
+      const provider=await Provider.findById(trip.providerId).session(session).select("businessName status");
+      if(!provider)throw Object.assign(new Error("Trip provider not found"),{statusCode:409});
+
+      const currentStatus=tripPlatformStatus(trip);
+      if(currentStatus===platformStatus){
+        return {trip,provider,currentStatus};
+      }
+      if(platformStatus===PLATFORM_STATUS.PAUSED)attachAdminActionReason(req);
+
+      trip.platformStatus=platformStatus;
+      await trip.save({session});
+      await createAdminAuditEvent({
+        req,
+        action:platformStatus===PLATFORM_STATUS.PAUSED?"trip_platform_paused":"trip_platform_allowed",
+        entityType:"trip",
+        entityId:trip._id,
+        entityLabel:trip.titleEn||trip.titleAr||"Trip",
+        reason:platformStatus===PLATFORM_STATUS.PAUSED?req.adminActionReason:null,
+        before:{platformStatus:currentStatus},
+        after:{platformStatus:tripPlatformStatus(trip)},
+        session
       });
-    }
-    if(platformStatus===PLATFORM_STATUS.PAUSED)attachAdminActionReason(req);
-
-    trip.platformStatus=platformStatus;
-    await trip.save();
+      return {trip,provider,currentStatus:tripPlatformStatus(trip)};
+    });
 
     res.json({
-      id:trip._id,
-      active:trip.active,
-      platformStatus:tripPlatformStatus(trip),
-      provider:{id:provider._id,businessName:provider.businessName,status:provider.status},
-      sellable:isTripSellable({trip,provider})
+      id:result.trip._id,
+      active:result.trip.active,
+      platformStatus:tripPlatformStatus(result.trip),
+      provider:{id:result.provider._id,businessName:result.provider.businessName,status:result.provider.status},
+      sellable:isTripSellable({trip:result.trip,provider:result.provider})
     });
   }catch(e){next(e);}
 });
