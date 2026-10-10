@@ -28,6 +28,7 @@ test("confirmed + scheduled + unused is ready and QR-usable", () => {
   const lifecycle = deriveTicketLifecycle(source);
   assert.deepEqual(lifecycle, { state: "ready", usable: true, used: false });
   const customer = deriveCustomerTicketState({ ticketLifecycle: lifecycle });
+  assert.equal(customer.label, "Ready for check-in");
   assert.equal(customer.ready, true);
   assert.equal(customer.showQr, true);
   assert.equal(customer.clientStatus, "confirmed");
@@ -66,6 +67,7 @@ test("confirmed booking on cancelled departure is not ready", () => {
   const adapted = applyCustomerTicketState({ status: "confirmed", ticketLifecycle: lifecycle });
   assert.equal(adapted.bookingStatus, "confirmed");
   assert.equal(adapted.status, "Departure_cancelled");
+  assert.equal(adapted.ticketPresentation.label, "Departure cancelled");
   assert.notEqual(adapted.status, "confirmed");
   assert.equal(adapted.ticketPresentation.showQr, false);
   assert.equal(ticketPdfPresentation(source).activeQr, false);
