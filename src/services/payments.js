@@ -10,6 +10,7 @@ import Provider from "../models/Provider.js";
 import User from "../models/User.js";
 import { getPaymentProvider } from "../payments/index.js";
 import { sendBookingConfirmation } from "./notifications.js";
+import { sellableTripFilter } from "./tripSales.js";
 
 const SUCCESS_TERMINAL_PAYMENT_STATUSES=new Set(["paid","partially_refunded","refunded"]);
 export function isSuccessfulTerminalPaymentStatus(status){return SUCCESS_TERMINAL_PAYMENT_STATUSES.has(String(status||""));}
@@ -68,13 +69,17 @@ async function confirmPaidHoldInSession({payment,event,session}){
       }
 
       const departure=await Departure.findOne({_id:hold.departureId,status:"scheduled",salesClosed:{$ne:true},startsAt:{$gt:now}}).session(session).select("_id");
-      const trip=await Trip.findOne({_id:hold.tripId,active:true}).session(session).select("_id providerId");
+      const trip=await Trip.findOne(sellableTripFilter({_id:hold.tripId})).session(session).select("_id providerId");
       const provider=trip?await Provider.findOne({_id:trip.providerId,status:"approved"}).session(session).select("_id"):null;
       if(!departure||!trip||!provider){
         payment.status="needs_review";
         payment.lastEventId=event.eventId;
         payment.rawLastEvent=event.raw;
         await payment.save({session});
+        // A successful gateway event cannot become a booking when current trip/provider
+        // sales authority has been revoked. Release the still-active hold atomically so
+        // paid-but-blocked inventory does not leak while Payment remains reviewable.
+        if(!trip||!provider)await releaseHold(hold,"released",session);
         result={payment,bookingId:null};
         return;
       }
@@ -137,7 +142,7 @@ function sameMoney(a, b) {
 }
 
 async function holdInventoryIsSellable(hold) {
-  const trip = await Trip.findOne({ _id: hold.tripId, active: true }).select("_id providerId");
+  const trip = await Trip.findOne(sellableTripFilter({ _id: hold.tripId })).select("_id providerId");
   if (!trip) return false;
   const provider = await Provider.findOne({ _id: trip.providerId, status: "approved" }).select("_id");
   return Boolean(provider);
