@@ -28,6 +28,11 @@ router.patch("/providers/:providerId/access",async(req,res,next)=>{
       const name=suppliedName||String(provider.businessName||"").trim();
 
       const currentOwner=provider.ownerUserId?await User.findById(provider.ownerUserId).session(session):null;
+      const before={
+        email:currentOwner?.email||null,
+        name:currentOwner?.name||null,
+        isActive:currentOwner?.isActive??null
+      };
       let user=await User.findOne({email}).session(session);
 
       if(currentOwner){
@@ -44,11 +49,6 @@ router.patch("/providers/:providerId/access",async(req,res,next)=>{
       }
 
       const existingUser=!user.isNew;
-      const before={
-        email:currentOwner?.email||null,
-        name:currentOwner?.name||null,
-        isActive:currentOwner?.isActive??null
-      };
       const emailChanged=cleanEmail(before.email)!==email;
       const nameChanged=String(before.name||"")!==name;
 
