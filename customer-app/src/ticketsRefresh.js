@@ -119,6 +119,7 @@ export function createTicketsRefreshController({
     active = true;
     lastTickets = Array.isArray(initialTickets) ? initialTickets : [];
     failureCount = 0;
+    lastForegroundRefreshAt = now();
     return refresh("entry", { initial: true });
   }
 
