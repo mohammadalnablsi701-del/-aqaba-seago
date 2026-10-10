@@ -80,9 +80,15 @@ router.post("/:paymentId/complete", async (req, res, next) => {
       return res.status(404).json({ error: "Mock payment not found" });
     }
 
+    const paymentReference=String(payment._id);
+    const legacyPlaceholder=`pending_${paymentReference}`;
+    const externalPaymentId=payment.externalPaymentId&&payment.externalPaymentId!==legacyPlaceholder
+      ? payment.externalPaymentId
+      : `mock_${paymentReference}`;
     const payload = Buffer.from(JSON.stringify({
       eventId: `evt_${Date.now()}_${payment._id}`,
-      externalPaymentId: payment.externalPaymentId,
+      paymentReference,
+      externalPaymentId,
       status: req.body.status || "paid",
       amount: payment.amount,
       currency: payment.currency

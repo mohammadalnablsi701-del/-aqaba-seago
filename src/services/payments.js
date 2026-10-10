@@ -16,6 +16,126 @@ const SUCCESS_TERMINAL_PAYMENT_STATUSES=new Set(["paid","partially_refunded","re
 export function isSuccessfulTerminalPaymentStatus(status){return SUCCESS_TERMINAL_PAYMENT_STATUSES.has(String(status||""));}
 
 const FAILURE_TERMINAL_PAYMENT_STATUSES=new Set(["failed","cancelled","expired"]);
+const CHECKOUT_MUTABLE_PAYMENT_STATUSES=new Set(["created","pending"]);
+
+export function paymentReferenceFor(payment){
+  if(!payment?._id)throw new TypeError("Payment identity is required");
+  return String(payment._id);
+}
+
+export function providerCheckoutIdempotencyKeyFor(payment){
+  return `checkout:${paymentReferenceFor(payment)}`;
+}
+
+function legacyPendingExternalPaymentId(payment){
+  return `pending_${paymentReferenceFor(payment)}`;
+}
+
+function hasBoundExternalPaymentId(payment){
+  const value=String(payment?.externalPaymentId||"");
+  return Boolean(value&&value!==legacyPendingExternalPaymentId(payment));
+}
+
+function sameMoney(a, b) {
+  return Math.abs(Number(a) - Number(b)) < 0.001;
+}
+
+function normalizedCheckout({checkout,paymentReference,amount,currency}){
+  if(!checkout||typeof checkout!=="object")throw Object.assign(new Error("Payment provider returned an invalid checkout"),{statusCode:502});
+  const returnedReference=checkout.paymentReference==null?paymentReference:String(checkout.paymentReference);
+  if(returnedReference!==paymentReference){
+    throw Object.assign(new Error("Payment provider checkout reference mismatch"),{statusCode:502});
+  }
+  const externalPaymentId=String(checkout.externalPaymentId||"").trim();
+  const checkoutUrl=String(checkout.checkoutUrl||"").trim();
+  if(!externalPaymentId||!checkoutUrl){
+    throw Object.assign(new Error("Payment provider returned an incomplete checkout"),{statusCode:502});
+  }
+  if(checkout.amount!==undefined&&!sameMoney(checkout.amount,amount)){
+    throw Object.assign(new Error("Payment provider checkout amount mismatch"),{statusCode:502});
+  }
+  if(checkout.currency!==undefined&&String(checkout.currency)!==String(currency)){
+    throw Object.assign(new Error("Payment provider checkout currency mismatch"),{statusCode:502});
+  }
+  return {...checkout,paymentReference,externalPaymentId,checkoutUrl};
+}
+
+async function lookupProviderCheckout({provider,request}){
+  if(typeof provider.findCheckoutByReference!=="function")return null;
+  const found=await provider.findCheckoutByReference(request);
+  return found?normalizedCheckout({checkout:found,paymentReference:request.paymentReference,amount:request.amount,currency:request.currency}):null;
+}
+
+export async function createOrRecoverProviderCheckout({provider,payment,baseUrl}){
+  const request={
+    paymentReference:paymentReferenceFor(payment),
+    providerIdempotencyKey:providerCheckoutIdempotencyKeyFor(payment),
+    amount:Number(payment.amount),
+    currency:String(payment.currency||"JOD"),
+    baseUrl
+  };
+
+  const existing=await lookupProviderCheckout({provider,request});
+  if(existing)return existing;
+
+  try{
+    const created=await provider.createCheckout(request);
+    return normalizedCheckout({checkout:created,paymentReference:request.paymentReference,amount:request.amount,currency:request.currency});
+  }catch(error){
+    // A timeout/error can happen after the provider-side checkout was created.
+    // Reference lookup recovers that ambiguous result where the adapter supports it.
+    const recovered=await lookupProviderCheckout({provider,request});
+    if(recovered)return recovered;
+    throw error;
+  }
+}
+
+async function persistCheckoutMapping({payment,checkout}){
+  const placeholder=legacyPendingExternalPaymentId(payment);
+  const conflict=await Payment.findOne({
+    _id:{$ne:payment._id},
+    provider:payment.provider,
+    externalPaymentId:checkout.externalPaymentId
+  }).select("_id");
+  if(conflict){
+    await Payment.updateOne({_id:payment._id,status:{$in:["created","pending"]}},{$set:{status:"needs_review"}});
+    throw Object.assign(new Error("Payment checkout identity conflict"),{statusCode:409});
+  }
+
+  const updated=await Payment.findOneAndUpdate(
+    {
+      _id:payment._id,
+      provider:payment.provider,
+      status:{$in:["created","pending"]},
+      $or:[
+        {externalPaymentId:{$exists:false}},
+        {externalPaymentId:null},
+        {externalPaymentId:""},
+        {externalPaymentId:placeholder},
+        {externalPaymentId:checkout.externalPaymentId}
+      ]
+    },
+    {$set:{externalPaymentId:checkout.externalPaymentId,checkoutUrl:checkout.checkoutUrl,status:"pending"}},
+    {new:true}
+  );
+  if(updated)return updated;
+
+  const current=await Payment.findById(payment._id);
+  if(!current)throw Object.assign(new Error("Payment disappeared during checkout creation"),{statusCode:409});
+  if(hasBoundExternalPaymentId(current)&&String(current.externalPaymentId)!==checkout.externalPaymentId){
+    if(!isSuccessfulTerminalPaymentStatus(current.status)){
+      await Payment.updateOne({_id:current._id},{$set:{status:"needs_review"}});
+    }
+    throw Object.assign(new Error("Payment checkout identity conflict"),{statusCode:409});
+  }
+  if(String(current.externalPaymentId||"")===checkout.externalPaymentId&&!current.checkoutUrl){
+    await Payment.updateOne({_id:current._id,externalPaymentId:checkout.externalPaymentId},{$set:{checkoutUrl:checkout.checkoutUrl}});
+    return Payment.findById(current._id);
+  }
+  // A webhook may have completed the financial transition while the checkout API
+  // was persisting the provider result. Do not overwrite that terminal state.
+  return current;
+}
 
 async function recordPaymentEvent({providerName,event,payment}){
   try{
@@ -137,10 +257,6 @@ async function confirmPaidHoldInSession({payment,event,session}){
   return result;
 }
 
-function sameMoney(a, b) {
-  return Math.abs(Number(a) - Number(b)) < 0.001;
-}
-
 async function holdInventoryIsSellable(hold) {
   const trip = await Trip.findOne(sellableTripFilter({ _id: hold.tripId })).select("_id providerId");
   if (!trip) return false;
@@ -196,24 +312,41 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
 
   let payment = await Payment.findOne({ holdId: hold._id });
   if (!payment) {
+    const paymentId=new mongoose.Types.ObjectId();
     payment = await Payment.create({
+      _id:paymentId,
       holdId: hold._id,
       customerId,
       provider: process.env.PAYMENT_PROVIDER || "mock",
+      externalPaymentId:`pending_${paymentId}`,
       amount: hold.pricing.grossAmount,
       currency: hold.pricing.currency || "JOD"
     });
   }
 
+  // The Mongo _id is the SeaGo-owned merchant reference. It is immutable, unique,
+  // merchant-safe, and this Payment is durable before any provider side effect.
+  // pending_<id> is only an internal unbound sentinel for the existing unique index.
+  if(!CHECKOUT_MUTABLE_PAYMENT_STATUSES.has(payment.status))return payment;
+  if(hasBoundExternalPaymentId(payment)&&payment.checkoutUrl)return payment;
+
   const provider = getPaymentProvider(payment.provider);
-  const checkout = await provider.createCheckout({ payment, baseUrl });
-  // A webhook may have finalized this payment while checkout was being prepared.
-  const updated = await Payment.findOneAndUpdate(
-    { _id: payment._id, status: { $in: ["created", "pending"] } },
-    { $set: { externalPaymentId: checkout.externalPaymentId, checkoutUrl: checkout.checkoutUrl, status: "pending" } },
-    { new: true }
-  );
-  return updated || await Payment.findById(payment._id);
+  const checkout = await createOrRecoverProviderCheckout({provider,payment,baseUrl});
+  return persistCheckoutMapping({payment,checkout});
+}
+
+function canonicalPaymentReference(value){
+  const reference=String(value||"").trim();
+  if(!/^[a-f\d]{24}$/i.test(reference)||!mongoose.isValidObjectId(reference))return null;
+  return String(new mongoose.Types.ObjectId(reference));
+}
+
+async function markCorrelationReview({payment,event,session}){
+  if(!isSuccessfulTerminalPaymentStatus(payment.status))payment.status="needs_review";
+  payment.lastEventId=event.eventId;
+  payment.rawLastEvent=event.raw;
+  await payment.save({session});
+  return payment;
 }
 
 export async function processPaymentWebhook({ providerName, rawBody, signature }) {
@@ -221,8 +354,9 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
   provider.verifyWebhook({ rawBody, signature });
   const event = provider.parseWebhook(rawBody);
   const allowedStatuses = new Set(["pending", "paid", "failed", "cancelled", "expired"]);
+  const paymentReference=event.paymentReference?canonicalPaymentReference(event.paymentReference):null;
   if (!event.eventId || !event.externalPaymentId || !allowedStatuses.has(event.status) ||
-      !Number.isFinite(event.amount) || event.amount < 0) {
+      !Number.isFinite(event.amount) || event.amount < 0 || (event.paymentReference && !paymentReference)) {
     throw Object.assign(new Error("Malformed payment event"), { statusCode: 400 });
   }
 
@@ -234,9 +368,40 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
       // MongoDB may retry this callback after a write conflict. Always reload
       // the state and reset side effects instead of using a stale preflight read.
       confirmationBookingId = null;
-      const payment = await Payment.findOne({
-        provider: providerName, externalPaymentId: event.externalPaymentId
+      const paymentByExternal=await Payment.findOne({
+        provider:providerName,externalPaymentId:event.externalPaymentId
       }).session(session);
+      let payment=paymentByExternal;
+
+      if(paymentReference){
+        const paymentByReference=await Payment.findOne({_id:paymentReference,provider:providerName}).session(session);
+        if(!paymentByReference){
+          if(paymentByExternal){
+            const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
+            if(seen||paymentByExternal.lastEventId===event.eventId){result={duplicate:true,payment:paymentByExternal};return;}
+            await markCorrelationReview({payment:paymentByExternal,event,session});
+            result={duplicate:false,payment:paymentByExternal};
+            return;
+          }
+          throw Object.assign(new Error("Payment not found"),{statusCode:404});
+        }
+        payment=paymentByReference;
+        if(paymentByExternal&&String(paymentByExternal._id)!==String(payment._id)){
+          const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
+          if(seen||payment.lastEventId===event.eventId){result={duplicate:true,payment};return;}
+          await markCorrelationReview({payment,event,session});
+          result={duplicate:false,payment};
+          return;
+        }
+        if(hasBoundExternalPaymentId(payment)&&String(payment.externalPaymentId)!==event.externalPaymentId){
+          const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
+          if(seen||payment.lastEventId===event.eventId){result={duplicate:true,payment};return;}
+          await markCorrelationReview({payment,event,session});
+          result={duplicate:false,payment};
+          return;
+        }
+      }
+
       if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
       const seen = await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
       if (seen || payment.lastEventId === event.eventId) {
@@ -253,29 +418,36 @@ export async function processPaymentWebhook({ providerName, rawBody, signature }
       }
 
       const hold = await CheckoutHold.findById(payment.holdId).session(session);
-      if (!hold || !sameMoney(event.amount, payment.amount) || event.currency !== payment.currency) {
+      const moneyMatches=hold&&sameMoney(event.amount,payment.amount)&&event.currency===payment.currency;
+      if (!moneyMatches) {
         payment.status = "needs_review";
-      } else if (event.status === "paid") {
-        if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)) {
-          // A late success after seats were released requires reconciliation,
-          // never automatic rebooking or a second seat allocation.
-          payment.status = "needs_review";
-        } else {
-          const confirmed = await confirmPaidHoldInSession({payment,event,session});
-          confirmationBookingId = confirmed?.bookingId || null;
-          result = { duplicate: false, payment: confirmed?.payment || payment };
-          return;
-        }
-      } else if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(event.status)) {
-        if (hold.status === "paid" || payment.bookingId) {
-          payment.status = "needs_review";
-        } else {
-          await releaseHold(hold, event.status === "expired" ? "expired" : "released", session);
-          payment.status = event.status;
-          payment.failedAt = new Date();
-        }
       } else {
-        payment.status = "pending";
+        // First binding after a crash/DB failure is allowed only after provider,
+        // SeaGo reference, amount and currency have all matched in this transaction.
+        if(paymentReference&&!hasBoundExternalPaymentId(payment))payment.externalPaymentId=event.externalPaymentId;
+
+        if (event.status === "paid") {
+          if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)) {
+            // A late success after seats were released requires reconciliation,
+            // never automatic rebooking or a second seat allocation.
+            payment.status = "needs_review";
+          } else {
+            const confirmed = await confirmPaidHoldInSession({payment,event,session});
+            confirmationBookingId = confirmed?.bookingId || null;
+            result = { duplicate: false, payment: confirmed?.payment || payment };
+            return;
+          }
+        } else if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(event.status)) {
+          if (hold.status === "paid" || payment.bookingId) {
+            payment.status = "needs_review";
+          } else {
+            await releaseHold(hold, event.status === "expired" ? "expired" : "released", session);
+            payment.status = event.status;
+            payment.failedAt = new Date();
+          }
+        } else {
+          payment.status = "pending";
+        }
       }
       payment.lastEventId = event.eventId;
       payment.rawLastEvent = event.raw;
