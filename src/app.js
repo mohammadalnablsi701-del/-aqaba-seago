@@ -12,6 +12,7 @@ import adminCommissionRoutes from "./routes/adminCommission.js";
 import adminTripControlRoutes from "./routes/adminTripControl.js";
 import adminSensitiveActionGuard from "./routes/adminSensitiveActionGuard.js";
 import adminProviderLifecycleRoutes from "./routes/adminProviderLifecycle.js";
+import adminDeparturesRoutes from "./routes/adminDepartures.js";
 import providerAccessAdminRoutes from "./routes/providerAccessAdmin.js";
 import operationsRoutes from "./routes/operations.js";
 import tripRoutes from "./routes/trips.js";
@@ -56,6 +57,7 @@ export function createApp() {
   app.get("/health", (_req, res) => res.json({ok:true,service:"aqaba-seago-api",version:"0.3.1",commit:process.env.RAILWAY_GIT_COMMIT_SHA||process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null}));
   app.use("/api/auth", authRoutes);
   app.use("/api/providers", providerRoutes);
+  app.use("/api/admin/operations", adminDeparturesRoutes);
   app.use("/api/admin/operations", operationsRoutes);
   app.use("/api/admin", adminAuditRoutes);
   app.use("/api/admin", providerAccessAdminRoutes);
