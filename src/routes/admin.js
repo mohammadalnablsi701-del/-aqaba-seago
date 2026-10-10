@@ -1,5 +1,5 @@
 import {settlementLedger, recordSettlement} from "../services/settlements.js";
-import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import ProviderSettlement from "../models/ProviderSettlement.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import ProviderSettlement from "../models/ProviderSettlement.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";import{isTripSellable,sellableNowDepartureFilter,tripSalesSemantics}from"../services/tripSales.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
 
 function overviewDate(value,end=false){
   const s=String(value||"").trim();
@@ -155,26 +155,49 @@ router.post("/settlements/pay",async(req,res,next)=>{
 router.get("/trips",async(_req,res,next)=>{try{
   const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});
   const tripIds=rows.map(t=>t._id);
-  const stats=tripIds.length?await Booking.aggregate([
-    {$match:{tripId:{$in:tripIds},status:"confirmed"}},
-    {$group:{_id:"$tripId",bookings:{$sum:1},seats:{$sum:{$ifNull:["$seats",0]}},gross:{$sum:{$ifNull:["$pricing.grossAmount",0]}},commission:{$sum:{$ifNull:["$pricing.commissionAmount",0]}},providerNet:{$sum:{$ifNull:["$pricing.providerNetAmount",0]}}}}
-  ]):[];
+  const now=new Date();
+  const [stats,sellableDepartureRows]=tripIds.length?await Promise.all([
+    Booking.aggregate([
+      {$match:{tripId:{$in:tripIds},status:"confirmed"}},
+      {$group:{_id:"$tripId",bookings:{$sum:1},seats:{$sum:{$ifNull:["$seats",0]}},gross:{$sum:{$ifNull:["$pricing.grossAmount",0]}},commission:{$sum:{$ifNull:["$pricing.commissionAmount",0]}},providerNet:{$sum:{$ifNull:["$pricing.providerNetAmount",0]}}}}
+    ]),
+    Departure.find(sellableNowDepartureFilter({tripId:{$in:tripIds}},now)).select("tripId").lean()
+  ]):[[],[]];
   const byTrip=new Map(stats.map(s=>[String(s._id),s]));
-  res.json(rows.map(t=>({...t.toObject(),financials:(()=>{const s=byTrip.get(String(t._id))||{};return{confirmedBookings:Number(s.bookings||0),confirmedSeats:Number(s.seats||0),grossSales:Number(s.gross||0),commissionAmount:Number(s.commission||0),providerNetAmount:Number(s.providerNet||0),currency:t.pricing?.currency||"JOD"};})()})));
+  const sellableTripIds=new Set(sellableDepartureRows.map(d=>String(d.tripId)));
+  res.json(rows.map(t=>{
+    const s=byTrip.get(String(t._id))||{};
+    const sellability=tripSalesSemantics({trip:t,provider:t.providerId,hasSellableDeparture:sellableTripIds.has(String(t._id))});
+    return {...t.toObject(),sellability,financials:{confirmedBookings:Number(s.bookings||0),confirmedSeats:Number(s.seats||0),grossSales:Number(s.gross||0),commissionAmount:Number(s.commission||0),providerNetAmount:Number(s.providerNet||0),currency:t.pricing?.currency||"JOD"}};
+  }));
 }catch(e){next(e);}});
 router.get("/providers",async(_req,res,next)=>{try{
   const rows=await Provider.find({}).populate("ownerUserId","name email phone isActive").sort({createdAt:-1}).limit(300);
   const providerIds=rows.map(x=>x._id);
-  const trips=providerIds.length?await Trip.find({providerId:{$in:providerIds}}).select("_id providerId active"): [];
+  const trips=providerIds.length?await Trip.find({providerId:{$in:providerIds}}).select("_id providerId active platformStatus"): [];
   const tripIds=trips.map(t=>t._id);
   const now=new Date();
-  const departures=tripIds.length?await Departure.find({tripId:{$in:tripIds},status:"scheduled",startsAt:{$gte:now}}).select("tripId startsAt reservedSeats capacity").sort({startsAt:1}):[];
+  const [departures,sellableDepartureRows]=tripIds.length?await Promise.all([
+    Departure.find({tripId:{$in:tripIds},status:"scheduled",startsAt:{$gte:now}}).select("tripId startsAt reservedSeats capacity").sort({startsAt:1}),
+    Departure.find(sellableNowDepartureFilter({tripId:{$in:tripIds}},now)).select("tripId").lean()
+  ]):[[],[]];
+  const sellableTripIds=new Set(sellableDepartureRows.map(d=>String(d.tripId)));
   const tripProvider=new Map(trips.map(t=>[String(t._id),String(t.providerId)]));
+  const providerById=new Map(rows.map(p=>[String(p._id),p]));
   const byProvider=new Map();
-  for(const p of providerIds)byProvider.set(String(p),{tripCount:0,activeTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0});
-  for(const t of trips){const k=String(t.providerId),s=byProvider.get(k);if(!s)continue;s.tripCount+=1;if(t.active)s.activeTripCount+=1;}
+  for(const p of providerIds)byProvider.set(String(p),{tripCount:0,activeTripCount:0,providerActiveTripCount:0,platformAllowedTripCount:0,salesEligibleTripCount:0,sellableNowTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0});
+  for(const t of trips){
+    const k=String(t.providerId),s=byProvider.get(k);if(!s)continue;
+    const semantics=tripSalesSemantics({trip:t,provider:providerById.get(k),hasSellableDeparture:sellableTripIds.has(String(t._id))});
+    s.tripCount+=1;
+    if(semantics.providerActive){s.providerActiveTripCount+=1;s.activeTripCount+=1;}
+    if(semantics.platformAllowed)s.platformAllowedTripCount+=1;
+    if(semantics.salesEligible)s.salesEligibleTripCount+=1;
+    if(semantics.sellableNow)s.sellableNowTripCount+=1;
+  }
   for(const d of departures){const k=tripProvider.get(String(d.tripId));const s=byProvider.get(k);if(!s)continue;s.upcomingDepartures+=1;s.reservedSeatsUpcoming+=Number(d.reservedSeats||0);s.capacityUpcoming+=Number(d.capacity||0);if(!s.nextDepartureAt)s.nextDepartureAt=d.startsAt;}
-  res.json(rows.map(p=>({...p.toObject(),operations:byProvider.get(String(p._id))||{tripCount:0,activeTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0},settingsConfigured:Boolean(p.settings?.configured)})));
+  const emptyOps={tripCount:0,activeTripCount:0,providerActiveTripCount:0,platformAllowedTripCount:0,salesEligibleTripCount:0,sellableNowTripCount:0,upcomingDepartures:0,nextDepartureAt:null,reservedSeatsUpcoming:0,capacityUpcoming:0};
+  res.json(rows.map(p=>({...p.toObject(),operations:byProvider.get(String(p._id))||emptyOps,settingsConfigured:Boolean(p.settings?.configured)})));
 }catch(e){next(e);}});
 router.get("/notifications",async(_req,res,next)=>{try{const rows=await NotificationLog.find({}).sort({createdAt:-1}).limit(300);res.json(rows);}catch(e){next(e);}});
 router.get("/support-requests",async(_req,res,next)=>{try{
@@ -272,30 +295,36 @@ router.post("/bookings/release-expired",async(_req,res,next)=>{try{const release
 router.get("/readiness",async(_req,res,next)=>{
   try{
     const now=new Date();
-    const [approvedProviders,providersPending,confirmedBookings,bookingTotals]=await Promise.all([
-      Provider.find({status:"approved"}).select("_id"),
-      Provider.countDocuments({status:"pending"}),
+    const [providerRows,confirmedBookings,bookingTotals,tripRows]=await Promise.all([
+      Provider.find({}).select("_id status"),
       Booking.countDocuments({status:"confirmed"}),
       Booking.aggregate([
         {$match:{status:"confirmed"}},
         {$group:{_id:null,gross:{$sum:{$ifNull:["$pricing.grossAmount",0]}},commission:{$sum:{$ifNull:["$pricing.commissionAmount",0]}},providerNet:{$sum:{$ifNull:["$pricing.providerNetAmount",0]}},seats:{$sum:{$ifNull:["$seats",0]}}}}
-      ])
+      ]),
+      Trip.find({}).select("_id providerId active platformStatus")
     ]);
-    const approvedProviderIds=approvedProviders.map(p=>p._id);
-    const activeTripRows=approvedProviderIds.length
-      ?await Trip.find({active:true,providerId:{$in:approvedProviderIds}}).select("_id")
-      :[];
-    const activeTripIds=activeTripRows.map(t=>t._id);
-    const upcomingDepartures=activeTripIds.length
-      ?await Departure.countDocuments({tripId:{$in:activeTripIds},status:"scheduled",startsAt:{$gte:now}})
-      :0;
-    const providersApproved=approvedProviders.length;
-    const activeTrips=activeTripIds.length;
-    const totals=bookingTotals[0]||{gross:0,commission:0,providerNet:0,seats:0};
-    const upcomingRows=activeTripIds.length
-      ?await Departure.find({tripId:{$in:activeTripIds},status:"scheduled",startsAt:{$gte:now}})
+    const providerById=new Map(providerRows.map(p=>[String(p._id),p]));
+    const providersApproved=providerRows.filter(p=>p.status==="approved").length;
+    const providersPending=providerRows.filter(p=>p.status==="pending").length;
+    const providerActiveTrips=tripRows.filter(t=>t.active===true).length;
+    const platformAllowedTrips=tripRows.filter(t=>tripSalesSemantics({trip:t,provider:providerById.get(String(t.providerId))}).platformAllowed).length;
+    const salesEligibleRows=tripRows.filter(t=>isTripSellable({trip:t,provider:providerById.get(String(t.providerId))}));
+    const salesEligibleTripIds=salesEligibleRows.map(t=>t._id);
+    const salesEligibleTrips=salesEligibleTripIds.length;
+    const sellableFilter=sellableNowDepartureFilter({tripId:{$in:salesEligibleTripIds}},now);
+    const [sellableDepartures,sellableTripIds,upcomingDepartures,upcomingRows]=salesEligibleTripIds.length?await Promise.all([
+      Departure.countDocuments(sellableFilter),
+      Departure.distinct("tripId",sellableFilter),
+      Departure.countDocuments({tripId:{$in:salesEligibleTripIds},status:"scheduled",startsAt:{$gte:now}}),
+      Departure.find({tripId:{$in:salesEligibleTripIds},status:"scheduled",startsAt:{$gte:now}})
         .sort({startsAt:1}).limit(6).populate({path:"tripId",select:"titleEn titleAr providerId",populate:{path:"providerId",select:"businessName"}})
-      :[];
+    ]):[0,[],0,[]];
+    const sellableTrips=sellableTripIds.length;
+    // Transitional compatibility: readiness.activeTrips historically meant
+    // market-eligible inventory, not every provider-controlled active trip.
+    const activeTrips=salesEligibleTrips;
+    const totals=bookingTotals[0]||{gross:0,commission:0,providerNet:0,seats:0};
 
     const demoProvider=await Provider.findOne({businessName:"Aqaba SeaGo Demo Partner"}).select("_id");
     const demoTripCount=demoProvider?await Trip.countDocuments({providerId:demoProvider._id}):0;
@@ -312,10 +341,10 @@ router.get("/readiness",async(_req,res,next)=>{
 
     const checks=[
       {id:"provider",label:"At least one approved provider",ok:providersApproved>0},
-      {id:"trips",label:"At least one active trip",ok:activeTrips>0},
-      {id:"departures",label:"At least one upcoming departure",ok:upcomingDepartures>0},
+      {id:"trips",label:"At least one sales-eligible trip",ok:salesEligibleTrips>0},
+      {id:"departures",label:"At least one sellable departure now",ok:sellableDepartures>0},
       {id:"demo-seed",label:"Demo seeding disabled",ok:process.env.SEED_DEMO_DATA!=="true"},
-      {id:"demo-records",label:"No sellable demo inventory remains",ok:demoActiveTripCount===0},
+      {id:"demo-records",label:"No provider-active demo trips remain",ok:demoActiveTripCount===0},
       {id:"jwt-secret",label:"Strong JWT secret configured",ok:jwtSecret.length>=32&&!/replace-with|changeme|secret/i.test(jwtSecret)},
       {id:"cors",label:"Allowed frontend origins configured",ok:allowedOrigins.length>0},
       {id:"public-url",label:"Public API base URL configured",ok:validPublicBaseUrl},
@@ -344,7 +373,7 @@ router.get("/readiness",async(_req,res,next)=>{
         allowedOriginCount:allowedOrigins.length,
         publicBaseUrlConfigured:validPublicBaseUrl
       },
-      counts:{providersApproved,providersPending,activeTrips,upcomingDepartures,confirmedBookings},
+      counts:{providersApproved,providersPending,activeTrips,providerActiveTrips,platformAllowedTrips,salesEligibleTrips,sellableTrips,sellableDepartures,upcomingDepartures,confirmedBookings},
       operations:{
         currency:"JOD",
         grossSales:Number(totals.gross||0),
@@ -361,7 +390,7 @@ router.get("/readiness",async(_req,res,next)=>{
           providerName:d.tripId?.providerId?.businessName||"Provider"
         }))
       },
-      demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,activeTripCount:demoActiveTripCount,userCount:demoUserCount},
+      demo:{providerExists:Boolean(demoProvider),tripCount:demoTripCount,activeTripCount:demoActiveTripCount,providerActiveTripCount:demoActiveTripCount,userCount:demoUserCount},
       checks
     });
   }catch(e){next(e);}
