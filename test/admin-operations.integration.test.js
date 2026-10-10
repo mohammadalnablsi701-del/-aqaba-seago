@@ -11,7 +11,7 @@ import SupportRequest from '../src/models/SupportRequest.js';
 
 const uri=process.env.SEAGO_TEST_MONGODB_URI;
 
-test('admin operations queue is protected and surfaces actionable failures',{skip:!uri},async t=>{
+test('admin operations queue is protected and surfaces only safe actionable failures',{skip:!uri},async t=>{
   assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
   const oldSecret=process.env.JWT_SECRET;
   process.env.JWT_SECRET='admin-operations-test-secret-at-least-32-characters';
@@ -27,13 +27,20 @@ test('admin operations queue is protected and surfaces actionable failures',{ski
 
   const admin=await User.create({name:'Admin',phone:'+962790009001',role:'admin'});
   const customer=await User.create({name:'Customer',phone:'+962790009002',role:'customer'});
+  const provider=await User.create({name:'Provider',phone:'+962790009003',role:'provider'});
+  const rawSecret='raw-webhook-secret-must-not-leak';
+  const checkoutSecret='https://gateway.example.test/pay?token=checkout-secret-must-not-leak';
+  const notificationRecipient='private-recipient@example.test';
+  const notificationExternalId='provider-message-secret-id';
+  const supportMessage='support-message-body-must-not-appear-in-attention-preview';
   await Payment.create({
-    holdId:new mongoose.Types.ObjectId(),customerId:customer._id,provider:'mock',status:'needs_review',amount:42,currency:'JOD'
+    holdId:new mongoose.Types.ObjectId(),customerId:customer._id,provider:'mock',status:'needs_review',amount:42,currency:'JOD',
+    checkoutUrl:checkoutSecret,rawLastEvent:{authorization:rawSecret}
   });
   await NotificationLog.create({
-    key:'ops-test-failure',type:'booking_confirmation',recipient:'redacted@example.test',status:'failed',error:'x'.repeat(400)
+    key:'ops-test-failure',type:'booking_confirmation',recipient:notificationRecipient,status:'failed',externalId:notificationExternalId,error:'x'.repeat(400)
   });
-  await SupportRequest.create({customerId:customer._id,subject:'Need help',message:'Test support request',status:'open'});
+  await SupportRequest.create({customerId:customer._id,subject:'Need help',message:supportMessage,status:'open',bookingReference:'SG-TEST1234'});
 
   const tokenFor=user=>jwt.sign({sub:String(user._id)},process.env.JWT_SECRET,{expiresIn:'1h'});
   const app=createApp();
@@ -49,6 +56,9 @@ test('admin operations queue is protected and surfaces actionable failures',{ski
   const customerDenied=await fetch(url,{headers:{authorization:`Bearer ${tokenFor(customer)}`}});
   assert.equal(customerDenied.status,403);
 
+  const providerDenied=await fetch(url,{headers:{authorization:`Bearer ${tokenFor(provider)}`}});
+  assert.equal(providerDenied.status,403);
+
   const response=await fetch(url,{headers:{authorization:`Bearer ${tokenFor(admin)}`}});
   assert.equal(response.status,200);
   const body=await response.json();
@@ -57,6 +67,20 @@ test('admin operations queue is protected and surfaces actionable failures',{ski
   assert.equal(body.alerts.notificationFailures24h,1);
   assert.equal(body.alerts.openSupport,1);
   assert.equal(body.queues.paymentNeedsReview.length,1);
+  assert.equal(body.queues.paymentNeedsReview[0].status,'needs_review');
   assert.equal(body.queues.notificationFailures.length,1);
   assert.ok(body.queues.notificationFailures[0].error.length<=240);
+  assert.equal(body.queues.openSupport.length,1);
+  assert.equal(body.queues.openSupport[0].subject,'Need help');
+  assert.equal(body.queues.openSupport[0].status,'open');
+  assert.equal(body.queues.openSupport[0].customerId.name,'Customer');
+  assert.equal(body.queues.openSupport[0].message,undefined);
+  assert.equal(body.queues.openSupport[0].customerId.email,undefined);
+
+  const serialized=JSON.stringify(body);
+  assert.doesNotMatch(serialized,new RegExp(rawSecret));
+  assert.doesNotMatch(serialized,/checkout-secret-must-not-leak/);
+  assert.doesNotMatch(serialized,new RegExp(notificationRecipient.replace('.','\\.')));
+  assert.doesNotMatch(serialized,new RegExp(notificationExternalId));
+  assert.doesNotMatch(serialized,new RegExp(supportMessage));
 });
