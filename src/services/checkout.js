@@ -39,11 +39,13 @@ export async function reserveCheckout({customerId,key,departureId,adults,childre
       }],{session});
       // Persist the SeaGo Payment identity with inventory. Payment._id becomes the
       // durable provider merchant reference; gateway calls stay outside this callback
-      // because a MongoDB transaction callback may be retried.
+      // because a MongoDB transaction callback may be retried. The pending_* value is
+      // only an internal unique-index sentinel and is never the provider correlation key.
       const paymentId=new mongoose.Types.ObjectId();
       await Payment.create([{
         _id:paymentId,
         holdId:hold._id,customerId,provider:process.env.PAYMENT_PROVIDER||"mock",
+        externalPaymentId:`pending_${paymentId}`,
         amount:pricing.grossAmount,currency:pricing.currency||"JOD"
       }],{session});
     });
