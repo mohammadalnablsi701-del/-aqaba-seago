@@ -4,33 +4,96 @@ import Booking from "../models/Booking.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validateAllowedFields, isBoundedString } from "../middleware/validation.js";
 import { signTicketToken } from "../services/tickets.js";
+import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
 import { cancelBooking, cancellationPolicyFor } from "../services/cancellations.js";
 import { salePricing, tripForAudience } from "../services/pricingVisibility.js";
 
 const router = express.Router();
 const CANCELLATION_FIELDS = new Set(["reason"]);
 
+function toCustomerDeparture(departure) {
+  if (!departure) return null;
+  const source = departure?.toObject ? departure.toObject() : departure;
+  return {
+    _id: source._id,
+    startsAt: source.startsAt,
+    status: source.status
+  };
+}
+
+function toCustomerProvider(provider) {
+  if (!provider) return null;
+  const source = provider?.toObject ? provider.toObject() : provider;
+  const owner = source.ownerUserId?.toObject ? source.ownerUserId.toObject() : source.ownerUserId;
+  return {
+    _id: source._id,
+    businessName: source.businessName,
+    phone: source.phone || null,
+    ownerUserId: owner ? {
+      phone: owner.phone || null,
+      phoneNormalized: owner.phoneNormalized || null
+    } : null
+  };
+}
+
+function toCustomerCancellation(cancellation) {
+  if (!cancellation) return null;
+  const source = cancellation?.toObject ? cancellation.toObject() : cancellation;
+  if (!source.cancelledAt && source.refundStatus === undefined) return null;
+  return {
+    cancelledAt: source.cancelledAt || null,
+    refundPercentage: Number(source.refundPercentage || 0),
+    refundAmount: Number(source.refundAmount || 0),
+    refundStatus: source.refundStatus || "none"
+  };
+}
+
+function toCustomerBookingDto(row, reqUser, baseUrl) {
+  const source = row.toObject();
+  const departureId = toCustomerDeparture(source.departureId);
+  const lifecycle = deriveTicketLifecycle({
+    status: source.status,
+    checkedInAt: source.checkedInAt,
+    departureId
+  });
+  const ticketToken = signTicketToken(row);
+
+  return {
+    _id: source._id,
+    status: source.status,
+    seats: source.seats,
+    adults: source.adults,
+    children: source.children,
+    mealPlan: source.mealPlan,
+    pricing: salePricing(source.pricing),
+    tripId: source.tripId ? tripForAudience(source.tripId) : null,
+    providerId: toCustomerProvider(source.providerId),
+    departureId,
+    checkedInAt: source.checkedInAt || null,
+    cancellation: toCustomerCancellation(source.cancellation),
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+    customer: {
+      name: source.customerSnapshot?.name || reqUser.name || "",
+      phone: source.customerSnapshot?.phone || reqUser.phoneNormalized || reqUser.phone || ""
+    },
+    ticketLifecycle: lifecycle,
+    ticketToken,
+    ticketValidationUrl: `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(ticketToken)}`
+  };
+}
+
 router.get("/", requireAuth, requireRole("customer"), async (req, res, next) => {
   try {
     const rows = await Booking.find({ customerId: req.user._id, status: { $in: ["confirmed","cancelled","refunded"] } })
+      .select("customerSnapshot providerId tripId departureId seats adults children mealPlan status pricing checkedInAt cancellation createdAt updatedAt")
       .populate({ path: "tripId", select: "titleAr titleEn vesselName category durationMinutes departureLocation pricing" })
       .populate({ path: "providerId", select: "businessName phone ownerUserId", populate: { path: "ownerUserId", select: "phone phoneNormalized" } })
       .populate({ path: "departureId", select: "startsAt status" })
       .sort({ createdAt: -1 })
       .limit(100);
     const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
-    res.json(rows.map(row => {
-      const obj = row.toObject();
-      const ticketToken = signTicketToken(row);
-      return {
-        ...obj,
-        pricing: salePricing(obj.pricing),
-        tripId: obj.tripId ? tripForAudience(obj.tripId) : obj.tripId,
-        customer: { name: obj.customerSnapshot?.name || req.user.name || "", phone: obj.customerSnapshot?.phone || req.user.phoneNormalized || req.user.phone || "" },
-        ticketToken,
-        ticketValidationUrl: `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(ticketToken)}`
-      };
-    }));
+    res.json(rows.map(row => toCustomerBookingDto(row, req.user, baseUrl)));
   } catch (err) {
     next(err);
   }
