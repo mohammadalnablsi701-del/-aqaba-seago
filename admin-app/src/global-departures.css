@@ -1,0 +1,43 @@
+.global-departures{margin:0 0 18px;padding:18px;border:1px solid #dce4eb;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(27,49,67,.05)}
+.global-departures__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.global-departures__head small{display:block;color:#718191;font-size:11px;font-weight:800;letter-spacing:.12em}
+.global-departures__head h2{margin:3px 0 4px;font-size:22px;color:#17364a}
+.global-departures__head p{margin:0;color:#657587;font-size:13px;line-height:1.45}
+.global-departures__freshness{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:34px;color:#657587;font-size:12px;white-space:nowrap}
+.global-departures__freshness>span{display:inline-flex;align-items:center;gap:6px}
+.global-departures__freshness button.secondary{display:inline-flex;align-items:center;gap:5px;padding:8px 10px}
+.global-departures__datebar{display:flex;align-items:center;gap:8px;padding:10px 0 14px;border-bottom:1px solid #e8edf1}
+.global-departures__datebar>strong{margin-left:4px;color:#29495d;font-size:13px}
+.global-departures__datebar button{display:inline-flex;align-items:center;justify-content:center;min-height:36px}
+.global-departures__datebar button.active{border:1px solid #225f82;background:#225f82;color:white;border-radius:9px;padding:8px 12px;font-weight:800}
+.global-departures__date{display:flex;align-items:center;gap:7px;border:1px solid #d4dee6;border-radius:9px;padding:5px 8px;color:#52697b;background:white}
+.global-departures__date input{border:0;padding:3px;background:transparent;color:#213e51;font:inherit;outline:0}
+.global-departures__filters{display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(130px,.8fr) minmax(140px,.8fr) minmax(180px,1.2fr) auto;gap:10px;align-items:end;padding:14px 0}
+.global-departures__filters>label:not(.global-departures__attention){display:grid;gap:5px}
+.global-departures__filters label>span{font-size:11px;font-weight:800;color:#657587}
+.global-departures__filters select,.global-departures__filters input{width:100%;min-height:38px;border:1px solid #d4dee6;border-radius:9px;background:white;color:#213e51;padding:7px 9px;font:inherit}
+.global-departures__search>div{display:flex;align-items:center;gap:6px;border:1px solid #d4dee6;border-radius:9px;padding-left:9px;color:#718191}
+.global-departures__search>div input{border:0;border-radius:0;outline:0;min-width:0}
+.global-departures__attention{display:flex;align-items:center;gap:7px;min-height:38px;padding:0 4px 4px}
+.global-departures__attention input{width:auto;min-height:auto}
+.global-departures__loading,.global-departures__error,.global-departures__warning,.global-departures__empty{display:flex;align-items:center;gap:10px;border-radius:12px;padding:13px 14px;font-size:13px}
+.global-departures__loading,.global-departures__empty{background:#f5f8fa;color:#53687a}
+.global-departures__error{margin-bottom:12px;background:#fff4f1;color:#8d392d}
+.global-departures__error span{flex:1}
+.global-departures__warning{margin-bottom:12px;background:#fff8e8;color:#7d5b1e}
+.global-departures__table-wrap{overflow:auto;border:1px solid #e1e7ec;border-radius:12px}
+.global-departures__table{width:100%;border-collapse:collapse;min-width:1040px;font-size:12px}
+.global-departures__table th{position:sticky;top:0;z-index:1;text-align:left;padding:10px 9px;background:#f6f9fb;color:#657587;font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #dfe7ed}
+.global-departures__table td{vertical-align:top;padding:11px 9px;color:#29495d;border-top:1px solid #edf1f4}
+.global-departures__table tbody tr:first-child td{border-top:0}
+.global-departures__table tbody tr.needs-attention{background:#fffdf8}
+.global-departures__table strong{color:#17364a;font-size:12px}
+.global-departures__stack{display:grid;gap:4px;min-width:0}
+.global-departures__stack>span:not(.global-departures__badge){color:#718191;font-size:10px;line-height:1.25}
+.global-departures__inline-badges{display:flex;flex-wrap:wrap;gap:4px}
+.global-departures__badge{display:inline-flex;width:max-content;max-width:100%;align-items:center;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;line-height:1.2;text-transform:capitalize;background:#eef2f5;color:#53687a}
+.global-departures__badge--success{background:#edf7f0;color:#27603a}
+.global-departures__badge--warning{background:#fff5dc;color:#7c591a}
+.global-departures__badge--danger{background:#fff0ec;color:#983c31}
+@media(max-width:980px){.global-departures__filters{grid-template-columns:repeat(2,minmax(0,1fr))}.global-departures__attention{align-self:end}}
+@media(max-width:760px){.global-departures{padding:14px}.global-departures__head{display:grid}.global-departures__freshness{justify-content:flex-start;white-space:normal;flex-wrap:wrap}.global-departures__datebar{flex-wrap:wrap}.global-departures__datebar>strong{flex-basis:100%;margin:2px 0 0}.global-departures__filters{grid-template-columns:1fr}.global-departures__table-wrap{overflow:visible;border:0}.global-departures__table{display:block;min-width:0}.global-departures__table thead{display:none}.global-departures__table tbody{display:grid;gap:10px}.global-departures__table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #e1e7ec;border-radius:12px;padding:6px;background:white}.global-departures__table tbody tr.needs-attention{background:#fffdf8}.global-departures__table td{display:grid;gap:3px;padding:8px;border:0}.global-departures__table td::before{content:attr(data-label);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#8896a1}.global-departures__table td[data-label="Provider"],.global-departures__table td[data-label="Trip / Vessel"]{grid-column:1/-1}}
