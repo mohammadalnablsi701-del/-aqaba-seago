@@ -34,10 +34,10 @@ test("E: failed modal execution remains in the dialog error path instead of opti
   assert.match(dialogSource,/showError\(err\?\.message\|\|"Action failed\. Nothing was changed\."\)/);
 });
 
-test("I: commission confirmation shows old/new and future-only snapshot wording",()=>{
+test("I: commission confirmation shows current/new and future-only snapshot wording",()=>{
   assert.match(apiSource,/title:"Change trip commission"/);
-  assert.match(apiSource,/\{label:"Old",value:/);assert.match(apiSource,/\{label:"New",value:/);
-  assert.match(apiSource,/This affects future bookings only\. Existing booking pricing snapshots will not change\./);
+  assert.match(apiSource,/\{label:"Current commission",value:/);assert.match(apiSource,/\{label:"New commission",value:/);
+  assert.match(apiSource,/This change applies to future bookings only\. Existing booking pricing snapshots will remain unchanged\./);
 });
 
 test("J: Manage Access has a lifecycle-neutral credential reset confirmation",()=>{

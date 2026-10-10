@@ -10,6 +10,9 @@ import Trip from "../src/models/Trip.js";
 import Departure from "../src/models/Departure.js";
 import Booking from "../src/models/Booking.js";
 import CheckoutHold from "../src/models/CheckoutHold.js";
+import Payment from "../src/models/Payment.js";
+import AdminAuditLog from "../src/models/AdminAuditLog.js";
+import {settlementLedger} from "../src/services/settlements.js";
 
 const uri=process.env.SEAGO_TEST_MONGODB_URI;
 const SECRET="admin-sensitive-actions-test-secret-at-least-32-chars";
@@ -24,7 +27,7 @@ test("sensitive admin actions enforce safety without changing lifecycle semantic
   const oldSecret=process.env.JWT_SECRET;process.env.JWT_SECRET=SECRET;
   await mongoose.connect(uri,{dbName:"seago_admin_sensitive_"+crypto.randomUUID().replaceAll("-","")});
   t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret});
-  await Promise.all([User,Provider,Trip,Departure,Booking,CheckoutHold].map(m=>m.init()));
+  await Promise.all([User,Provider,Trip,Departure,Booking,CheckoutHold,Payment,AdminAuditLog].map(m=>m.init()));
 
   const admin=await User.create({name:"Admin",email:"admin-sensitive@example.test",role:"admin"});
   const owner=await User.create({name:"Provider",email:"provider-sensitive@example.test",role:"provider",isActive:true});
@@ -34,16 +37,18 @@ test("sensitive admin actions enforce safety without changing lifecycle semantic
   const app=createApp();const server=app.listen(0,"127.0.0.1");await new Promise(resolve=>server.once("listening",resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));const base=`http://127.0.0.1:${server.address().port}`;
 
   const provider=await Provider.create({ownerUserId:owner._id,businessName:"Safety Marine",status:"approved",approvedAt:new Date(),approvedBy:admin._id});
-  const trip=await Trip.create({providerId:provider._id,titleAr:"رحلة أمان",titleEn:"Safety Trip",category:"yacht",durationMinutes:90,pricing:{pricePerPerson:25,adultPrice:25,childPrice:15,commissionType:"percentage",commissionValue:20},active:true,platformStatus:"allowed"});
+  const trip=await Trip.create({providerId:provider._id,titleAr:"رحلة أمان",titleEn:"Safety Trip",category:"yacht",durationMinutes:90,pricing:{pricePerPerson:25,adultPrice:25,childPrice:15,buffetEnabled:true,buffetAdultPrice:30,buffetChildPrice:20,commissionType:"percentage",commissionValue:20},active:true,platformStatus:"allowed"});
   const departure=await Departure.create({tripId:trip._id,startsAt:new Date(Date.now()+86400000),capacity:10,reservedSeats:2,status:"scheduled"});
   const confirmed=await Booking.create({customerId:customer._id,customerSnapshot:{name:"Customer",phone:"+962790000000"},providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,status:"confirmed",holdExpiresAt:new Date(Date.now()+3600000),pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},idempotencyKey:"confirmed-before-suspend"});
   const hold=await CheckoutHold.create({customerId:customer._id,providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},status:"active",expiresAt:new Date(Date.now()+3600000),idempotencyKey:"open-hold-before-suspend"});
+  const paidHold=await CheckoutHold.create({customerId:customer._id,providerId:provider._id,tripId:trip._id,departureId:departure._id,seats:1,adults:1,children:0,pricing:{currency:"JOD",grossAmount:25,commissionAmount:5,providerNetAmount:20},status:"paid",expiresAt:new Date(Date.now()+3600000),idempotencyKey:"paid-hold-for-settlement"});
+  await Payment.create({bookingId:confirmed._id,holdId:paidHold._id,customerId:customer._id,provider:"mock",externalPaymentId:"commission-sensitive-payment",status:"paid",amount:25,currency:"JOD",paidAt:new Date()});
 
   await t.test("K: customer and provider roles cannot invoke admin endpoints",async()=>{
     for(const token of [customerToken,providerToken]){
       const status=await requestJson(base,`/api/admin/providers/${provider._id}/status`,{token,method:"PATCH",body:{status:"suspended",reason:"Unauthorized attempt"}});assert.equal(status.response.status,403);
       const pause=await requestJson(base,`/api/admin/trips/${trip._id}/platform-status`,{token,method:"PATCH",body:{platformStatus:"paused",reason:"Unauthorized attempt"}});assert.equal(pause.response.status,403);
-      const commission=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token,method:"PATCH",body:{percentage:25,reason:"Unauthorized attempt"}});assert.equal(commission.response.status,403);
+      const commission=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token,method:"PATCH",body:{commissionType:"fixed_per_booking",commissionValue:5,confirmTypeChange:true,reason:"Unauthorized attempt"}});assert.equal(commission.response.status,403);
     }
   });
 
@@ -61,6 +66,7 @@ test("sensitive admin actions enforce safety without changing lifecycle semantic
     const suspended=await requestJson(base,`/api/admin/providers/${provider._id}/status`,{token:adminToken,method:"PATCH",body:{status:"suspended",reason:"Temporary operational suspension"}});assert.equal(suspended.response.status,200);
     assert.equal((await Provider.findById(provider._id)).status,"suspended");
     assert.equal((await CheckoutHold.findById(hold._id)).status,"released");
+    assert.equal((await CheckoutHold.findById(paidHold._id)).status,"paid");
     assert.equal((await Booking.findById(confirmed._id)).status,"confirmed");
     assert.equal((await Departure.findById(departure._id)).status,"scheduled");
   });
@@ -72,11 +78,33 @@ test("sensitive admin actions enforce safety without changing lifecycle semantic
     const allowed=await requestJson(base,`/api/admin/trips/${trip._id}/platform-status`,{token:adminToken,method:"PATCH",body:{platformStatus:"allowed"}});assert.equal(allowed.response.status,200);assert.equal(allowed.json.active,true);assert.equal(allowed.json.platformStatus,"allowed");assert.equal((await Trip.findById(trip._id)).active,true);
   });
 
-  await t.test("I: commission change requires reason and preserves existing booking snapshots",async()=>{
+  await t.test("I/P: commission change requires reason and preserves existing booking snapshots",async()=>{
     const beforeBooking=await Booking.findById(confirmed._id).lean();
     const noReason=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{percentage:25}});assert.equal(noReason.response.status,400);assert.equal((await Trip.findById(trip._id)).pricing.commissionValue,20);
     const changed=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{percentage:25,reason:"Commercial agreement update"}});assert.equal(changed.response.status,200);assert.equal(changed.json.pricing.commissionType,"percentage");assert.equal(changed.json.pricing.commissionValue,25);
     const afterBooking=await Booking.findById(confirmed._id).lean();assert.equal(afterBooking.pricing.commissionAmount,beforeBooking.pricing.commissionAmount);assert.equal(afterBooking.pricing.grossAmount,beforeBooking.pricing.grossAmount);
+  });
+
+  await t.test("G/H/I/J/L/P/Q/R: type changes require confirmation and preserve booking and settlement history with audited before/after",async()=>{
+    const bookingBefore=(await Booking.findById(confirmed._id).lean()).pricing;
+    const ledgerBefore=await settlementLedger({providerId:String(provider._id)});
+    const providerBefore=ledgerBefore.breakdown.find(row=>String(row.providerId)===String(provider._id));
+    assert.equal(providerBefore.seaGoCommission,5);assert.equal(providerBefore.providerNet,20);
+
+    const missingConfirm=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{commissionType:"fixed_per_booking",commissionValue:4,reason:"Move to booking fee"}});assert.equal(missingConfirm.response.status,409);
+    const whitespace=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{commissionType:"fixed_per_booking",commissionValue:4,confirmTypeChange:true,reason:"   "}});assert.equal(whitespace.response.status,400);
+    assert.equal((await Trip.findById(trip._id)).pricing.commissionType,"percentage");
+
+    const fixedBooking=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{commissionType:"fixed_per_booking",commissionValue:4,confirmTypeChange:true,reason:"Move to booking fee"}});assert.equal(fixedBooking.response.status,200);assert.equal(fixedBooking.json.pricing.commissionType,"fixed_per_booking");assert.equal(fixedBooking.json.pricing.commissionValue,4);
+    let event=await AdminAuditLog.findOne({action:"commission_updated",entityId:trip._id}).sort({createdAt:-1}).lean();
+    assert.deepEqual(event.before,{commissionType:"percentage",commissionValue:25});assert.deepEqual(event.after,{commissionType:"fixed_per_booking",commissionValue:4});assert.equal(event.reason,"Move to booking fee");assert.equal(String(event.actorUserId),String(admin._id));
+
+    const fixedGuest=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{commissionType:"fixed_per_person",commissionValue:3,adultCommission:3,childCommission:2,buffetAdultCommission:5,buffetChildCommission:3,confirmTypeChange:true,reason:"Use guest tiers"}});assert.equal(fixedGuest.response.status,200);assert.equal(fixedGuest.json.pricing.adultCommission,3);assert.equal(fixedGuest.json.pricing.childCommission,2);assert.equal(fixedGuest.json.pricing.buffetAdultCommission,5);assert.equal(fixedGuest.json.pricing.buffetChildCommission,3);
+
+    const backToPercentage=await requestJson(base,`/api/admin/trips/${trip._id}/commission`,{token:adminToken,method:"PATCH",body:{commissionType:"percentage",commissionValue:20,confirmTypeChange:true,reason:"Return to percentage"}});assert.equal(backToPercentage.response.status,200);assert.equal(backToPercentage.json.pricing.commissionType,"percentage");assert.equal(backToPercentage.json.pricing.adultCommission,undefined);assert.equal(backToPercentage.json.pricing.childCommission,undefined);
+
+    const bookingAfter=(await Booking.findById(confirmed._id).lean()).pricing;assert.deepEqual(bookingAfter,bookingBefore);
+    const ledgerAfter=await settlementLedger({providerId:String(provider._id)});const providerAfter=ledgerAfter.breakdown.find(row=>String(row.providerId)===String(provider._id));assert.equal(providerAfter.seaGoCommission,providerBefore.seaGoCommission);assert.equal(providerAfter.providerNet,providerBefore.providerNet);
   });
 
   await t.test("J: Manage Access reason is required and provider lifecycle remains unchanged",async()=>{
