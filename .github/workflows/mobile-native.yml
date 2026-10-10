@@ -39,6 +39,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -46,15 +48,19 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install dependencies
+      - name: Install dependencies from lockfile
         working-directory: customer-app
-        run: npm install --no-fund
+        run: npm ci --no-fund
 
       - name: Build web app
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
         run: npm run build
+
+      - name: Verify Android production web environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android Production"
 
       - name: Create Android project
         working-directory: customer-app
@@ -72,6 +78,10 @@ jobs:
       - name: Sync Android project
         working-directory: customer-app
         run: npx cap sync android
+
+      - name: Verify synced Android web artifact
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android synced artifact"
 
       - name: Build debug APK
         working-directory: customer-app/android
@@ -110,16 +120,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
 
-      - name: Install dependencies
+      - name: Install dependencies from lockfile
         working-directory: customer-app
-        run: npm install --no-fund
+        run: npm ci --no-fund
 
       - name: Build web app
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
         run: npm run build
+
+      - name: Verify iOS production web environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="iOS Production"
 
       - name: Create iOS project
         working-directory: customer-app
@@ -137,6 +153,10 @@ jobs:
       - name: Sync iOS project
         working-directory: customer-app
         run: npx cap sync ios
+
+      - name: Verify synced iOS web artifact
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="iOS synced artifact"
 
       - name: Build unsigned simulator app
         working-directory: customer-app
