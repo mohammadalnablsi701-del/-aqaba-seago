@@ -42,3 +42,5 @@ jobs:
           git add src admin-app provider-app test
           git commit -m "Implement independent admin and provider trip sales authority"
           git push origin HEAD:phase1-task7-admin-provider-sales-authority
+
+# trigger: separated CI workflow mutation
