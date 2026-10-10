@@ -2,38 +2,6 @@ import { applyCustomerTicketState } from "./ticketLifecycle.js";
 
 const API_BASE = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-function vesselStore(){
-  if(typeof window==="undefined")return{byId:{},byTitle:{}};
-  window.__seagoVesselStore ||= {byId:{},byTitle:{}};
-  return window.__seagoVesselStore;
-}
-function indexTrip(trip){
-  if(!trip||typeof trip!=="object")return;
-  const vesselName=String(trip.vesselName||"").trim();
-  if(!vesselName)return;
-  const store=vesselStore();
-  const id=trip._id||trip.id;
-  if(id)store.byId[String(id)]=vesselName;
-  if(trip.titleEn)store.byTitle[String(trip.titleEn).trim()]=vesselName;
-  if(trip.titleAr)store.byTitle[String(trip.titleAr).trim()]=vesselName;
-}
-function indexPayload(payload){
-  if(Array.isArray(payload)){payload.forEach(indexPayload);return payload;}
-  if(!payload||typeof payload!=="object")return payload;
-  indexTrip(payload);
-  if(payload.tripId&&typeof payload.tripId==="object")indexTrip(payload.tripId);
-  if(payload.trip&&typeof payload.trip==="object")indexTrip(payload.trip);
-  if(payload.departure?.trip&&typeof payload.departure.trip==="object")indexTrip(payload.departure.trip);
-  if(payload.items&&Array.isArray(payload.items))payload.items.forEach(indexPayload);
-  if(payload.bookings&&Array.isArray(payload.bookings))payload.bookings.forEach(indexPayload);
-  return payload;
-}
-function publishVessels(payload){
-  indexPayload(payload);
-  if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent("seago:vessels-updated"));
-  return payload;
-}
-
 async function request(path, options = {}) {
   if (!API_BASE) throw new Error("API_NOT_CONFIGURED");
 
@@ -68,7 +36,7 @@ export function getApiBase() {
 }
 
 export async function listTrips() {
-  return publishVessels(await request("/api/trips"));
+  return request("/api/trips");
 }
 
 export async function listDepartures(tripId) {
@@ -123,8 +91,7 @@ export async function createBooking({ departureId, seats, token }) {
 
 export async function listBookings(token) {
   const rows = await request("/api/bookings", { token });
-  const lifecycleAware = Array.isArray(rows) ? rows.map(applyCustomerTicketState) : rows;
-  return publishVessels(lifecycleAware);
+  return Array.isArray(rows) ? rows.map(applyCustomerTicketState) : rows;
 }
 
 export async function createPaymentCheckout({ departureId, adults, children = 0, mealPlan = "without_buffet", token, idempotencyKey }) {

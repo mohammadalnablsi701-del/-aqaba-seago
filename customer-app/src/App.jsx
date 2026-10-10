@@ -115,6 +115,12 @@ function formatDuration(minutes) {
   return `${n} min`;
 }
 
+function VesselName({ value, className }) {
+  const vesselName=String(value||"").trim();
+  if(!vesselName)return null;
+  return <span className={className}>Vessel · {vesselName}</span>;
+}
+
 function tripDisplayProfile(raw) {
   const provider=String(raw?.providerId?.businessName||"").trim().toLowerCase();
   const title=String(raw?.titleEn||"").trim();
@@ -166,6 +172,7 @@ function normalizeTrip(raw, index = 0) {
     id: raw._id,
     apiId: raw._id,
     title: profile?.title || raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
+    vesselName: String(raw.vesselName || "").trim(),
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
     verifiedProvider: true,
@@ -330,6 +337,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
         <div className="trip-card__facts">
           <span><CalendarDays size={14}/>{trip.duration}</span>
           <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
+          <VesselName value={trip.vesselName} className="seago-vessel-card"/>
         </div>
         {trip.apiId&&<div className={"trip-live-status "+(trip.liveInventory?.nextDepartureAt?"available":"unavailable")}>
           {trip.liveInventory?.nextDepartureAt
@@ -423,6 +431,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
       <div className="detail-body">
         <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
         <h1>{trip.title}</h1>
+        <VesselName value={trip.vesselName} className="seago-vessel-detail"/>
         <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified operator <span>{trip.providerName || "Approved SeaGo partner"}</span></div>
 
         <div className="detail-price-summary">
@@ -747,6 +756,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         {success.priceChanged&&<div className="booking-note">Price updated to the latest server amount before payment.</div>}
         <div className="payment-review-card">
           <div><span>Experience</span><b>{trip.title}</b></div>
+          {trip.vesselName&&<div><span>Vessel</span><b>{trip.vesselName}</b></div>}
           {selected?.startsAt&&<div><span>Departure</span><b>{formatDeparture(selected.startsAt)}</b></div>}
           <div><span>Persons</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
           <div><span>Total</span><strong>{formatServerMoney(success.amount,success.currency)}</strong></div>
@@ -772,7 +782,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     <div className="screen standard-screen booking-screen">
       <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><span/></div>
       <div className="booking-title"><span>BOOKING · STEP 1 OF 2</span><h1>Choose your trip details</h1><p className="booking-subtitle">Review the departure, persons and package before payment.</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"person":"persons"}</p>}<div className="booking-progress"><i/><i/></div></div>
-      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><p>{trip.duration} · Aqaba</p><div className="booking-verified"><CheckCircle2 size={14}/> Verified operator</div></div></div>
+      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><VesselName value={trip.vesselName} className="seago-vessel-booking"/><p>{trip.duration} · Aqaba</p><div className="booking-verified"><CheckCircle2 size={14}/> Verified operator</div></div></div>
       {trip.departureLocation?.name&&<div className="booking-location-card"><div><MapPin size={20}/><span><small>Departure point</small><strong>{trip.departureLocation.name}</strong>{trip.departureLocation.address&&<em>{trip.departureLocation.address}</em>}</span></div>{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Google Maps <ChevronRight size={16}/></a>}</div>}
 
       {loading ? <LoadingState label="Checking live departures"/> : (
@@ -879,7 +889,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
     const status=statusLabels[visualStatus]||String(visualStatus||"").replaceAll("_"," ");
     const qrValue=b.ticketToken ? `SG2:${b.ticketToken}` : (b.ticketValidationUrl || `AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`);
     return <article className={`ticket-card ticket-card--${visualStatus}`} key={b._id}>
-      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}{(provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone)&&<p className="ticket-provider-phone"><span>Provider phone · </span><a href={"tel:"+(provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone)} dir="ltr">{provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone}</a></p>}</div><span className={`ticket-status ticket-status--${visualStatus}`}>{status}</span></div>
+      <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><VesselName value={trip.vesselName} className="seago-vessel-ticket"/><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}{(provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone)&&<p className="ticket-provider-phone"><span>Provider phone · </span><a href={"tel:"+(provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone)} dir="ltr">{provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone}</a></p>}</div><span className={`ticket-status ticket-status--${visualStatus}`}>{status}</span></div>
       {used?<div className="ticket-used-banner"><CheckCircle2 size={16}/><span><b>Ticket used</b><small>Checked in successfully{b.checkedInAt?" · "+new Date(b.checkedInAt).toLocaleString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"}):""}</small></span></div>:b.status==="confirmed"&&<div className="ticket-ready-banner"><CheckCircle2 size={16}/><span><b>Ready for check-in</b><small>Keep this ticket open when you arrive</small></span></div>}
       <div className="ticket-card__details">
         <div style={{minWidth:0}}><small>Customer name</small><strong dir="auto" style={{overflowWrap:"anywhere"}}>{b.customer?.name || auth?.user?.name || "Not provided"}</strong></div>
