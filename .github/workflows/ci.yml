@@ -177,13 +177,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 > /tmp/provider-preview.log 2>&1 &
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist > /tmp/provider-preview.log 2>&1 &
           preview_pid=$!
           trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
-          url="http://127.0.0.1:4173${PROVIDER_BASE_PATH}"
           ready=false
           for i in {1..20}; do
-            if curl -fsS "$url" -o /tmp/provider-index.html; then
+            if curl -fsS "http://127.0.0.1:4173/" -o /tmp/provider-index.html; then
               ready=true
               break
             fi
