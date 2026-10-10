@@ -17,7 +17,7 @@ function assertPayload(body){
   if(!body||typeof body!=="object"||Array.isArray(body))fail("Invalid commission payload");
   for(const key of Object.keys(body))if(!ALLOWED_BODY_KEYS.has(key))fail(`Unexpected commission field: ${key}`);
 }
-function number(value,label,{max=10000,maxDecimals=2}={}){
+function number(value,label,{max=Number.MAX_SAFE_INTEGER,maxDecimals=2}={}){
   if((typeof value!=="number"&&typeof value!=="string")||(typeof value==="string"&&!value.trim()))fail(`${label} is invalid`);
   const parsed=Number(value);
   if(!Number.isFinite(parsed)||parsed<0||parsed>max)fail(`${label} is invalid`);
