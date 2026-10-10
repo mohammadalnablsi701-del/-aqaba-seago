@@ -10,6 +10,7 @@ import{
 }from"../admin-app/src/commissionEditorModel.js";
 
 const tiers={commissionType:"fixed_per_person",commissionValue:3,adultCommission:3,childCommission:2,buffetAdultCommission:5,buffetChildCommission:3};
+const cleared={adultCommission:null,childCommission:null,buffetAdultCommission:null,buffetChildCommission:null};
 
 test("A/B: percentage loads and updates with decimal support",()=>{
   const draft=commissionDraftFromPricing({commissionType:"percentage",commissionValue:12.5});
@@ -25,10 +26,12 @@ test("C: fixed per booking loads and updates",()=>{
   assert.equal(buildCommissionUpdate({commissionType:"fixed_per_booking",commissionValue:5},{commissionType:"fixed_per_booking",commissionValue:6.5}).commissionValue,6.5);
 });
 
-test("D: basic fixed per guest remains a one-value contract",()=>{
+test("D: basic fixed per guest remains a one-value contract and clears stale tiers",()=>{
   const draft=commissionDraftFromPricing({commissionType:"fixed_per_person",commissionValue:4});
   assert.equal(draft.guestStructure,"basic");
-  assert.deepEqual(validateCommissionDraft(draft),{ok:true,payload:{commissionType:"fixed_per_person",commissionValue:4}});
+  const checked=validateCommissionDraft(draft);
+  assert.deepEqual(checked,{ok:true,payload:{commissionType:"fixed_per_person",commissionValue:4,...cleared}});
+  assert.deepEqual(buildCommissionUpdate(tiers,checked.payload),{commissionType:"fixed_per_person",commissionValue:4,adultCommission:undefined,childCommission:undefined,buffetAdultCommission:undefined,buffetChildCommission:undefined});
 });
 
 test("E/F: adult child and buffet tiers load and round-trip",()=>{
@@ -37,6 +40,15 @@ test("E/F: adult child and buffet tiers load and round-trip",()=>{
   assert.equal(draft.adultCommission,"3");assert.equal(draft.childCommission,"2");assert.equal(draft.buffetAdultCommission,"5");assert.equal(draft.buffetChildCommission,"3");
   assert.deepEqual(validateCommissionDraft(draft).payload,tiers);
   assert.deepEqual(buildCommissionUpdate(tiers,tiers),tiers);
+});
+
+test("buffet tiers can be disabled without stale values surviving checkout",()=>{
+  const draft={...commissionDraftFromPricing(tiers),buffetTiers:false,buffetAdultCommission:"",buffetChildCommission:""};
+  const payload=validateCommissionDraft(draft).payload;
+  assert.equal(payload.buffetAdultCommission,null);assert.equal(payload.buffetChildCommission,null);
+  const update=buildCommissionUpdate(tiers,payload);
+  assert.equal(update.buffetAdultCommission,undefined);assert.equal(update.buffetChildCommission,undefined);
+  assert.equal(update.adultCommission,3);assert.equal(update.childCommission,2);
 });
 
 test("G/H/I/J: every type change is explicit and stale fields are cleared",()=>{
