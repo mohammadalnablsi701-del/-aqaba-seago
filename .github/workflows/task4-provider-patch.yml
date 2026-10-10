@@ -1,0 +1,105 @@
+name: Task 4 Provider Patch
+
+on:
+  push:
+    branches:
+      - fix/provider-dashboard-request-safety-clean
+
+permissions:
+  contents: write
+
+jobs:
+  patch-app:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/provider-dashboard-request-safety-clean
+      - name: Apply minimal App.jsx patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path=Path('provider-app/src/App.jsx')
+          s=path.read_text()
+
+          def once(old,new,label):
+              global s
+              count=s.count(old)
+              if count!=1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              s=s.replace(old,new,1)
+
+          once(
+            'import{buildTripFormState,serializeTripForm}from"./tripFormModel.js";\n',
+            'import{buildTripFormState,serializeTripForm}from"./tripFormModel.js";\nimport{createLatestRequestManager,isAbortError,rowsForSelectedDate}from"./requestLifecycle.js";\n',
+            'request helper import'
+          )
+
+          once(
+            'const[bookingFilter,setBookingFilter]=useState("today");const[loading,setLoading]=useState(false);const[scanner,setScanner]=useState(false);',
+            'const[bookingFilter,setBookingFilter]=useState("today");const[initialLoading,setInitialLoading]=useState(()=>Boolean(auth?.token));const[refreshing,setRefreshing]=useState(false);const[loadedDate,setLoadedDate]=useState("");const[scanner,setScanner]=useState(false);',
+            'loading state split'
+          )
+
+          once(
+            'const[teamOpen,setTeamOpen]=useState(false);const[quickUpdating,setQuickUpdating]=useState("");const[onboardingPush,setOnboardingPush]=useState({supported:true,permission:"default",subscribed:false});\nuseEffect(()=>{\n  const expired=()=>{setAuth(null);setProvider(null);setProfileMissing(false);setTripRows([]);setDepRows([]);setBookingRows([]);setAllBookingRows([]);setError("Your session expired. Please sign in again.");};\n  window.addEventListener("seago:session-expired",expired);\n  return()=>window.removeEventListener("seago:session-expired",expired);\n},[]);\nasync function load(){if(!auth?.token)return;setLoading(true);setError("");try{let p;try{p=await me(auth.token)}catch(e){if(e.status===404){setProvider(null);setProfileMissing(true);setTripRows([]);setDepRows([]);setUpcomingDepRows([]);setBookingRows([]);setAllBookingRows([]);return}throw e}setProvider(p);setProfileMissing(false);if(p.status!=="approved"){setTripRows([]);setDepRows([]);setUpcomingDepRows([]);setBookingRows([]);setAllBookingRows([]);return}const[t,d,upcoming,b,allB]=await Promise.all([trips(auth.token),departures(auth.token,date),departures(auth.token),bookings(auth.token,date),bookings(auth.token)]);setTripRows(t);setDepRows(d);setUpcomingDepRows(upcoming);setBookingRows(b);setAllBookingRows(allB)}catch(e){setError(e.message)}finally{setLoading(false)}}\nuseEffect(()=>{load()},[auth?.token,date]);useEffect(()=>{if(auth?.token)pushNotificationStatus().then(setOnboardingPush).catch(()=>{})},[auth?.token,tab]);',
+            '''const[teamOpen,setTeamOpen]=useState(false);const[quickUpdating,setQuickUpdating]=useState("");const[onboardingPush,setOnboardingPush]=useState({supported:true,permission:"default",subscribed:false});
+const requestManagerRef=useRef(null);if(!requestManagerRef.current)requestManagerRef.current=createLatestRequestManager();const baseLoadedRef=useRef(false);const lastTokenRef=useRef(auth?.token||"");
+useEffect(()=>()=>requestManagerRef.current?.cancel(),[]);
+useEffect(()=>{
+  const expired=()=>{requestManagerRef.current?.cancel();baseLoadedRef.current=false;lastTokenRef.current="";setInitialLoading(false);setRefreshing(false);setAuth(null);setProvider(null);setProfileMissing(false);setTripRows([]);setDepRows([]);setUpcomingDepRows([]);setBookingRows([]);setAllBookingRows([]);setLoadedDate("");setError("Your session expired. Please sign in again.");};
+  window.addEventListener("seago:session-expired",expired);
+  return()=>window.removeEventListener("seago:session-expired",expired);
+},[]);
+async function load(options={}){const token=auth?.token;if(!token)return;if(lastTokenRef.current!==token){requestManagerRef.current?.cancel();baseLoadedRef.current=false;lastTokenRef.current=token;setLoadedDate("")}const requestedDate=date;const full=options?.full!==false||!baseLoadedRef.current;const initial=!baseLoadedRef.current&&!provider&&!profileMissing;const request=requestManagerRef.current.start();if(initial){setInitialLoading(true);setRefreshing(false)}else setRefreshing(true);setError("");try{if(full){let p;try{p=await me(token,{signal:request.signal})}catch(e){if(e.status===404){if(!requestManagerRef.current.isCurrent(request.id))return;setProvider(null);setProfileMissing(true);setTripRows([]);setDepRows([]);setUpcomingDepRows([]);setBookingRows([]);setAllBookingRows([]);setLoadedDate(requestedDate);baseLoadedRef.current=false;return}throw e}if(!requestManagerRef.current.isCurrent(request.id))return;if(p.status!=="approved"){setProvider(p);setProfileMissing(false);setTripRows([]);setDepRows([]);setUpcomingDepRows([]);setBookingRows([]);setAllBookingRows([]);setLoadedDate(requestedDate);baseLoadedRef.current=true;return}const[t,d,upcoming,b,allB]=await Promise.all([trips(token,{signal:request.signal}),departures(token,requestedDate,{signal:request.signal}),departures(token,undefined,{signal:request.signal}),bookings(token,requestedDate,{signal:request.signal}),bookings(token,undefined,{signal:request.signal})]);if(!requestManagerRef.current.isCurrent(request.id))return;setProvider(p);setProfileMissing(false);setTripRows(t);setDepRows(d);setUpcomingDepRows(upcoming);setBookingRows(b);setAllBookingRows(allB);setLoadedDate(requestedDate);baseLoadedRef.current=true}else{const[d,b]=await Promise.all([departures(token,requestedDate,{signal:request.signal}),bookings(token,requestedDate,{signal:request.signal})]);if(!requestManagerRef.current.isCurrent(request.id))return;setDepRows(d);setBookingRows(b);setLoadedDate(requestedDate)}}catch(e){if(!requestManagerRef.current.isCurrent(request.id)||isAbortError(e))return;setError(e.message||"Could not refresh provider dashboard.")}finally{if(requestManagerRef.current.isCurrent(request.id)){requestManagerRef.current.finish(request.id);setInitialLoading(false);setRefreshing(false)}}}
+useEffect(()=>{load({full:false})},[auth?.token,date]);useEffect(()=>{if(auth?.token)pushNotificationStatus().then(setOnboardingPush).catch(()=>{})},[auth?.token,tab]);''',
+            'dashboard request lifecycle'
+          )
+
+          once(
+            'if(!auth)return <Login onDone={setAuth}/>;const signOut=()=>{localStorage.removeItem("seago_provider_auth");setAuth(null);setProvider(null);setProfileMissing(false)};if(loading&&!provider&&!profileMissing)return <div className="onboarding-shell"><div className="loading">Loading provider account...</div></div>;if(profileMissing)return <ProviderProfileSetup token={auth.token} onCreated={p=>{setProvider(p);setProfileMissing(false)}}/>;if(provider&&provider.status!=="approved")return <ProviderApprovalStatus provider={provider} onRefresh={load} onSignOut={signOut}/>;if(scanner)return <Scanner token={auth.token} onClose={()=>setScanner(false)} onDone={load}/>;\nconst checked=bookingRows.filter(b=>b.checkedInAt).length;const guests=bookingRows.reduce((s,b)=>s+Number(b.seats||0),0);',
+            'if(!auth)return <Login onDone={setAuth}/>;const signOut=()=>{requestManagerRef.current?.cancel();baseLoadedRef.current=false;lastTokenRef.current="";localStorage.removeItem("seago_provider_auth");setInitialLoading(false);setRefreshing(false);setAuth(null);setProvider(null);setProfileMissing(false);setLoadedDate("")};if(initialLoading&&!provider&&!profileMissing)return <div className="onboarding-shell"><div className="loading">Loading provider account...</div></div>;if(!provider&&!profileMissing&&error)return <div className="onboarding-shell"><div className="onboarding-card"><h1>Could not load provider account</h1><div className="error">{error}</div><div className="onboarding-actions"><button onClick={()=>load({full:true})}>Try again</button><button className="secondary" onClick={signOut}>Sign out</button></div></div></div>;if(profileMissing)return <ProviderProfileSetup token={auth.token} onCreated={p=>{setProvider(p);setProfileMissing(false)}}/>;if(provider&&provider.status!=="approved")return <ProviderApprovalStatus provider={provider} onRefresh={()=>load({full:true})} onSignOut={signOut}/>;if(scanner)return <Scanner token={auth.token} onClose={()=>setScanner(false)} onDone={()=>load({full:true})}/>;\nconst visibleDepRows=rowsForSelectedDate(depRows,loadedDate,date);const visibleBookingRows=rowsForSelectedDate(bookingRows,loadedDate,date);const checked=visibleBookingRows.filter(b=>b.checkedInAt).length;const guests=visibleBookingRows.reduce((s,b)=>s+Number(b.seats||0),0);',
+            'initial loading and date visibility'
+          )
+
+          once(
+            'const homeScopeDeps=depRows.length?depRows:upcomingDepRows;const homeScopeLabel=depRows.length?dayLabel:"Upcoming";',
+            'const homeScopeDeps=visibleDepRows.length?visibleDepRows:upcomingDepRows;const homeScopeLabel=visibleDepRows.length?dayLabel:"Upcoming";',
+            'home date scope'
+          )
+
+          once(
+            '<button className="header-refresh" aria-label="Refresh dashboard" title="Refresh" onClick={load} disabled={loading}><RefreshCw size={18} className={loading?"spin":""}/><span>Refresh</span></button>',
+            '<button className="header-refresh" aria-label="Refresh dashboard" title="Refresh" onClick={()=>load({full:true})} disabled={refreshing||initialLoading}><RefreshCw size={18} className={refreshing?"spin":""}/><span>Refresh</span></button>',
+            'refresh button'
+          )
+
+          once(
+            '<div className="welcome"><div><h1>{provider?.businessName||"SeaGo Partner"}</h1></div><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>\n{error&&<div className="error">{error}</div>}{loading?<div className="loading">Loading dashboard...</div>:<>',
+            '<div className="welcome"><div><h1>{provider?.businessName||"SeaGo Partner"}</h1>{refreshing&&<small className="form-hint">Refreshing...</small>}</div><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>\n{error&&<div className="error">{error}</div>}',
+            'background loading presentation'
+          )
+
+          s=s.replace('depRows.length','visibleDepRows.length')
+          s=s.replace('visibleDepRows.length?depRows:upcomingDepRows.slice(0,4)','visibleDepRows.length?visibleDepRows:upcomingDepRows.slice(0,4)')
+
+          once(
+            '</>}</main><nav>',
+            '</main><nav>',
+            'dashboard loading wrapper close'
+          )
+
+          path.write_text(s)
+          PY
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add provider-app/src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Stabilize provider dashboard request lifecycle"
+          git push origin HEAD:fix/provider-dashboard-request-safety-clean
