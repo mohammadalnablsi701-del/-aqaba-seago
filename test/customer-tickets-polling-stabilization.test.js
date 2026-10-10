@@ -81,13 +81,12 @@ test("D) hidden/background document does not poll",async()=>{
   assert.equal(h.latestTimer().cancelled,true);
 });
 
-test("E) returning visible triggers one refresh",async()=>{
+test("E) returning visible triggers one refresh even immediately after backgrounding",async()=>{
   const h=harness([[ready("a")],[ready("b")]]);
   await h.controller.start();
   h.setVisible(false);
   await h.controller.handleVisibility(false);
   h.setVisible(true);
-  h.advance(1100);
   await h.controller.handleVisibility(true);
   assert.equal(h.calls.length,2);
   assert.equal(h.calls[1].reason,"visible");
@@ -104,12 +103,12 @@ test("F) focus plus visibility is deduped",async()=>{
   assert.match(ticketsSource,/visibilitychange/);
 });
 
-test("G) two close refresh triggers are single-flight",async()=>{
+test("G) two close ordinary refresh triggers are single-flight",async()=>{
   const wait=deferred();
   const h=harness([()=>wait.promise]);
   const first=h.controller.start();
   await tick();
-  const second=h.controller.refresh("mutation");
+  const second=h.controller.refresh("manual");
   assert.equal(h.calls.length,1);
   wait.resolve([ready()]);
   await Promise.all([first,second]);
@@ -125,7 +124,6 @@ test("H) latest request wins after a hidden generation invalidates an old reques
   h.setVisible(false);
   await h.controller.handleVisibility(false);
   h.setVisible(true);
-  h.advance(1100);
   const second=h.controller.handleVisibility(true);
   await tick();
   fresh.resolve([terminal("checked_in")]);
@@ -146,7 +144,21 @@ test("I) background refresh failure preserves last-known-good tickets",async()=>
   assert.equal(h.latestTimer().delay,60000);
 });
 
-test("J) cancellation success still forces immediate Tickets truth refresh without waiting for poll",()=>{
+test("J) cancellation mutation queues one post-flight truth refresh without overlap",async()=>{
+  const old=deferred();
+  const h=harness([()=>old.promise,[terminal("booking_cancelled")]]);
+  const first=h.controller.start();
+  await tick();
+  const mutation=h.controller.refresh("mutation");
+  assert.equal(h.calls.length,1);
+  assert.equal(h.controller.snapshot().queuedRefresh,true);
+  old.resolve([ready("pre-cancel")]);
+  await Promise.all([first,mutation]);
+  await tick();
+  await tick();
+  assert.equal(h.calls.length,2);
+  assert.equal(h.calls[1].reason,"mutation");
+  assert.equal(h.data.at(-1)[0].ticketPresentation.state,"booking_cancelled");
   assert.match(cancellationSource,/dispatchEvent\(new Event\("focus"\)\)/);
   assert.match(ticketsSource,/event\?\.isTrusted===false\?refresher\.refresh\("mutation"\)/);
 });
