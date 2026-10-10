@@ -38,6 +38,7 @@ export function createTicketsRefreshController({
   let lastTickets = [];
   let failureCount = 0;
   let lastForegroundRefreshAt = -Infinity;
+  let queuedRefreshReason = "";
 
   function clearScheduledPoll() {
     if (timerId === null) return;
@@ -46,6 +47,7 @@ export function createTicketsRefreshController({
   }
 
   function abortCurrent() {
+    queuedRefreshReason = "";
     if (!inFlight && !abortController) return;
     generation += 1;
     abortController?.abort();
@@ -67,7 +69,10 @@ export function createTicketsRefreshController({
 
   function refresh(reason = "manual", { initial = false } = {}) {
     if (!active || !isVisible()) return Promise.resolve(null);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (reason === "mutation") queuedRefreshReason = reason;
+      return inFlight;
+    }
 
     const sequence = ++generation;
     const requestAbortController = new AbortController();
@@ -98,6 +103,9 @@ export function createTicketsRefreshController({
         abortController = null;
         if (inFlightWasInitial) onInitialLoading(false);
         inFlightWasInitial = false;
+        const queued = queuedRefreshReason;
+        queuedRefreshReason = "";
+        if (queued && active && isVisible()) void refresh(queued);
       });
 
     inFlight = requestPromise;
@@ -127,6 +135,7 @@ export function createTicketsRefreshController({
     if (!active) return Promise.resolve(null);
     if (!visible) {
       clearScheduledPoll();
+      lastForegroundRefreshAt = -Infinity;
       abortCurrent();
       return Promise.resolve(null);
     }
@@ -146,7 +155,8 @@ export function createTicketsRefreshController({
       inFlight: Boolean(inFlight),
       failureCount,
       ticketCount: lastTickets.length,
-      mutable: shouldPollTickets(lastTickets)
+      mutable: shouldPollTickets(lastTickets),
+      queuedRefresh: Boolean(queuedRefreshReason)
     };
   }
 
