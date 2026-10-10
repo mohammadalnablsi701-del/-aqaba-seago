@@ -46,7 +46,7 @@ function ticketReferenceFromCard(card) {
     .find(value => /^SG-[A-F0-9]{8}$/.test(value || "")) || null;
 }
 
-function createModal({ booking, auth, trigger, onTruthChanged }) {
+function createCancellationModal({ booking, auth, trigger, onTruthChanged }) {
   const layer = document.createElement("div");
   layer.className = "cancellation-modal-layer";
   layer.dataset.seagoCancellationModal = "1";
@@ -116,56 +116,55 @@ function createModal({ booking, auth, trigger, onTruthChanged }) {
   document.addEventListener("keydown", onKeyDown);
   backdrop.addEventListener("click", close);
 
-  function clearRegion() {
+  function clearRegions() {
     content.replaceChildren();
     actions.replaceChildren();
   }
 
-  function keepButton(label = "Keep booking") {
+  function secondaryButton(label = "Keep booking") {
     const button = makeButton(label, "cancellation-button cancellation-button--secondary", close);
     button.disabled = submitting;
     return button;
   }
 
   function renderLoading() {
-    clearRegion();
+    clearRegions();
     const state = document.createElement("div");
     state.className = "cancellation-policy-state cancellation-policy-state--loading";
     const spinner = document.createElement("span");
     spinner.className = "cancellation-spinner";
-    const text = document.createElement("span");
-    text.textContent = "Loading cancellation policy...";
-    state.append(spinner, text);
+    const copy = document.createElement("span");
+    copy.textContent = "Loading cancellation policy...";
+    state.append(spinner, copy);
     content.appendChild(state);
-    actions.appendChild(keepButton());
+    actions.appendChild(secondaryButton());
   }
 
   function renderPolicyError(error) {
     policy = null;
-    clearRegion();
+    clearRegions();
     const state = document.createElement("div");
     state.className = "cancellation-policy-state cancellation-policy-state--error";
-    const strong = document.createElement("strong");
-    const knownEligibilityFailure = Number(error?.status || 0) === 404 || Number(error?.status || 0) === 409;
-    strong.textContent = knownEligibilityFailure
+    const message = document.createElement("strong");
+    const knownEligibilityFailure = [404, 409].includes(Number(error?.status || 0));
+    message.textContent = knownEligibilityFailure
       ? cancellationErrorCopy(error)
       : "Unable to load cancellation policy. Please try again.";
-    state.appendChild(strong);
+    state.appendChild(message);
     content.appendChild(state);
-    const retry = makeButton("Try again", "cancellation-button cancellation-button--secondary", loadPolicy);
-    actions.append(keepButton(), retry);
+    actions.append(secondaryButton(), makeButton("Try again", "cancellation-button cancellation-button--secondary", loadPolicy));
   }
 
-  function policyPanel(model) {
+  function makePolicyPanel(model) {
     const panel = document.createElement("div");
     panel.className = "cancellation-policy-preview";
     const heading = document.createElement("div");
     heading.className = "cancellation-policy-preview__heading";
-    const label = document.createElement("span");
-    label.textContent = "Cancellation policy";
-    const current = document.createElement("strong");
-    current.textContent = `${model.refundPercentage}% refund`;
-    heading.append(label, current);
+    const headingLabel = document.createElement("span");
+    headingLabel.textContent = "Cancellation policy";
+    const headingValue = document.createElement("strong");
+    headingValue.textContent = `${model.refundPercentage}% refund`;
+    heading.append(headingLabel, headingValue);
 
     const amount = document.createElement("div");
     amount.className = "cancellation-policy-preview__amount";
@@ -195,66 +194,64 @@ function createModal({ booking, auth, trigger, onTruthChanged }) {
       renderPolicyError({ status: 0 });
       return;
     }
-    clearRegion();
-    content.appendChild(policyPanel(model));
+    clearRegions();
+    content.appendChild(makePolicyPanel(model));
     const note = document.createElement("p");
     note.className = "cancellation-authority-note";
     note.textContent = "The final refund is rechecked by SeaGo when you confirm cancellation.";
     content.appendChild(note);
-
     const confirm = makeButton("Cancel booking", "cancellation-button cancellation-button--danger", submitCancellation);
     confirm.dataset.seagoConfirmCancellation = "1";
     confirm.disabled = submitting;
-    actions.append(keepButton(), confirm);
+    actions.append(secondaryButton(), confirm);
   }
 
   function renderSubmitting() {
     renderPolicy();
-    const confirm = actions.querySelector("[data-seago-confirm-cancellation]");
-    if (confirm) {
-      confirm.disabled = true;
-      confirm.textContent = "Cancelling...";
-    }
     actions.querySelectorAll("button").forEach(button => { button.disabled = true; });
+    const confirm = actions.querySelector("[data-seago-confirm-cancellation]");
+    if (confirm) confirm.textContent = "Cancelling...";
   }
 
   function renderActionError(error) {
-    clearRegion();
+    clearRegions();
     const state = document.createElement("div");
     state.className = "cancellation-policy-state cancellation-policy-state--error";
-    const strong = document.createElement("strong");
-    strong.textContent = cancellationErrorCopy(error);
-    state.appendChild(strong);
+    const message = document.createElement("strong");
+    message.textContent = cancellationErrorCopy(error);
+    state.appendChild(message);
     content.appendChild(state);
 
-    const finalEligibilityFailure = Number(error?.status || 0) === 404 || Number(error?.status || 0) === 409;
+    const finalEligibilityFailure = [404, 409].includes(Number(error?.status || 0));
     if (!finalEligibilityFailure && policy) {
-      const retry = makeButton("Try cancellation again", "cancellation-button cancellation-button--danger", submitCancellation);
-      actions.append(keepButton(), retry);
+      actions.append(
+        secondaryButton(),
+        makeButton("Try cancellation again", "cancellation-button cancellation-button--danger", submitCancellation)
+      );
     } else {
       policy = null;
-      actions.appendChild(keepButton("Close"));
+      actions.appendChild(secondaryButton("Close"));
     }
   }
 
   function renderSuccess(result) {
     completed = true;
-    clearRegion();
+    clearRegions();
     title.textContent = "Booking cancelled";
     warning.textContent = "Your booking history remains available in My Tickets.";
-    const status = refundStatusPresentation(result?.refundStatus);
-    const success = document.createElement("div");
-    success.className = "cancellation-success";
-    const statusLabel = document.createElement("strong");
-    statusLabel.textContent = status.label;
-    const finalRefund = document.createElement("span");
+    const refund = refundStatusPresentation(result?.refundStatus);
+    const state = document.createElement("div");
+    state.className = "cancellation-success";
+    const label = document.createElement("strong");
+    label.textContent = refund.label;
+    const amount = document.createElement("span");
     const percentage = Number(result?.refundPercentage);
-    finalRefund.textContent = `${Number.isFinite(percentage) ? percentage : 0}% · ${formatServerMoney(result?.refundAmount, result?.currency || "JOD")}`;
+    amount.textContent = `${Number.isFinite(percentage) ? percentage : 0}% · ${formatServerMoney(result?.refundAmount, result?.currency || "JOD")}`;
     const copy = document.createElement("p");
-    copy.textContent = status.copy;
-    success.append(statusLabel, finalRefund, copy);
-    content.appendChild(success);
-    actions.appendChild(keepButton("Done"));
+    copy.textContent = refund.copy;
+    state.append(label, amount, copy);
+    content.appendChild(state);
+    actions.appendChild(secondaryButton("Done"));
   }
 
   async function loadPolicy() {
@@ -268,7 +265,7 @@ function createModal({ booking, auth, trigger, onTruthChanged }) {
       renderPolicy();
     } catch (error) {
       renderPolicyError(error);
-      if (Number(error?.status || 0) === 404 || Number(error?.status || 0) === 409) onTruthChanged?.();
+      if ([404, 409].includes(Number(error?.status || 0))) onTruthChanged?.();
     }
   }
 
@@ -278,21 +275,19 @@ function createModal({ booking, auth, trigger, onTruthChanged }) {
     renderSubmitting();
     try {
       const result = await cancelBooking(booking._id, undefined, auth.token);
+      submitting = false;
       renderSuccess(result);
       onTruthChanged?.(true);
     } catch (error) {
       submitting = false;
       renderActionError(error);
-      if (Number(error?.status || 0) === 404 || Number(error?.status || 0) === 409) onTruthChanged?.();
-      return;
+      if ([404, 409].includes(Number(error?.status || 0))) onTruthChanged?.();
     }
-    submitting = false;
   }
 
   renderLoading();
   loadPolicy();
-  const firstFocusable = actions.querySelector("button");
-  firstFocusable?.focus();
+  actions.querySelector("button")?.focus();
 }
 
 export function enableCancellationUi() {
@@ -301,6 +296,7 @@ export function enableCancellationUi() {
   let loadPromise = null;
   let lastLoadedAt = 0;
   let syncQueued = false;
+  let forceNextSync = false;
 
   function clearControls() {
     document.querySelectorAll("[data-seago-cancel-control]").forEach(node => node.remove());
@@ -321,8 +317,7 @@ export function enableCancellationUi() {
     }
     if (cachedToken !== auth.token) {
       cachedToken = auth.token;
-      cachedBookings = [];
-      lastLoadedAt = 0;
+      invalidate();
     }
     if (!force && cachedBookings.length && Date.now() - lastLoadedAt < 30000) return cachedBookings;
     if (loadPromise) return loadPromise;
@@ -380,7 +375,7 @@ export function enableCancellationUi() {
       const button = makeButton("Cancel booking", "customer-cancel-booking", () => {
         const auth = readAuth();
         if (!auth?.token) return;
-        createModal({
+        createCancellationModal({
           booking,
           auth,
           trigger: button,
@@ -399,23 +394,24 @@ export function enableCancellationUi() {
     });
   }
 
-  async function sync(force = false) {
+  async function sync() {
     syncQueued = false;
+    const force = forceNextSync;
+    forceNextSync = false;
     updateFaq();
-    const ticketsScreen = document.querySelector(".tickets-screen");
-    if (!ticketsScreen) {
+    if (!document.querySelector(".tickets-screen")) {
       clearControls();
       return;
     }
     const bookings = await loadBookings(force);
-    if (!document.querySelector(".tickets-screen")) return;
-    installControls(bookings);
+    if (document.querySelector(".tickets-screen")) installControls(bookings);
   }
 
   function queueSync(force = false) {
-    if (syncQueued && !force) return;
+    forceNextSync ||= force;
+    if (syncQueued) return;
     syncQueued = true;
-    queueMicrotask(() => sync(force));
+    queueMicrotask(sync);
   }
 
   const root = document.getElementById("root");
