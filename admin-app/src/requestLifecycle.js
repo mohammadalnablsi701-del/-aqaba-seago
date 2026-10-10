@@ -23,6 +23,21 @@ export function createLatestRequestManager(){
   };
 }
 
+export function createSectionRequestManager(){
+  const managers=new Map();
+  const managerFor=key=>{
+    if(!managers.has(key))managers.set(key,createLatestRequestManager());
+    return managers.get(key);
+  };
+  return {
+    start(key){return managerFor(key).start();},
+    isCurrent(key,id){return managerFor(key).isCurrent(id);},
+    finish(key,id){managerFor(key).finish(id);},
+    cancel(key){managerFor(key).cancel();},
+    cancelAll(){for(const manager of managers.values())manager.cancel();}
+  };
+}
+
 export function isAbortError(error){
   return error?.name==="AbortError"||error?.code==="ABORT_ERR";
 }
