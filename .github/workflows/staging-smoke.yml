@@ -67,6 +67,16 @@ jobs:
           echo "$body"
           echo "$body" | grep -q '"publicLaunch":false'
 
+      - name: Verify Provider staging origin is allowed by API
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          curl -sS -D "$headers" -o /tmp/provider-staging-cors.json \
+            -H "Origin: $PROVIDER_STAGING_URL" \
+            "$STAGING_API/api/auth/google/config"
+          grep -qi "^access-control-allow-origin: $PROVIDER_STAGING_URL" "$headers"
+
       - name: Wait for Provider staging preview
         shell: bash
         run: |
