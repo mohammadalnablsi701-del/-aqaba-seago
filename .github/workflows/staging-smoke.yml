@@ -15,9 +15,10 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       STAGING_API: https://aqaba-seago-api-staging.onrender.com
+      PROVIDER_STAGING_URL: https://aqaba-seago-provider-staging.onrender.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,3 +66,62 @@ jobs:
           body="$(curl -fsS "$STAGING_API/ready")"
           echo "$body"
           echo "$body" | grep -q '"publicLaunch":false'
+
+      - name: Wait for Provider staging preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..36}; do
+            code="$(curl -L -sS -o /tmp/provider-staging.html -w "%{http_code}" "$PROVIDER_STAGING_URL/" || true)"
+            if [ "$code" = "200" ] && grep -qi '<!doctype html' /tmp/provider-staging.html; then
+              module_src="$(node -e 'const fs=require("fs");const h=fs.readFileSync("/tmp/provider-staging.html","utf8");const m=h.match(/<script[^>]+type=["'"'"']module["'"'"'][^>]+src=["'"'"']([^"'"'"']+)/i)||h.match(/<script[^>]+src=["'"'"']([^"'"'"']+)["'"'"'][^>]+type=["'"'"']module/i);if(!m)process.exit(1);process.stdout.write(new URL(m[1],process.argv[1]).href)' "$PROVIDER_STAGING_URL/")"
+              if curl -fsS "$module_src" -o /tmp/provider-staging.js \
+                && grep -q 'https://aqaba-seago-api-staging.onrender.com' /tmp/provider-staging.js \
+                && ! grep -q 'https://aqaba-seago-api.onrender.com' /tmp/provider-staging.js; then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Provider staging preview did not become healthy with the staging API environment."
+          exit 1
+
+      - name: Verify Provider staging assets and PWA scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const fs=require("fs");
+          const html=fs.readFileSync("/tmp/provider-staging.html","utf8");
+          const refs=[...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)].map(m=>m[1]).filter(v=>!v.startsWith("data:"));
+          if(!refs.length) process.exit(1);
+          for(const ref of refs) console.log(new URL(ref,process.env.PROVIDER_STAGING_URL+"/").href);
+          JS
+          node <<'JS' > /tmp/provider-assets.txt
+          const fs=require("fs");
+          const html=fs.readFileSync("/tmp/provider-staging.html","utf8");
+          for(const m of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)){
+            const ref=m[1];
+            if(ref.startsWith("data:")) continue;
+            console.log(new URL(ref,process.env.PROVIDER_STAGING_URL+"/").href);
+          }
+          JS
+          while IFS= read -r asset; do
+            curl -fsS "$asset" -o /dev/null
+          done < /tmp/provider-assets.txt
+          curl -fsS "$PROVIDER_STAGING_URL/sw.js" -o /tmp/provider-sw.js
+          curl -fsS "$PROVIDER_STAGING_URL/manifest.webmanifest" -o /tmp/provider-manifest.json
+          node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("/tmp/provider-manifest.json","utf8"));if(m.scope!=="./"||m.start_url!=="./")process.exit(1)'
+
+      - name: Browser-level Provider staging shell smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -n "$chrome" ]; then
+            "$chrome" --headless=new --no-sandbox --disable-gpu --virtual-time-budget=7000 --dump-dom "$PROVIDER_STAGING_URL/" \
+              > /tmp/provider-staging-dom.html 2>/tmp/provider-staging-chrome.log
+            grep -q 'Provider sign in' /tmp/provider-staging-dom.html
+          else
+            echo "::warning::Chrome is unavailable; HTTP/asset/environment smoke already passed."
+          fi

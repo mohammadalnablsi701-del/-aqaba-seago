@@ -56,6 +56,10 @@ jobs:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
         run: npm run build
 
+      - name: Verify production Provider build environment
+        working-directory: provider-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/provider/"
+
       - name: Merge provider app into customer site
         run: |
           mkdir -p customer-app/dist/provider

@@ -132,22 +132,87 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Configure Provider build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${GITHUB_BASE_REF:-${GITHUB_REF_NAME}}"
+          case "$target" in
+            staging)
+              echo "PROVIDER_API=https://aqaba-seago-api-staging.onrender.com" >> "$GITHUB_ENV"
+              echo "PROVIDER_FORBIDDEN_API=https://aqaba-seago-api.onrender.com" >> "$GITHUB_ENV"
+              echo "PROVIDER_BASE_PATH=/" >> "$GITHUB_ENV"
+              ;;
+            main)
+              echo "PROVIDER_API=https://aqaba-seago-api.onrender.com" >> "$GITHUB_ENV"
+              echo "PROVIDER_FORBIDDEN_API=https://aqaba-seago-api-staging.onrender.com" >> "$GITHUB_ENV"
+              echo "PROVIDER_BASE_PATH=/-aqaba-seago/provider/" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported Provider build target: $target"
+              exit 1
+              ;;
+          esac
+
       - name: Install provider app dependencies from lockfile
         working-directory: provider-app
         run: npm ci
+
       - name: Build provider app
         working-directory: provider-app
-        run: npm run build
+        run: VITE_API_BASE_URL="$PROVIDER_API" npm run build -- --base="$PROVIDER_BASE_PATH"
+
+      - name: Verify Provider build artifact and environment
+        working-directory: provider-app
+        run: node scripts/verify-build-env.mjs --expected="$PROVIDER_API" --forbidden="$PROVIDER_FORBIDDEN_API" --base="$PROVIDER_BASE_PATH"
+
+      - name: Smoke serve Provider build
+        working-directory: provider-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 > /tmp/provider-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          url="http://127.0.0.1:4173${PROVIDER_BASE_PATH}"
+          for i in {1..20}; do
+            if curl -fsS "$url" -o /tmp/provider-index.html; then
+              break
+            fi
+            sleep 1
+          done
+          grep -qi '<!doctype html' /tmp/provider-index.html
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -n "$chrome" ]; then
+            "$chrome" --headless=new --no-sandbox --disable-gpu --virtual-time-budget=5000 --dump-dom "$url" \
+              > /tmp/provider-dom.html 2>/tmp/provider-chrome.log
+            grep -q 'Provider sign in' /tmp/provider-dom.html
+          else
+            echo "::warning::Chrome is unavailable on this runner; curl-level Provider smoke passed."
+          fi
+
       - name: Rebuild provider app from a clean install
         working-directory: provider-app
         run: |
           rm -rf node_modules dist
           npm ci
-          npm run build
+          VITE_API_BASE_URL="$PROVIDER_API" npm run build -- --base="$PROVIDER_BASE_PATH"
+          node scripts/verify-build-env.mjs --expected="$PROVIDER_API" --forbidden="$PROVIDER_FORBIDDEN_API" --base="$PROVIDER_BASE_PATH"
+
+      - name: Upload Provider build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-build-${{ github.sha }}
+          path: provider-app/dist
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Verify provider dependency files are stable
         run: |
           set -euo pipefail
@@ -171,3 +236,35 @@ jobs:
       - name: Build admin app
         working-directory: admin-app
         run: npm run build
+
+  release-guard:
+    name: release-guard
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - secret-scan
+      - dependency-audit
+      - payment-integration
+      - backend-test
+      - customer-app-build
+      - provider-app-build
+      - admin-app-build
+    steps:
+      - name: Require all CI gates
+        env:
+          REQUIRED_RESULTS: >-
+            ${{ needs.secret-scan.result }}
+            ${{ needs.dependency-audit.result }}
+            ${{ needs.payment-integration.result }}
+            ${{ needs.backend-test.result }}
+            ${{ needs.customer-app-build.result }}
+            ${{ needs.provider-app-build.result }}
+            ${{ needs.admin-app-build.result }}
+        run: |
+          set -euo pipefail
+          for result in $REQUIRED_RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "Required CI gate did not pass: $result"
+              exit 1
+            fi
+          done
