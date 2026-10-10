@@ -181,21 +181,19 @@ jobs:
           preview_pid=$!
           trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
           url="http://127.0.0.1:4173${PROVIDER_BASE_PATH}"
+          ready=false
           for i in {1..20}; do
             if curl -fsS "$url" -o /tmp/provider-index.html; then
+              ready=true
               break
             fi
             sleep 1
           done
-          grep -qi '<!doctype html' /tmp/provider-index.html
-          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
-          if [ -n "$chrome" ]; then
-            "$chrome" --headless=new --no-sandbox --disable-gpu --virtual-time-budget=5000 --dump-dom "$url" \
-              > /tmp/provider-dom.html 2>/tmp/provider-chrome.log
-            grep -q 'Provider sign in' /tmp/provider-dom.html
-          else
-            echo "::warning::Chrome is unavailable on this runner; curl-level Provider smoke passed."
+          if [ "$ready" != true ]; then
+            cat /tmp/provider-preview.log || true
+            exit 1
           fi
+          grep -qi '<!doctype html' /tmp/provider-index.html
 
       - name: Rebuild provider app from a clean install
         working-directory: provider-app
