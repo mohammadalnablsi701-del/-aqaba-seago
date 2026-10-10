@@ -60,7 +60,7 @@ export default function BookingSupport({token}){
     if(!preserve)setDetail(null);
     try{
       const value=await adminBookingDetail(token,bookingId,{signal:request.signal});
-      if(detailManager.current.isCurrent(request.id)&&String(bookingId)===String(selectedId||bookingId))setDetail(value);
+      if(detailManager.current.isCurrent(request.id))setDetail(value);
     }catch(error){
       if(detailManager.current.isCurrent(request.id)&&!isAbortError(error))setDetailError(error.message||"Could not load booking detail");
     }finally{
