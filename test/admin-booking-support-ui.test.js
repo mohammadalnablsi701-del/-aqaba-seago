@@ -5,7 +5,7 @@ import {createLatestRequestManager} from '../admin-app/src/requestLifecycle.js';
 
 const component=fs.readFileSync(new URL('../admin-app/src/BookingSupport.jsx',import.meta.url),'utf8');
 const api=fs.readFileSync(new URL('../admin-app/src/bookingSupportApi.js',import.meta.url),'utf8');
-const operations=fs.readFileSync(new URL('../admin-app/src/OperationsAttention.jsx',import.meta.url),'utf8');
+const app=fs.readFileSync(new URL('../admin-app/src/App.jsx',import.meta.url),'utf8');
 
 function deferred(){
   let resolve;
@@ -28,8 +28,10 @@ test('booking support is read-only, submit-driven, scoped and secret-safe',()=>{
   assert.doesNotMatch(api,/method\s*:\s*["'](?:POST|PATCH|PUT|DELETE)/i);
   assert.match(api,/\/api\/admin\/bookings\/search/);
   assert.match(api,/\/api\/admin\/bookings\//);
-  assert.match(operations,/>Booking Support</);
-  assert.match(operations,/createPortal/);
+  assert.match(app,/tab==="booking-support"/);
+  assert.match(app,/>Booking Support</);
+  assert.match(app,/<BookingSupport token=\{auth\.token\}\/>/);
+  assert.doesNotMatch(app,/createPortal/);
 });
 
 test('rapid booking searches are latest-request-wins and abort stale work',async()=>{
