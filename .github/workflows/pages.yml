@@ -65,20 +65,24 @@ jobs:
           mkdir -p customer-app/dist/provider
           cp -R provider-app/dist/* customer-app/dist/provider/
 
-      - name: Restore Node 22 for admin
+      - name: Setup Node 20 for admin
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: Install admin dependencies
+      - name: Install admin dependencies from lockfile
         working-directory: admin-app
-        run: npm install
+        run: npm ci
 
       - name: Build admin app
         working-directory: admin-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-        run: npm run build
+        run: npm run build -- --base="/-aqaba-seago/admin/"
+
+      - name: Verify production Admin build environment
+        working-directory: admin-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/admin/"
 
       - name: Merge admin app into customer site
         run: |
