@@ -48,11 +48,13 @@ test('Q rapid payment list changes are latest-request-wins and abort stale reque
   assert.match(component,/listManager\.current\.isCurrent\(request\.id\)/);
 });
 
-test('R background list/detail failure preserves last-known-good data',async()=>{
+test('R background list/detail failure preserves last-known-good data',()=>{
   assert.match(component,/Last known payment list remains visible\./);
   assert.match(component,/Last known detail remains visible\./);
-  assert.doesNotMatch(component,/setData\(null\).*setListError/s);
-  assert.match(component,/preserve:true/);
+  assert.match(component,/setListError\(error\.message\|\|"Could not load payments"\)/);
+  assert.match(component,/setDetailError\(error\.message\|\|"Could not load payment detail"\)/);
+  assert.match(component,/if\(!preserve\)setDetail\(null\)/);
+  assert.match(component,/loadDetail\(selectedId,\{preserve:true\}\)/);
 });
 
 test('S Operations Attention payment items open the real payment visibility surface',()=>{
