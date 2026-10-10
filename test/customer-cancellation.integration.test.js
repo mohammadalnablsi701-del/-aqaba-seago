@@ -96,6 +96,7 @@ test("customer cancellation is server-authoritative, idempotent and ownership-sa
         holdId: new mongoose.Types.ObjectId(),
         customerId: ownerId,
         provider: paymentProvider,
+        externalPaymentId: `test_${marker}`,
         status: "paid",
         amount: grossAmount,
         currency: "JOD",
