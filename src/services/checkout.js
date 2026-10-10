@@ -37,11 +37,12 @@ export async function reserveCheckout({customerId,key,departureId,adults,childre
         seats,adults,children,mealPlan,pricing,idempotencyKey:key,
         expiresAt:new Date(Date.now()+minutes*60000)
       }],{session});
-      // Persist the payment identity with inventory; gateway calls stay outside
-      // the callback because a transaction may be retried by MongoDB.
+      // Persist the SeaGo Payment identity with inventory. Payment._id becomes the
+      // durable provider merchant reference; gateway calls stay outside this callback
+      // because a MongoDB transaction callback may be retried.
       const paymentId=new mongoose.Types.ObjectId();
       await Payment.create([{
-        _id:paymentId,externalPaymentId:`pending_${paymentId}`,
+        _id:paymentId,
         holdId:hold._id,customerId,provider:process.env.PAYMENT_PROVIDER||"mock",
         amount:pricing.grossAmount,currency:pricing.currency||"JOD"
       }],{session});
