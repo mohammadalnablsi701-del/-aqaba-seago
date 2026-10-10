@@ -55,12 +55,12 @@ async function req(path,{token,...options}={}){
 }
 export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});
 export const registerProvider=data=>req("/api/auth/register",{method:"POST",body:JSON.stringify({...data,role:"provider"})});
-export const me=token=>req("/api/providers/me",{token});
+export const me=(token,{signal}={})=>req("/api/providers/me",{token,signal});
 export const createProviderProfile=(token,data)=>req("/api/providers",{token,method:"POST",body:JSON.stringify(data)});
 export const updateProviderSettings=(token,data)=>req("/api/providers/me/settings",{token,method:"PATCH",body:JSON.stringify(data)});
-export const trips=async token=>publishVessels(await req("/api/providers/me/trips",{token}));
-export const departures=async(token,date)=>publishVessels(await req("/api/providers/me/departures"+(date?"?date="+encodeURIComponent(date):""),{token}));
-export const bookings=async(token,date)=>publishVessels(await req("/api/providers/me/bookings"+(date?"?date="+encodeURIComponent(date):""),{token}));
+export const trips=async(token,{signal}={})=>publishVessels(await req("/api/providers/me/trips",{token,signal}));
+export const departures=async(token,date,{signal}={})=>publishVessels(await req("/api/providers/me/departures"+(date?"?date="+encodeURIComponent(date):""),{token,signal}));
+export const bookings=async(token,date,{signal}={})=>publishVessels(await req("/api/providers/me/bookings"+(date?"?date="+encodeURIComponent(date):""),{token,signal}));
 export const checkIn=(token,ticketToken)=>req("/api/tickets/check-in",{token,method:"POST",body:JSON.stringify({token:ticketToken})});
 
 export const inspectTicket=async(token,ticketToken)=>rememberInspected(await req("/api/tickets/inspect",{token,method:"POST",body:JSON.stringify({token:ticketToken})}));
