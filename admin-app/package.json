@@ -1,1 +1,18 @@
-{"name":"aqaba-seago-admin","private":true,"version":"0.1.0","type":"module","scripts":{"dev":"vite","build":"vite build"},"dependencies":{"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest","lucide-react":"latest"},"devDependencies":{}}
+{
+  "name": "aqaba-seago-admin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "vite": "8.3.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "lucide-react": "1.54.0"
+  },
+  "devDependencies": {}
+}
