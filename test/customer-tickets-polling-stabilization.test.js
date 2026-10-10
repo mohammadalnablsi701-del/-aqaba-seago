@@ -12,6 +12,7 @@ import { deriveCustomerTicketState } from "../customer-app/src/ticketLifecycle.j
 const appSource = fs.readFileSync(new URL("../customer-app/src/App.jsx", import.meta.url), "utf8");
 const apiSource = fs.readFileSync(new URL("../customer-app/src/api.js", import.meta.url), "utf8");
 const cancellationSource = fs.readFileSync(new URL("../customer-app/src/cancellationUi.js", import.meta.url), "utf8");
+const platformPauseSource = fs.readFileSync(new URL("./customer-platform-pause-payment.integration.test.js", import.meta.url), "utf8");
 const ticketsSource = appSource.slice(appSource.indexOf("function TicketsScreen"), appSource.indexOf("function ProfileScreen"));
 
 const ready = (id="ready") => ({ _id:id, ticketPresentation:{ state:"ready", ready:true } });
@@ -206,8 +207,10 @@ test("Q) Task 5 cancellation UX bridge remains wired",()=>{
   assert.match(cancellationSource,/queueSync\(true\)/);
 });
 
-test("R) Task 1 platform pause remains present",()=>{
-  assert.match(appSource,/platformPaused/);
+test("R) Task 1 platform pause payment safety regression remains present",()=>{
+  assert.match(platformPauseSource,/final payment confirmation re-checks current sales authority/);
+  assert.match(platformPauseSource,/platform pause before paid fails closed/);
+  assert.match(platformPauseSource,/needs_review/);
 });
 
 test("S) Task 2 Payment DTO consumer remains status and bookingId oriented",()=>{
