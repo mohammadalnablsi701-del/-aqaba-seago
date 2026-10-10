@@ -26,20 +26,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Customer Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
 
-      - name: Install dependencies
+      - name: Install Customer dependencies from lockfile
         working-directory: customer-app
-        run: npm install
+        run: npm ci --no-fund
 
-      - name: Build customer app
+      - name: Build Customer production app
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
         run: npm run build
+
+      - name: Verify Customer production build environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Pages Production"
 
       - name: Setup Node 20 for provider
         uses: actions/setup-node@v4
