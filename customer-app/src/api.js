@@ -74,9 +74,9 @@ export async function listDepartures(tripId) {
   return request(`/api/departures?${qs}`);
 }
 
-export async function getQuote(departureId, adults, children = 0, mealPlan = "without_buffet") {
+export async function getQuote(departureId, adults, children = 0, mealPlan = "without_buffet", options = {}) {
   const qs = new URLSearchParams({ adults: String(adults), children: String(children), mealPlan });
-  return request(`/api/departures/${departureId}/quote?${qs}`);
+  return request(`/api/departures/${departureId}/quote?${qs}`, options);
 }
 
 export async function registerCustomer({ name, email, phone, password }) {
