@@ -5,6 +5,7 @@ import Payment from "../models/Payment.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validateAllowedFields, isIntegerInRange, isOneOf } from "../middleware/validation.js";
 import { createCheckoutForHold } from "../services/payments.js";
+import { toCustomerPaymentDto } from "../services/customerPaymentDto.js";
 
 const router = express.Router();
 const CHECKOUT_FIELDS = new Set(["departureId", "adults", "children", "seats", "mealPlan"]);
@@ -67,10 +68,12 @@ router.get("/:paymentId", requireAuth, requireRole("customer"), async (req, res,
     const payment = await Payment.findOne({
       _id: req.params.paymentId,
       customerId: req.user._id
-    });
+    })
+      .select("status bookingId")
+      .lean();
 
     if (!payment) return res.status(404).json({ error: "Payment not found" });
-    res.json(payment);
+    res.json(toCustomerPaymentDto(payment));
   } catch (err) {
     next(err);
   }
