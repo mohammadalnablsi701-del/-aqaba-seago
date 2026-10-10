@@ -1,11 +1,12 @@
 const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");
 
-export async function adminAudit(token,{page=1,limit=25,entityType="",entityId="",action=""}={}){
+export async function adminAudit(token,{page=1,limit=25,entityType="",entityId="",action="",signal}={}){
   const params=new URLSearchParams({page:String(page),limit:String(limit)});
   if(entityType)params.set("entityType",entityType);
   if(entityId)params.set("entityId",entityId);
   if(action)params.set("action",action);
   const response=await fetch(`${API}/api/admin/audit?${params.toString()}`,{
+    signal,
     headers:token?{Authorization:`Bearer ${token}`}:{ }
   });
   const json=await response.json().catch(()=>({}));

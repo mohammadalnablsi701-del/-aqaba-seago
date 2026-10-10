@@ -11,7 +11,7 @@ const tripName=t=>t.titleEn||t.titleAr||"Trip";
 const providerName=p=>p.businessName||"Provider";
 
 export const login=(email,password)=>req("/api/auth/login",{method:"POST",body:JSON.stringify({email,password})});
-export const providers=token=>req("/api/admin/providers",{token});
+export const providers=(token,options={})=>req("/api/admin/providers",{token,...options});
 export const approveProvider=(token,id)=>runLockedSensitiveAction(`provider:${id}:approve`,async()=>{
   const p=await providerMeta(token,id);
   return runSensitiveAction({
@@ -21,7 +21,7 @@ export const approveProvider=(token,id)=>runLockedSensitiveAction(`provider:${id
     execute:()=>req("/api/admin/providers/"+id+"/approve",{token,method:"PATCH"})
   });
 });
-export const trips=token=>req("/api/admin/trips",{token});
+export const trips=(token,options={})=>req("/api/admin/trips",{token,...options});
 export const setTripPlatformStatus=(token,id,platformStatus)=>runLockedSensitiveAction(`trip:${id}:platform:${platformStatus}`,async()=>{
   const t=await tripMeta(token,id);const current=t.platformStatus==="paused"?"paused":"allowed";
   if(current===platformStatus)return req("/api/admin/trips/"+id+"/platform-status",{token,method:"PATCH",body:JSON.stringify({platformStatus})});
@@ -49,15 +49,15 @@ export const setCommission=(token,id,fees)=>runLockedSensitiveAction(`trip:${id}
     execute:reason=>req("/api/admin/trips/"+id+"/commission",{token,method:"PATCH",body:JSON.stringify({...body,reason})})
   });
 });
-export const refunds=token=>req("/api/admin/refunds",{token});
-export const notifications=token=>req("/api/admin/notifications",{token});
-export const supportRequests=token=>req("/api/admin/support-requests",{token});
+export const refunds=(token,options={})=>req("/api/admin/refunds",{token,...options});
+export const notifications=(token,options={})=>req("/api/admin/notifications",{token,...options});
+export const supportRequests=(token,options={})=>req("/api/admin/support-requests",{token,...options});
 export const setSupportRequestStatus=(token,id,status)=>req("/api/admin/support-requests/"+id,{token,method:"PATCH",body:JSON.stringify({status})});
-export const overview=(token,{from="",to="",providerId=""}={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/overview"+(q.toString()?"?"+q.toString():""),{token});};
-export const settlements=(token,{from="",to="",providerId=""}={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/settlements"+(q.toString()?"?"+q.toString():""),{token});};
+export const overview=(token,{from="",to="",providerId=""}={},options={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/overview"+(q.toString()?"?"+q.toString():""),{token,...options});};
+export const settlements=(token,{from="",to="",providerId=""}={},options={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/settlements"+(q.toString()?"?"+q.toString():""),{token,...options});};
 export const markSettlementPaid=(token,{providerId,from,to,note=""})=>req("/api/admin/settlements/pay",{token,method:"POST",body:JSON.stringify({providerId,from,to,note})});
-export const readiness=token=>req("/api/admin/readiness",{token});
-export const demoCleanupPreview=token=>req("/api/admin/demo-cleanup-preview",{token});
+export const readiness=(token,options={})=>req("/api/admin/readiness",{token,...options});
+export const demoCleanupPreview=(token,options={})=>req("/api/admin/demo-cleanup-preview",{token,...options});
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
 export const setProviderStatus=(token,id,status)=>runLockedSensitiveAction(`provider:${id}:status:${status}`,async()=>{
   const p=await providerMeta(token,id);if(p.status===status)return req("/api/admin/providers/"+id+"/status",{token,method:"PATCH",body:JSON.stringify({status})});
