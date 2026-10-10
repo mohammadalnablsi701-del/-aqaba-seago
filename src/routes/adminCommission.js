@@ -10,13 +10,22 @@ const router=express.Router();
 const TYPES=new Set(["percentage","fixed_per_person","fixed_per_booking"]);
 const TIER_KEYS=["adultCommission","childCommission","buffetAdultCommission","buffetChildCommission"];
 const SNAPSHOT_KEYS=["commissionType","commissionValue",...TIER_KEYS];
+const ALLOWED_BODY_KEYS=new Set(["commissionType","commissionValue",...TIER_KEYS,"confirmTypeChange","percentage","reason"]);
 
 function fail(message,statusCode=400){throw Object.assign(new Error(message),{statusCode});}
-function number(value,label,{max=10000}={}){
+function assertPayload(body){
+  if(!body||typeof body!=="object"||Array.isArray(body))fail("Invalid commission payload");
+  for(const key of Object.keys(body))if(!ALLOWED_BODY_KEYS.has(key))fail(`Unexpected commission field: ${key}`);
+}
+function number(value,label,{max=10000,maxDecimals=2}={}){
+  if((typeof value!=="number"&&typeof value!=="string")||(typeof value==="string"&&!value.trim()))fail(`${label} is invalid`);
   const parsed=Number(value);
   if(!Number.isFinite(parsed)||parsed<0||parsed>max)fail(`${label} is invalid`);
+  const factor=10**maxDecimals;
+  if(Math.abs(parsed*factor-Math.round(parsed*factor))>1e-8)fail(`${label} supports up to ${maxDecimals} decimal places`);
   return parsed;
 }
+function present(value){return value!==undefined&&value!==null;}
 
 function commissionSnapshot(pricing={}){
   const out={};
@@ -28,8 +37,10 @@ function commissionSnapshot(pricing={}){
 }
 
 function sameSnapshot(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+function clearedTiers(){return Object.fromEntries(TIER_KEYS.map(key=>[key,undefined]));}
 
 export function buildCommissionUpdate(currentPricing={},body={}){
+  assertPayload(body);
   const currentType=String(currentPricing.commissionType||"percentage");
   const legacyPercentage=body.percentage!==undefined&&body.commissionType===undefined;
   const nextType=legacyPercentage?"percentage":String(body.commissionType||currentType);
@@ -44,21 +55,30 @@ export function buildCommissionUpdate(currentPricing={},body={}){
 
   if(nextType==="percentage"){
     const commissionValue=number(legacyPercentage?body.percentage:body.commissionValue,"Commission percentage",{max:100});
-    return {commissionType:nextType,commissionValue,...Object.fromEntries(TIER_KEYS.map(key=>[key,undefined]))};
+    return {commissionType:nextType,commissionValue,...clearedTiers()};
   }
 
   if(nextType==="fixed_per_booking"){
     const commissionValue=number(body.commissionValue,"Fixed booking commission");
-    return {commissionType:nextType,commissionValue,...Object.fromEntries(TIER_KEYS.map(key=>[key,undefined]))};
+    return {commissionType:nextType,commissionValue,...clearedTiers()};
   }
 
-  const fallbackSource=body.commissionValue??currentPricing.commissionValue;
+  const switchingIntoFixed=currentType!=="fixed_per_person";
+  const fallbackSource=body.commissionValue!==undefined
+    ? body.commissionValue
+    : switchingIntoFixed?undefined:currentPricing.commissionValue;
   const commissionValue=number(fallbackSource,"Fixed per-person fallback commission");
   const update={commissionType:nextType,commissionValue};
   for(const key of TIER_KEYS){
-    const source=body[key]!==undefined?body[key]:currentPricing[key];
-    update[key]=source===undefined||source===null?undefined:number(source,key);
+    const source=body[key]!==undefined?body[key]:(switchingIntoFixed?undefined:currentPricing[key]);
+    update[key]=present(source)?number(source,key):undefined;
   }
+
+  const adultPair=present(update.adultCommission)&&present(update.childCommission);
+  const buffetPair=present(update.buffetAdultCommission)&&present(update.buffetChildCommission);
+  if(present(update.adultCommission)!==present(update.childCommission))fail("Adult and child commissions must be configured together");
+  if(present(update.buffetAdultCommission)!==present(update.buffetChildCommission))fail("Buffet adult and child commissions must be configured together");
+  if(buffetPair&&!adultPair)fail("Buffet commission tiers require adult and child commission tiers");
   return update;
 }
 
