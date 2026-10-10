@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
 import { verifyTicketToken } from "../services/tickets.js";
+import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
 import { renderTicketPdf } from "../services/ticketPdf.js";
 
 const router = express.Router();
@@ -57,13 +58,12 @@ router.get("/validate", async (req, res, next) => {
     const trip = booking.tripId || {};
     const provider = booking.providerId || {};
     const departure = booking.departureId || {};
-    const departureUsable = departure.status === "scheduled";
-    const valid = booking.status === "confirmed" && departureUsable;
-    const used = Boolean(booking.checkedInAt);
+    const lifecycle = deriveTicketLifecycle(booking);
     const response = {
-      valid: valid && !used,
+      valid: lifecycle.usable,
       status: booking.status,
-      used,
+      lifecycleState: lifecycle.state,
+      used: lifecycle.used,
       checkedInAt: booking.checkedInAt || null,
       bookingReference: "SG-" + String(booking._id).slice(-8).toUpperCase(),
       trip: trip.titleEn || trip.titleAr || "Aqaba Sea Experience",
@@ -76,8 +76,16 @@ router.get("/validate", async (req, res, next) => {
     const wantsHtml = String(req.headers.accept || "").includes("text/html");
     if (!wantsHtml) return res.json(response);
 
-    const headline = !valid ? (departure.status==="cancelled"?"Departure cancelled":"Ticket not valid") : used ? "Ticket already used" : "Valid SeaGo ticket";
-    const stateClass = !valid ? "bad" : used ? "warn" : "ok";
+    const headline = lifecycle.state === "ready"
+      ? "Valid SeaGo ticket"
+      : lifecycle.state === "checked_in"
+        ? "Ticket already used"
+        : lifecycle.state === "departure_cancelled"
+          ? "Departure cancelled"
+          : lifecycle.state === "trip_completed"
+            ? "Trip completed"
+            : "Ticket not valid";
+    const stateClass = lifecycle.state === "ready" ? "ok" : lifecycle.state === "checked_in" ? "warn" : "bad";
     res.set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
     res.set("X-Content-Type-Options","nosniff");
     res.type("html").send(`<!doctype html>
@@ -95,7 +103,7 @@ h1{margin:8px 0 20px}.row{padding:10px 0;border-top:1px solid #edf2f6;display:fl
 ${response.vesselName?`<div class="row"><span>Vessel</span><b>${escapeHtml(response.vesselName)}</b></div>`:""}
 <div class="row"><span>Provider</span><b>${escapeHtml(response.provider || "-")}</b></div>
 <div class="row"><span>Guests</span><b>${escapeHtml(response.guests)}</b></div>
-<div class="row"><span>Status</span><b>${escapeHtml(used ? "USED" : response.status.toUpperCase())}</b></div>
+<div class="row"><span>Status</span><b>${escapeHtml(lifecycle.used ? "USED" : headline.toUpperCase())}</b></div>
 </div></body></html>`);
   } catch (err) { next(err); }
 });
@@ -117,12 +125,13 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
     const provider = booking.providerId || {};
     const departure = booking.departureId || {};
     const customer = booking.customerId || {};
+    const lifecycle = deriveTicketLifecycle(booking);
 
-    const departureUsable=departure.status==="scheduled";
     res.json({
-      valid: booking.status === "confirmed" && departureUsable && !booking.checkedInAt,
+      valid: lifecycle.usable,
       status: booking.status,
-      used: Boolean(booking.checkedInAt),
+      lifecycleState: lifecycle.state,
+      used: lifecycle.used,
       checkedInAt: booking.checkedInAt || null,
       bookingReference: "SG-" + String(booking._id).slice(-8).toUpperCase(),
       trip: trip.titleEn || trip.titleAr || "Aqaba Sea Experience",
@@ -145,18 +154,22 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
 router.post("/check-in", requireAuth, requireRole("provider","admin"), async (req, res, next) => {
   try {
     const { booking } = await loadTicket(req.body.token);
+    const lifecycle = deriveTicketLifecycle(booking);
 
     if (booking.status !== "confirmed") {
       return res.status(409).json({ error: "Ticket is not valid for check-in" });
     }
-    if (!booking.departureId || booking.departureId.status !== "scheduled") {
-      return res.status(409).json({ error: "Departure is not open for check-in" });
-    }
-    if (booking.checkedInAt) {
+    if (lifecycle.state === "checked_in") {
       return res.status(409).json({
         error: "Ticket already checked in",
         checkedInAt: booking.checkedInAt
       });
+    }
+    if (!booking.departureId || booking.departureId.status !== "scheduled") {
+      return res.status(409).json({ error: "Departure is not open for check-in" });
+    }
+    if (!lifecycle.usable) {
+      return res.status(409).json({ error: "Ticket is not valid for check-in" });
     }
 
     if (req.user.role === "provider") {

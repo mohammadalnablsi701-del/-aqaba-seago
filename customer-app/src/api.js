@@ -1,3 +1,5 @@
+import { applyCustomerTicketState } from "./ticketLifecycle.js";
+
 const API_BASE = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function vesselStore(){
@@ -120,7 +122,9 @@ export async function createBooking({ departureId, seats, token }) {
 }
 
 export async function listBookings(token) {
-  return publishVessels(await request("/api/bookings", { token }));
+  const rows = await request("/api/bookings", { token });
+  const lifecycleAware = Array.isArray(rows) ? rows.map(applyCustomerTicketState) : rows;
+  return publishVessels(lifecycleAware);
 }
 
 export async function createPaymentCheckout({ departureId, adults, children = 0, mealPlan = "without_buffet", token, idempotencyKey }) {
