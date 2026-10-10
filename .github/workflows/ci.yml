@@ -38,9 +38,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Audit customer app dependencies
+      - name: Audit customer app dependencies from lockfile
         working-directory: customer-app
-        run: npm install --no-fund && npm audit --audit-level=high
+        run: npm ci --no-fund && npm audit --audit-level=high
       - name: Setup Node 20 for provider and admin audits
         uses: actions/setup-node@v4
         with:
@@ -121,16 +121,107 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node
+
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install customer app dependencies
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Install Customer dependencies from lockfile
         working-directory: customer-app
-        run: npm install
-      - name: Build customer app
+        run: npm ci --no-fund
+
+      - name: Verify Customer source has no hardcoded deployed API
         working-directory: customer-app
-        run: npm run build
+        shell: bash
+        run: |
+          set -euo pipefail
+          matches="$(grep -RInE --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' --include='*.html' --include='*.json' --include='*.webmanifest' 'onrender[.]com' src public index.html capacitor.config.ts || true)"
+          if [[ -n "$matches" ]]; then
+            echo "Hardcoded deployed API URL found in Customer source"
+            printf '%s\n' "$matches"
+            exit 1
+          fi
+
+      - name: Prove missing Staging API is rejected
+        working-directory: customer-app
+        shell: bash
+        env:
+          VITE_API_BASE_URL: ""
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          npm run build
+          if node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="Staging missing env"; then
+            echo "Missing Staging environment was incorrectly accepted"
+            exit 1
+          fi
+          echo "Missing Staging environment rejected as expected"
+
+      - name: Build and verify Staging Customer artifact
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          npm run build
+          node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="Staging"
+          rm -rf "$RUNNER_TEMP/customer-staging"
+          cp -R dist "$RUNNER_TEMP/customer-staging"
+
+      - name: Build and verify Production Customer artifact
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          npm run build
+          node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Production first build"
+          (cd dist && find assets -type f \( -name '*.js' -o -name '*.css' \) -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/customer-prod-1.sha256"
+          rm -rf "$RUNNER_TEMP/customer-production"
+          cp -R dist "$RUNNER_TEMP/customer-production"
+
+      - name: Rebuild Production Customer from a second clean install
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: |
+          set -euo pipefail
+          rm -rf node_modules dist
+          npm ci --no-fund
+          npm run build
+          node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Production second clean build"
+          (cd dist && find assets -type f \( -name '*.js' -o -name '*.css' \) -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/customer-prod-2.sha256"
+          diff -u "$RUNNER_TEMP/customer-prod-1.sha256" "$RUNNER_TEMP/customer-prod-2.sha256"
+          echo "Customer production JS/CSS hashes are deterministic:"
+          cat "$RUNNER_TEMP/customer-prod-2.sha256"
+
+      - name: Upload Customer Staging artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-staging-${{ github.sha }}
+          path: ${{ runner.temp }}/customer-staging
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Customer Production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-production-${{ github.sha }}
+          path: ${{ runner.temp }}/customer-production
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Verify Customer dependency files and tree are stable
+        run: |
+          set -euo pipefail
+          rm -rf customer-app/node_modules customer-app/dist
+          git diff --exit-code -- customer-app/package.json customer-app/package-lock.json
+          test -z "$(git status --porcelain --untracked-files=all -- customer-app)"
 
   provider-app-build:
     runs-on: ubuntu-latest
