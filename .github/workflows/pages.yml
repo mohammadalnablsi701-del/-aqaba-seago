@@ -41,9 +41,14 @@ jobs:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
         run: npm run build
 
-      - name: Install provider dependencies
+      - name: Setup Node 20 for provider
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install provider dependencies from lockfile
         working-directory: provider-app
-        run: npm install
+        run: npm ci
 
       - name: Build provider app
         working-directory: provider-app
@@ -55,6 +60,11 @@ jobs:
         run: |
           mkdir -p customer-app/dist/provider
           cp -R provider-app/dist/* customer-app/dist/provider/
+
+      - name: Restore Node 22 for admin
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Install admin dependencies
         working-directory: admin-app
