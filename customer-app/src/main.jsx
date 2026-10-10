@@ -5,8 +5,10 @@ import App from "./App.jsx";
 import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
 import "./vessel-polish.css";
+import "./cancellation-ux.css";
 import { enableVesselUiPolish } from "./vesselUiPolish.js";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
+import { enableCancellationUi } from "./cancellationUi.js";
 
 const params=new URLSearchParams(window.location.search);
 if(params.get("open")==="tickets") sessionStorage.setItem("seago_active_screen","tickets");
@@ -80,6 +82,7 @@ createRoot(document.getElementById("root")).render(
 if(!recovery){
   enableVesselUiPolish();
   enableAccountDeletionUi();
+  enableCancellationUi();
 }
 
 if(!nativeApp&&"serviceWorker" in navigator){

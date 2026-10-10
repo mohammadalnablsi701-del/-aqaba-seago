@@ -11,6 +11,20 @@ export function cancellationPolicyFor(startsAt, now = new Date()) {
   return { hoursBeforeDeparture: hours, refundPercentage: 0 };
 }
 
+export function customerCancellationEligibility(booking) {
+  if (!booking || booking.status !== "confirmed") return { eligible: false, reason: "not_confirmed" };
+  if (booking.checkedInAt) return { eligible: false, reason: "checked_in" };
+  const departure = booking.departureId;
+  if (!departure) return { eligible: false, reason: "departure_unavailable" };
+  if (departure.status !== "scheduled") return { eligible: false, reason: "departure_not_scheduled" };
+  return { eligible: true, reason: null };
+}
+
+function customerCancellationError(reason) {
+  if (reason === "checked_in") return "Checked-in bookings cannot be cancelled";
+  return "This booking can no longer be cancelled";
+}
+
 async function applyMockRefund(payment, refundAmount, session) {
   const total = Number(payment?.amount || 0);
   const remaining=Math.max(0,total-Number(payment?.refundedAmount||0));
@@ -50,10 +64,16 @@ export async function cancelBooking({ bookingId, source, reason = "", customerId
         result=cancellationResult(booking);
         return;
       }
-      if(booking.status!=="confirmed")throw Object.assign(new Error("Booking requires cancellation review"),{statusCode:409});
-      if(source==="customer"&&booking.checkedInAt)throw Object.assign(new Error("Used tickets cannot be cancelled by the customer"),{statusCode:409});
       const dep=booking.departureId;
-      if(!dep)throw Object.assign(new Error("Departure requires reconciliation"),{statusCode:409});
+      if(source==="customer"){
+        const eligibility=customerCancellationEligibility(booking);
+        if(!eligibility.eligible){
+          throw Object.assign(new Error(customerCancellationError(eligibility.reason)),{statusCode:409});
+        }
+      }else{
+        if(booking.status!=="confirmed")throw Object.assign(new Error("Booking requires cancellation review"),{statusCode:409});
+        if(!dep)throw Object.assign(new Error("Departure requires reconciliation"),{statusCode:409});
+      }
       const policy=forceFullRefund
         ? {hoursBeforeDeparture:(new Date(dep.startsAt).getTime()-Date.now())/3600000,refundPercentage:100}
         : cancellationPolicyFor(dep.startsAt);

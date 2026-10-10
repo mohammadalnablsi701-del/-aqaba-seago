@@ -64,7 +64,7 @@ jobs:
         run: npm install
       - name: Install isolated MongoDB test runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
-      - name: Test payment, booking, permissions, operations, provider access, sellability semantics, sensitive admin actions, pilot E2E, recovery and backup/restore on a disposable replica set
+      - name: Test payment, cancellation, ticket lifecycle, booking, permissions, operations, provider access, sellability semantics, sensitive admin actions, pilot E2E, recovery and backup/restore on a disposable replica set
         run: |
           node <<'JS'
           const {MongoMemoryReplSet}=require(process.env.RUNNER_TEMP+'/seago-mongo/node_modules/mongodb-memory-server');
@@ -78,6 +78,8 @@ jobs:
                 'test/payment-transitions.integration.test.js',
                 'test/checkout-capacity.integration.test.js',
                 'test/ticket-checkin.integration.test.js',
+                'test/customer-ticket-lifecycle.integration.test.js',
+                'test/customer-cancellation.integration.test.js',
                 'test/settlement-ledger.integration.test.js',
                 'test/provider-role-permissions.integration.test.js',
                 'test/provider-sales-control.integration.test.js',
