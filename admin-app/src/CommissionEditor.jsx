@@ -18,9 +18,10 @@ export default function CommissionEditor({trip,token,onSaved}){
   const[msg,setMsg]=useState("");
   const signature=[source.commissionType,source.commissionValue,...TIER_KEYS.map(k=>source[k]),source.currency,source.buffetEnabled].join("|");
   useEffect(()=>{
+    if(editing)return;
     setCurrentPricing(source);
-    if(!editing)setDraft(commissionDraftFromPricing(source));
-  },[trip?._id,signature,editing]);
+    setDraft(commissionDraftFromPricing(source));
+  },[trip?._id,signature]);
 
   const view=commissionDisplay(currentPricing);
   const currency=currentPricing.currency||"JOD";
