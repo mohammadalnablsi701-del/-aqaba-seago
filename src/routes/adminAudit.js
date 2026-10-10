@@ -6,6 +6,7 @@ import {requireAuth,requireRole} from "../middleware/auth.js";
 const router=express.Router();
 const ACTIONS=new Set(ADMIN_AUDIT_ACTIONS);
 const ENTITY_TYPES=new Set(ADMIN_AUDIT_ENTITY_TYPES);
+const QUERY_KEYS=new Set(["limit","page","entityType","entityId","action"]);
 
 router.use(requireAuth,requireRole("admin"));
 
@@ -20,6 +21,9 @@ function positiveInt(value,fallback,{max=100}={}){
 
 router.get("/audit",async(req,res,next)=>{
   try{
+    if(Object.keys(req.query).some(key=>!QUERY_KEYS.has(key))){
+      return res.status(400).json({error:"Invalid audit query"});
+    }
     const limit=positiveInt(req.query.limit,50,{max:100});
     const page=positiveInt(req.query.page,1,{max:100000});
     const filter={};
