@@ -80,6 +80,7 @@ jobs:
                 'test/ticket-checkin.integration.test.js',
                 'test/settlement-ledger.integration.test.js',
                 'test/provider-role-permissions.integration.test.js',
+                'test/provider-sales-control.integration.test.js',
                 'test/admin-operations.integration.test.js',
                 'test/provider-access-admin.integration.test.js',
                 'test/pilot-booking-ticket.e2e.test.js',
