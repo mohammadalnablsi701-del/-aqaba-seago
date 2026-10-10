@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import Provider from "../models/Provider.js";
 import User from "../models/User.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
+import {attachAdminActionReason} from "../services/adminActionReason.js";
 
 const router=express.Router();
 router.use(requireAuth,requireRole("admin"));
@@ -20,6 +21,7 @@ router.patch("/providers/:providerId/access",async(req,res,next)=>{
     const password=String(req.body.temporaryPassword||"");
     if(!validEmail(email))return res.status(400).json({error:"Valid email is required"});
     if(password.length<12)return res.status(400).json({error:"Temporary password must be at least 12 characters"});
+    attachAdminActionReason(req);
 
     const currentOwner=provider.ownerUserId?await User.findById(provider.ownerUserId):null;
     let user=await User.findOne({email});
