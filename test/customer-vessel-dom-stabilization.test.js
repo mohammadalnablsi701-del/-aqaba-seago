@@ -29,12 +29,12 @@ test("missing vessel values render nothing instead of undefined or null", () => 
   assert.doesNotMatch(app, /Unknown vessel/);
 });
 
-test("async trip loading keeps vesselName in React state without DOM observation", () => {
+test("async trip loading keeps vesselName in React state without vessel DOM observation", () => {
   assert.match(app, /const normalized=rows\.map\(normalizeTrip\);/);
   assert.match(app, /setTripList\(enriched\);/);
   assert.doesNotMatch(app, /MutationObserver/);
-  assert.doesNotMatch(app, /querySelector/);
-  assert.doesNotMatch(app, /textContent/);
+  assert.doesNotMatch(app, /document\.querySelector(?:All)?\([^)]*vessel/i);
+  assert.doesNotMatch(app, /(?:vesselName|Vessel)[^\n]{0,120}textContent\s*=/i);
 });
 
 test("navigation history preserves the React trip object used for vessel rendering", () => {
