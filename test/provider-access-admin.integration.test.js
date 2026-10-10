@@ -11,6 +11,7 @@ import Provider from '../src/models/Provider.js';
 const uri=process.env.SEAGO_TEST_MONGODB_URI;
 const SECRET='provider-access-test-secret-at-least-32-characters';
 const PASSWORD='TemporaryPass123!';
+const REASON='Credential rotation test';
 
 function tokenFor(user,ver=Number(user.authVersion||0)){
   return jwt.sign({sub:String(user._id),ver},SECRET,{expiresIn:'1h'});
@@ -102,7 +103,7 @@ test('admin provider access is lifecycle-neutral, ID-targeted and session-safe',
     const {response,json}=await requestJson(base,path,{
       token:adminToken,
       method:'PATCH',
-      body:{email:newEmail,name:`${item.status} access owner`,temporaryPassword:PASSWORD}
+      body:{email:newEmail,name:`${item.status} access owner`,temporaryPassword:PASSWORD,reason:REASON}
     });
     assert.equal(response.status,200,`${item.status}: access update should succeed`);
     assert.equal(String(json.provider.id),String(item.provider._id),`${item.status}: response must identify requested provider ID`);
@@ -137,7 +138,7 @@ test('admin provider access is lifecycle-neutral, ID-targeted and session-safe',
   const targetResult=await requestJson(base,`/api/admin/providers/${duplicateA._id}/access`,{
     token:adminToken,
     method:'PATCH',
-    body:{email:'duplicate-a-new@example.test',name:'Duplicate A Updated',temporaryPassword:PASSWORD}
+    body:{email:'duplicate-a-new@example.test',name:'Duplicate A Updated',temporaryPassword:PASSWORD,reason:REASON}
   });
   assert.equal(targetResult.response.status,200);
   assert.equal(String(targetResult.json.provider.id),String(duplicateA._id));
@@ -156,7 +157,7 @@ test('admin provider access is lifecycle-neutral, ID-targeted and session-safe',
   const conflict=await requestJson(base,`/api/admin/providers/${conflictProvider._id}/access`,{
     token:adminToken,
     method:'PATCH',
-    body:{email:'reserved@aqabaseago.com',name:'Conflict Provider',temporaryPassword:'AnotherPass123!'}
+    body:{email:'reserved@aqabaseago.com',name:'Conflict Provider',temporaryPassword:'AnotherPass123!',reason:REASON}
   });
   assert.equal(conflict.response.status,409);
   const conflictOwnerAfter=await User.findById(conflictOwner._id);
