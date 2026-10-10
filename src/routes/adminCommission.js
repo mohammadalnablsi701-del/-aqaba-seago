@@ -3,11 +3,13 @@ import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { attachAdminActionReason } from "../services/adminActionReason.js";
+import { createAdminAuditEvent, withAdminAuditTransaction } from "../services/adminAudit.js";
 import { commissionMatchesApprovedPlan, isFunNSunProviderName, resolveFunNSunCommissionPlan } from "../services/pilotCommissionRules.js";
 
 const router=express.Router();
 const TYPES=new Set(["percentage","fixed_per_person","fixed_per_booking"]);
 const TIER_KEYS=["adultCommission","childCommission","buffetAdultCommission","buffetChildCommission"];
+const SNAPSHOT_KEYS=["commissionType","commissionValue",...TIER_KEYS];
 
 function fail(message,statusCode=400){throw Object.assign(new Error(message),{statusCode});}
 function number(value,label,{max=10000}={}){
@@ -15,6 +17,17 @@ function number(value,label,{max=10000}={}){
   if(!Number.isFinite(parsed)||parsed<0||parsed>max)fail(`${label} is invalid`);
   return parsed;
 }
+
+function commissionSnapshot(pricing={}){
+  const out={};
+  for(const key of SNAPSHOT_KEYS){
+    const value=pricing?.[key];
+    if(value!==undefined&&value!==null)out[key]=value;
+  }
+  return out;
+}
+
+function sameSnapshot(a,b){return JSON.stringify(a)===JSON.stringify(b);}
 
 export function buildCommissionUpdate(currentPricing={},body={}){
   const currentType=String(currentPricing.commissionType||"percentage");
@@ -52,20 +65,33 @@ export function buildCommissionUpdate(currentPricing={},body={}){
 router.use(requireAuth,requireRole("admin"));
 router.patch("/trips/:tripId/commission",async(req,res,next)=>{
   try{
-    const trip=await Trip.findById(req.params.tripId);
-    if(!trip)return res.status(404).json({error:"Trip not found"});
-    const update=buildCommissionUpdate(trip.pricing||{},req.body||{});
-    attachAdminActionReason(req);
-    const provider=await Provider.findById(trip.providerId).select("businessName");
-    if(provider&&isFunNSunProviderName(provider.businessName)){
-      const approvedPlan=resolveFunNSunCommissionPlan(trip.titleEn);
-      if(!approvedPlan)fail("This Fun N Sun trip is not in the approved pilot commission plan.",409);
-      if(!commissionMatchesApprovedPlan(update,approvedPlan)){
-        fail("Fun N Sun pilot commission is locked to the approved fixed-per-person values.",409);
+    const trip=await withAdminAuditTransaction(async session=>{
+      const row=await Trip.findById(req.params.tripId).session(session);
+      if(!row)throw Object.assign(new Error("Trip not found"),{statusCode:404});
+      const update=buildCommissionUpdate(row.pricing||{},req.body||{});
+      attachAdminActionReason(req);
+      const provider=await Provider.findById(row.providerId).session(session).select("businessName");
+      if(provider&&isFunNSunProviderName(provider.businessName)){
+        const approvedPlan=resolveFunNSunCommissionPlan(row.titleEn);
+        if(!approvedPlan)fail("This Fun N Sun trip is not in the approved pilot commission plan.",409);
+        if(!commissionMatchesApprovedPlan(update,approvedPlan)){
+          fail("Fun N Sun pilot commission is locked to the approved fixed-per-person values.",409);
+        }
       }
-    }
-    for(const [key,value] of Object.entries(update))trip.set(`pricing.${key}`,value);
-    await trip.save();
+
+      const before=commissionSnapshot(row.pricing||{});
+      for(const [key,value] of Object.entries(update))row.set(`pricing.${key}`,value);
+      const after=commissionSnapshot(row.pricing||{});
+      if(sameSnapshot(before,after))return row;
+
+      await row.save({session});
+      await createAdminAuditEvent({
+        req,action:"commission_updated",entityType:"trip",entityId:row._id,
+        entityLabel:row.titleEn||row.titleAr||"Trip",before,after,
+        reason:req.adminActionReason,metadata:{appliesTo:"future_bookings_only"},session
+      });
+      return row;
+    });
     res.json(trip);
   }catch(error){next(error);}
 });

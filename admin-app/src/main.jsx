@@ -1,8 +1,10 @@
 import React from"react";
 import{createRoot}from"react-dom/client";
 import App from"./App.jsx";
+import AdminActivityPanel from"./AdminActivityPanel.jsx";
 import"./styles.css";
 import"./sensitive-actions.css";
+import"./admin-activity.css";
 
 async function ensureFreshAdmin(){
   try{
@@ -23,7 +25,7 @@ async function ensureFreshAdmin(){
       return;
     }
   }catch{}
-  createRoot(document.getElementById("root")).render(<App/>);
+  createRoot(document.getElementById("root")).render(<><App/><AdminActivityPanel/></>);
 }
 
 ensureFreshAdmin();
