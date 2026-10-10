@@ -1,0 +1,123 @@
+name: Apply customer pricing truth patch
+
+on:
+  push:
+    branches: [feat/customer-pricing-breakdown-truth]
+    paths: [.github/workflows/apply-customer-pricing-truth-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/customer-pricing-breakdown-truth
+      - name: Apply focused customer pricing patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          api_path = Path("customer-app/src/api.js")
+          api = api_path.read_text()
+          api = replace_once(api,
+          '''export async function getQuote(departureId, adults, children = 0, mealPlan = "without_buffet") {
+            const qs = new URLSearchParams({ adults: String(adults), children: String(children), mealPlan });
+            return request(`/api/departures/${departureId}/quote?${qs}`);
+          }''',
+          '''export async function getQuote(departureId, adults, children = 0, mealPlan = "without_buffet", options = {}) {
+            const qs = new URLSearchParams({ adults: String(adults), children: String(children), mealPlan });
+            return request(`/api/departures/${departureId}/quote?${qs}`, options);
+          }''', "getQuote abort support")
+          api_path.write_text(api)
+
+          app_path = Path("customer-app/src/App.jsx")
+          app = app_path.read_text()
+          app = replace_once(app,
+          '''} from "./api.js";\n''',
+          '''} from "./api.js";\nimport { createQuoteRequestGate, formatServerMoney, pricingViewFromQuote, quoteMatchesSelection } from "./pricingTruth.js";\n''',
+          "pricing helper import")
+
+          app = replace_once(app,
+          '''  const [quote,setQuote]=useState(null);\n  const [loading,setLoading]=useState(Boolean(trip.apiId && hasApi()));''',
+          '''  const [quote,setQuote]=useState(null);\n  const [quoteLoading,setQuoteLoading]=useState(false);\n  const [loading,setLoading]=useState(Boolean(trip.apiId && hasApi()));''',
+          "quote loading state")
+
+          app = replace_once(app,
+          '''  const checkoutAttempt=useRef({fingerprint:"",key:""});\n  const [holdNow,setHoldNow]=useState(Date.now());\n  const live = Boolean(trip.apiId && hasApi());''',
+          '''  const checkoutAttempt=useRef({fingerprint:"",key:""});\n  const quoteRequestGate=useRef(createQuoteRequestGate());\n  const [holdNow,setHoldNow]=useState(Date.now());\n  const live = Boolean(trip.apiId && hasApi());\n  const currentQuote=quoteMatchesSelection(quote,{departureId:selected?.id,adults,children,mealPlan})?quote:null;\n  const pricingView=pricingViewFromQuote(currentQuote);\n  const quoteReady=Boolean(currentQuote&&pricingView);''',
+          "quote truth state")
+
+          app = replace_once(app,
+          '''  useEffect(()=>{\n    let ignore=false;\n    if(!live || !selected) { setQuote(null); return; }\n    setQuote(null);\n    getQuote(selected.id,adults,children,mealPlan)\n      .then(q=>{if(!ignore){setQuote(q);setError("");}})\n      .catch(err=>{if(!ignore){setQuote(null);setError(err.message);}});\n    return()=>{ignore=true;};\n  },[selected,adults,children,mealPlan,live]);''',
+          '''  useEffect(()=>{\n    if(!live || !selected) {\n      quoteRequestGate.current.invalidate();\n      setQuote(null);\n      setQuoteLoading(false);\n      return;\n    }\n    const request=quoteRequestGate.current.begin();\n    setQuote(null);\n    setQuoteLoading(true);\n    getQuote(selected.id,adults,children,mealPlan,{signal:request.signal})\n      .then(q=>{if(request.isCurrent()){setQuote(q);setError("");}})\n      .catch(err=>{\n        if(!request.isCurrent()||err?.name==="AbortError")return;\n        setQuote(null);\n        setError(err.message||"Could not load the current price.");\n      })\n      .finally(()=>{if(request.isCurrent())setQuoteLoading(false);});\n    return()=>request.abort();\n  },[selected?.id,adults,children,mealPlan,live]);''',
+          "latest quote effect")
+
+          app = replace_once(app,
+          '''    if(!quote)return setError("Please wait for the current price before continuing.");''',
+          '''    if(!quoteReady)return setError("Please wait for the current price before continuing.");''',
+          "checkout current quote guard")
+
+          app = replace_once(app,
+          '''        amount:payment.amount,\n        currency:payment.currency||"JOD"''',
+          '''        amount:payment.amount,\n        currency:payment.currency ?? currentQuote?.pricing?.currency ?? "",\n        priceChanged:Number(payment.amount)!==Number(currentQuote?.pricing?.grossAmount)||payment.currency!==currentQuote?.pricing?.currency''',
+          "payment server amount")
+
+          app = replace_once(app,
+          '''  const baseAdultPrice=Number(trip.price||0);\n  const baseChildPrice=Number(trip.childPrice||baseAdultPrice);\n  const buffetAdultAddOn=Math.max(0,Number(trip.buffetAdultPrice||baseAdultPrice)-baseAdultPrice);\n  const buffetChildAddOn=Math.max(0,Number(trip.buffetChildPrice||baseChildPrice)-baseChildPrice);\n  const baseTripSubtotal=baseAdultPrice*adults+baseChildPrice*children;\n  const buffetAddOnSubtotal=mealPlan==="with_buffet"\n    ? buffetAdultAddOn*adults+buffetChildAddOn*children\n    : 0;\n  const total=quote?.pricing?.grossAmount ?? null;\n''',
+          '''''',
+          "remove local checkout pricing math")
+
+          app = replace_once(app,
+          '''        <p>{success.paymentProvider==="mock" ? "Controlled pilot mode: this is a test payment and no real money will be charged." : "Your selected seats are temporarily protected. Complete payment to create the confirmed booking and QR ticket."}</p>''',
+          '''        <p>{success.paymentProvider==="mock" ? "Controlled pilot mode: this is a test payment and no real money will be charged." : "Your selected seats are temporarily protected. Complete payment to create the confirmed booking and QR ticket."}</p>\n        {success.priceChanged&&<div className="booking-note">Price updated to the latest server amount before payment.</div>}''',
+          "price change notice")
+
+          app = replace_once(app,
+          '''          <div><span>Total</span><strong>{Number(success.amount??total??0).toFixed(2)} {success.currency||"JOD"}</strong></div>''',
+          '''          <div><span>Total</span><strong>{formatServerMoney(success.amount,success.currency)}</strong></div>''',
+          "payment handoff total")
+
+          app = replace_once(app,
+          '''        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?"Hold expired":"Pay securely · "+Number(success.amount??total??0).toFixed(2)+" "+(success.currency||"JOD")} {!holdExpired&&<ChevronRight size={18}/>}</button>}''',
+          '''        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?"Hold expired":"Pay securely · "+formatServerMoney(success.amount,success.currency)} {!holdExpired&&<ChevronRight size={18}/>}</button>}''',
+          "payment CTA amount")
+
+          app = replace_once(app,
+          '''<button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Add open buffet</b><small>{buffetAdultAddOn===buffetChildAddOn?`+${buffetAdultAddOn.toFixed(2)} JOD per person`:`Adult +${buffetAdultAddOn.toFixed(2)} · Child +${buffetChildAddOn.toFixed(2)} JOD`}</small></button>''',
+          '''<button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Add open buffet</b><small>Live price updates below</small></button>''',
+          "remove stale buffet estimate")
+
+          old_summary='''          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quote?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {baseAdultPrice.toFixed(2)}</span><b>{(baseAdultPrice*adults).toFixed(2)} JOD</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {baseChildPrice.toFixed(2)}</span><b>{(baseChildPrice*children).toFixed(2)} JOD</b></div>}{trip.buffetEnabled&&mealPlan==="with_buffet"&&<div><span>Open buffet add-on</span><b>+{buffetAddOnSubtotal.toFixed(2)} JOD</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{Number(total||0).toFixed(2)} JOD</strong></div></>:<div className="live-price-loading"><LoaderCircle className="spin" size={16}/><span>{selected?"Fetching current price...":"Choose a departure to see the live price"}</span></div>}</div>'''
+          new_summary='''          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quoteReady?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {formatServerMoney(pricingView.adultUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.adultSubtotal,pricingView.currency)}</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {formatServerMoney(pricingView.childUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.childSubtotal,pricingView.currency)}</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{currentQuote.mealPlan==="with_buffet"?"Open buffet":"No buffet"}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{formatServerMoney(pricingView.grossAmount,pricingView.currency)}</strong></div></>:<div className="live-price-loading"><LoaderCircle className={quoteLoading?"spin":""} size={16}/><span>{quoteLoading?"Updating price...":selected?"Current price unavailable. Try again.":"Choose a departure to see the live price"}</span></div>}</div>'''
+          app = replace_once(app, old_summary, new_summary, "server quote summary")
+
+          app = replace_once(app,
+          '''disabled={submitting || (live && (!selected || !quote)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}''',
+          '''disabled={submitting || (live && (!selected || !quoteReady)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}''',
+          "checkout button quote guard")
+
+          app_path.write_text(app)
+          PY
+
+      - name: Run focused pricing truth unit tests
+        run: node --test test/customer-pricing-truth.test.js
+      - name: Commit focused patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add customer-app/src/App.jsx customer-app/src/api.js
+          git diff --cached --check
+          git commit -m "Use server quote for customer pricing breakdown"
+          git push origin HEAD:feat/customer-pricing-breakdown-truth
