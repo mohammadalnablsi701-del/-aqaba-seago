@@ -39,13 +39,6 @@ function rememberInspected(payload){
   }
   return publishVessels(payload);
 }
-function withVesselFromForm(data){
-  if(typeof document==="undefined")return data;
-  const input=document.querySelector("[data-seago-vessel-input]");
-  if(!input)return data;
-  return {...data,vesselName:String(input.value||"").trim()};
-}
-
 async function req(path,{token,...options}={}){
   const r=await fetch(API+path,{...options,headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{ }),...(options.headers||{})}});
   const j=await r.json().catch(()=>({}));
@@ -72,8 +65,8 @@ export const checkIn=(token,ticketToken)=>req("/api/tickets/check-in",{token,met
 
 export const inspectTicket=async(token,ticketToken)=>rememberInspected(await req("/api/tickets/inspect",{token,method:"POST",body:JSON.stringify({token:ticketToken})}));
 
-export const createTrip=async(token,data)=>publishVessels(await req("/api/trips",{token,method:"POST",body:JSON.stringify(withVesselFromForm(data))}));
-export const updateTrip=async(token,id,data)=>publishVessels(await req("/api/trips/"+id,{token,method:"PATCH",body:JSON.stringify(withVesselFromForm(data))}));
+export const createTrip=async(token,data)=>publishVessels(await req("/api/trips",{token,method:"POST",body:JSON.stringify(data)}));
+export const updateTrip=async(token,id,data)=>publishVessels(await req("/api/trips/"+id,{token,method:"PATCH",body:JSON.stringify(data)}));
 export const createDeparture=(token,data)=>req("/api/departures",{token,method:"POST",body:JSON.stringify(data)});
 export const createDeparturesBulk=(token,data)=>req("/api/departures/bulk",{token,method:"POST",body:JSON.stringify(data)});
 export const updateDeparture=(token,id,data)=>req("/api/departures/"+id,{token,method:"PATCH",body:JSON.stringify(data)});
