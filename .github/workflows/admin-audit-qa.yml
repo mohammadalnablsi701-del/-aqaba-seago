@@ -23,7 +23,7 @@ jobs:
         run: npm install
       - name: Install isolated MongoDB test runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
-      - name: Run admin audit trail tests on a disposable replica set
+      - name: Run admin audit and booking support tests on a disposable replica set
         run: |
           node <<'JS'
           const {MongoMemoryReplSet}=require(process.env.RUNNER_TEMP+'/seago-mongo/node_modules/mongodb-memory-server');
@@ -35,7 +35,9 @@ jobs:
               const child=spawn(process.execPath,[
                 '--test',
                 'test/admin-audit-trail.integration.test.js',
-                'test/admin-audit-ui.test.js'
+                'test/admin-audit-ui.test.js',
+                'test/admin-booking-support.integration.test.js',
+                'test/admin-booking-support-ui.test.js'
               ],{
                 env:{...process.env,SEAGO_TEST_MONGODB_URI:db.getUri()},stdio:'inherit'
               });
