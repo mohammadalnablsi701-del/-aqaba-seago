@@ -1,6 +1,8 @@
 import React,{useEffect,useRef,useState}from"react";
-import{AlertTriangle,BellRing,CheckCircle2,CircleDollarSign,LifeBuoy,RefreshCw}from"lucide-react";
+import{createPortal}from"react-dom";
+import{AlertTriangle,BellRing,CheckCircle2,CircleDollarSign,LifeBuoy,RefreshCw,Search}from"lucide-react";
 import{operations}from"./api.js";
+import BookingSupport from"./BookingSupport.jsx";
 import GlobalDepartures from"./GlobalDepartures.jsx";
 import{createLatestRequestManager,isAbortError}from"./requestLifecycle.js";
 import{buildQueuePreview,getAttentionCategories,hasOperationalAttention}from"./operationsAttentionModel.js";
@@ -15,11 +17,19 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
   const[retryKey,setRetryKey]=useState(0);
+  const[bookingSupportOpen,setBookingSupportOpen]=useState(false);
+  const[navHost,setNavHost]=useState(null);
   const managerRef=useRef(null);
   if(!managerRef.current)managerRef.current=createLatestRequestManager();
 
+  useEffect(()=>{setNavHost(document.querySelector(".admin-tabs"))},[]);
   useEffect(()=>{
-    if(!token)return;
+    document.body.classList.toggle("booking-support-open",bookingSupportOpen);
+    return()=>document.body.classList.remove("booking-support-open");
+  },[bookingSupportOpen]);
+
+  useEffect(()=>{
+    if(!token||bookingSupportOpen)return;
     const manager=managerRef.current;
     const request=manager.start();
     setLoading(true);
@@ -33,7 +43,11 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
       manager.finish(request.id);
     });
     return()=>manager.cancel();
-  },[token,refreshKey,retryKey]);
+  },[token,refreshKey,retryKey,bookingSupportOpen]);
+
+  const bookingNav=navHost?createPortal(<button className={bookingSupportOpen?"active":""} type="button" onClick={()=>setBookingSupportOpen(value=>!value)}><Search size={17}/><span>Booking Support</span></button>,navHost):null;
+
+  if(bookingSupportOpen)return <>{bookingNav}<div className="booking-support-page"><BookingSupport token={token}/></div></>;
 
   const categories=getAttentionCategories(data);
   const needsAttention=hasOperationalAttention(data);
@@ -41,6 +55,7 @@ export default function OperationsAttention({token,refreshKey=0,onNavigate}){
   const generatedAt=formatTime(data?.generatedAt);
 
   return <>
+    {bookingNav}
     <section className="operations-attention" aria-labelledby="operations-attention-title">
       <div className="operations-attention__head">
         <div>
