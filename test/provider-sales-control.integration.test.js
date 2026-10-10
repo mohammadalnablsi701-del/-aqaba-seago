@@ -73,7 +73,7 @@ test("provider and platform trip sales authority are independent",{skip:!uri},as
   const departureId=scheduled.json._id;
 
   async function providerPatch(body){return request(`/api/trips/${tripId}`,{auth:ownerToken,method:"PATCH",body})}
-  async function adminPlatform(platformStatus){return request(`/api/admin/trips/${tripId}/platform-status`,{auth:adminToken,method:"PATCH",body:{platformStatus}})}
+  async function adminPlatform(platformStatus){return request(`/api/admin/trips/${tripId}/platform-status`,{auth:adminToken,method:"PATCH",body:{platformStatus,...(platformStatus==="paused"?{reason:"Operations pause test"}:{})}})}
   async function tripDoc(){return Trip.findById(tripId).lean()}
   async function publicTripVisible(){const r=await request("/api/trips");return r.json.some(x=>String(x._id||x.id)===String(tripId))}
   async function publicDepartureVisible(){const r=await request(`/api/departures?tripId=${tripId}`);return r.json.some(x=>String(x.id||x._id)===String(departureId))}

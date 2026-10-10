@@ -2,6 +2,7 @@ import express from "express";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { attachAdminActionReason } from "../services/adminActionReason.js";
 import { isTripSellable, PLATFORM_STATUS, tripPlatformStatus } from "../services/tripSales.js";
 
 const router=express.Router();
@@ -17,6 +18,18 @@ router.patch("/trips/:tripId/platform-status",async(req,res,next)=>{
     if(!trip)return res.status(404).json({error:"Trip not found"});
     const provider=await Provider.findById(trip.providerId).select("businessName status");
     if(!provider)return res.status(409).json({error:"Trip provider not found"});
+
+    const currentStatus=tripPlatformStatus(trip);
+    if(currentStatus===platformStatus){
+      return res.json({
+        id:trip._id,
+        active:trip.active,
+        platformStatus:currentStatus,
+        provider:{id:provider._id,businessName:provider.businessName,status:provider.status},
+        sellable:isTripSellable({trip,provider})
+      });
+    }
+    if(platformStatus===PLATFORM_STATUS.PAUSED)attachAdminActionReason(req);
 
     trip.platformStatus=platformStatus;
     await trip.save();
