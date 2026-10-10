@@ -26,5 +26,6 @@ const paymentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 paymentSchema.index({ provider: 1, externalPaymentId: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ createdAt: -1 });
 
 export default mongoose.model("Payment", paymentSchema);
