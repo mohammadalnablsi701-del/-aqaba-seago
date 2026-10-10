@@ -12,7 +12,7 @@ export function buildTripFormState({trip=null,duplicateFrom=null,defaults={}}={}
     buffetAdultPrice:source?.pricing?.buffetAdultPrice??source?.pricing?.adultPrice??source?.pricing?.pricePerPerson??defaults.buffetAdultPrice??20,
     buffetChildPrice:source?.pricing?.buffetChildPrice??source?.pricing?.childPrice??defaults.buffetChildPrice??12,
     buffetDescription:source?.pricing?.buffetDescription||defaults.buffetDescription||"",
-    images:Array.isArray(source?.images)?source.images:[],
+    images:Array.isArray(source?.images)?source.images.map(x=>typeof x==="string"?{url:x,source:"external"}:x):[],
     imageUrl:"",
     locationName:source?.departureLocation?.name||defaults.locationName||"",
     address:source?.departureLocation?.address||defaults.address||"",
