@@ -47,7 +47,7 @@ jobs:
           node-version: 20
       - name: Audit provider app dependencies
         working-directory: provider-app
-        run: npm install --no-fund && npm audit --audit-level=high
+        run: npm ci --no-fund && npm audit --audit-level=high
       - name: Audit admin app dependencies
         working-directory: admin-app
         run: npm install --no-fund && npm audit --audit-level=high
@@ -136,12 +136,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install provider app dependencies
+      - name: Install provider app dependencies from lockfile
         working-directory: provider-app
-        run: npm install
+        run: npm ci
       - name: Build provider app
         working-directory: provider-app
         run: npm run build
+      - name: Rebuild provider app from a clean install
+        working-directory: provider-app
+        run: |
+          rm -rf node_modules dist
+          npm ci
+          npm run build
+      - name: Verify provider dependency files are stable
+        run: |
+          set -euo pipefail
+          rm -rf provider-app/node_modules provider-app/dist
+          git diff --exit-code -- provider-app/package.json provider-app/package-lock.json
+          test -z "$(git status --porcelain --untracked-files=all -- provider-app)"
 
   admin-app-build:
     runs-on: ubuntu-latest
