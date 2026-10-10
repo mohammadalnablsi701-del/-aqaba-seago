@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import{readFileSync}from"node:fs";
 import{createLatestRequestManager,isAbortError,rowsForSelectedDate}from"../provider-app/src/requestLifecycle.js";
 
 function deferred(){
@@ -54,6 +55,20 @@ test("stale failure cannot replace a newer success",async()=>{
   assert.equal(state.error,"");
 });
 
+test("current background failure preserves existing data",async()=>{
+  const manager=createLatestRequestManager();
+  const state={data:"existing",error:""};
+  const work=deferred();
+  const request=manager.start();
+  const run=applyWhenCurrent(manager,request,work.promise,state);
+
+  work.reject(new Error("refresh failed"));
+  await run;
+
+  assert.equal(state.data,"existing");
+  assert.equal(state.error,"refresh failed");
+});
+
 test("starting a newer request aborts the previous request",()=>{
   const manager=createLatestRequestManager();
   const first=manager.start();
@@ -81,4 +96,17 @@ test("cancel invalidates the current generation",()=>{
   manager.cancel();
   assert.equal(manager.isCurrent(current.id),false);
   assert.equal(current.signal.aborted,true);
+});
+
+test("background refresh keeps the dashboard rendered",()=>{
+  const source=readFileSync(new URL("../provider-app/src/App.jsx",import.meta.url),"utf8");
+  assert.match(source,/refreshing&&<small className="form-hint">Refreshing\.\.\.<\/small>/);
+  assert.doesNotMatch(source,/Loading dashboard\.\.\./);
+});
+
+test("initial load keeps a full loader and retryable error state",()=>{
+  const source=readFileSync(new URL("../provider-app/src/App.jsx",import.meta.url),"utf8");
+  assert.match(source,/initialLoading&&!provider&&!profileMissing/);
+  assert.match(source,/Could not load provider account/);
+  assert.match(source,/Try again/);
 });
