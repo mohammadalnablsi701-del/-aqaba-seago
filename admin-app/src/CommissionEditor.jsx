@@ -41,7 +41,7 @@ export default function CommissionEditor({trip,token,onSaved}){
       setDraft(commissionDraftFromPricing(trusted));
       setEditing(false);
       setMsg("Saved · applies to future bookings only");
-      await onSaved?.();
+      Promise.resolve(onSaved?.()).catch(()=>{});
     }catch(error){
       if(!error?.cancelled)setMsg(error?.message||"Commission update failed. Nothing was changed.");
     }finally{setSaving(false)}
@@ -55,7 +55,7 @@ export default function CommissionEditor({trip,token,onSaved}){
       {view.lines.map(line=><span className="commission-manager__line" key={line.label}><span>{line.label}</span><b>{line.value}</b></span>)}
     </div>
     {!editing?<button type="button" className="secondary commission-manager__edit" onClick={begin}>Edit commission</button>:<div className="commission-editor">
-      <label className="commission-editor__field"><span>Commission type</span><select value={draft.commissionType} disabled={saving} onChange={e=>setDraft(d=>changeCommissionType(d,e.target.value))}>{COMMISSION_TYPE_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label className="commission-editor__field"><span>Commission type</span><select value={draft.commissionType} disabled={saving} onChange={e=>setDraft(d=>changeCommissionType(d,e.target.value))}><option value="" disabled>Select commission type</option>{COMMISSION_TYPE_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       {draft.commissionType==="percentage"&&<MoneyField label="Commission rate" value={draft.commissionValue} suffix="%" disabled={saving} onChange={value=>setDraft(d=>({...d,commissionValue:value}))}/>} 
       {draft.commissionType==="fixed_per_booking"&&<MoneyField label="Commission per booking" value={draft.commissionValue} suffix={currency} disabled={saving} onChange={value=>setDraft(d=>({...d,commissionValue:value}))}/>} 
       {draft.commissionType==="fixed_per_person"&&<>
