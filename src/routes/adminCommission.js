@@ -2,6 +2,7 @@ import express from "express";
 import Trip from "../models/Trip.js";
 import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { attachAdminActionReason } from "../services/adminActionReason.js";
 import { commissionMatchesApprovedPlan, isFunNSunProviderName, resolveFunNSunCommissionPlan } from "../services/pilotCommissionRules.js";
 
 const router=express.Router();
@@ -54,6 +55,7 @@ router.patch("/trips/:tripId/commission",async(req,res,next)=>{
     const trip=await Trip.findById(req.params.tripId);
     if(!trip)return res.status(404).json({error:"Trip not found"});
     const update=buildCommissionUpdate(trip.pricing||{},req.body||{});
+    attachAdminActionReason(req);
     const provider=await Provider.findById(trip.providerId).select("businessName");
     if(provider&&isFunNSunProviderName(provider.businessName)){
       const approvedPlan=resolveFunNSunCommissionPlan(trip.titleEn);
