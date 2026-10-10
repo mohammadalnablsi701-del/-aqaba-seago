@@ -8,6 +8,8 @@ import {
   refundStatusPresentation
 } from "./cancellationPresentation.js";
 
+const CANCELLATION_FAQ_COPY = "Open My Tickets and choose Cancel booking when the booking is eligible. If self-service cancellation is unavailable, send a support request linked to the booking.";
+
 function readAuth() {
   try { return JSON.parse(localStorage.getItem("seago_auth") || "null"); }
   catch { return null; }
@@ -339,7 +341,7 @@ export function enableCancellationUi() {
     document.querySelectorAll(".support-faq details").forEach(details => {
       if (details.querySelector("summary")?.textContent?.trim() !== "What if I need to cancel?") return;
       const paragraph = details.querySelector("p");
-      if (paragraph) paragraph.textContent = "Open My Tickets and choose Cancel booking when the booking is eligible. If self-service cancellation is unavailable, send a support request linked to the booking.";
+      if (paragraph && paragraph.textContent !== CANCELLATION_FAQ_COPY) paragraph.textContent = CANCELLATION_FAQ_COPY;
     });
   }
 
