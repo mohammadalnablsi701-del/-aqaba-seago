@@ -13,7 +13,7 @@ export function getAttentionCategories(data){
   const notification=numberOrZero(alerts.notificationFailures24h);
   const support=numberOrZero(alerts.openSupport);
   return [
-    {id:"payment",count:payment,label:payment===1?"Payment needs review":"Payments need review",priority:1,destination:null},
+    {id:"payment",count:payment,label:payment===1?"Payment needs review":"Payments need review",priority:1,destination:"payments"},
     {id:"notification",count:notification,label:notification===1?"Notification failed":"Notification failures",priority:2,destination:"notifications"},
     {id:"support",count:support,label:support===1?"Open support request":"Open support requests",priority:3,destination:"support"}
   ];
@@ -34,7 +34,8 @@ function paymentPreview(item){
     title:`Payment ${paymentId} needs review`,
     details:[booking,money,text(item?.status,40)||"needs_review"].filter(Boolean),
     time:item?.updatedAt||item?.createdAt||null,
-    destination:null
+    destination:"payments",
+    targetId:text(item?._id,64)||null
   };
 }
 
