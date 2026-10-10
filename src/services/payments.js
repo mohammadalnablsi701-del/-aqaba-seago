@@ -312,10 +312,13 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
 
   let payment = await Payment.findOne({ holdId: hold._id });
   if (!payment) {
+    const paymentId=new mongoose.Types.ObjectId();
     payment = await Payment.create({
+      _id:paymentId,
       holdId: hold._id,
       customerId,
       provider: process.env.PAYMENT_PROVIDER || "mock",
+      externalPaymentId:`pending_${paymentId}`,
       amount: hold.pricing.grossAmount,
       currency: hold.pricing.currency || "JOD"
     });
@@ -323,6 +326,7 @@ export async function createCheckoutForHold({ hold, customerId, baseUrl }) {
 
   // The Mongo _id is the SeaGo-owned merchant reference. It is immutable, unique,
   // merchant-safe, and this Payment is durable before any provider side effect.
+  // pending_<id> is only an internal unbound sentinel for the existing unique index.
   if(!CHECKOUT_MUTABLE_PAYMENT_STATUSES.has(payment.status))return payment;
   if(hasBoundExternalPaymentId(payment)&&payment.checkoutUrl)return payment;
 
