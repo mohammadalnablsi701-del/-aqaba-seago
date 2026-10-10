@@ -46,8 +46,6 @@ router.patch("/providers/:providerId/access",async(req,res,next)=>{
     await user.save();
 
     provider.ownerUserId=user._id;
-    provider.status="approved";
-    provider.approvedAt=provider.approvedAt||new Date();
     await provider.save();
 
     res.json({
