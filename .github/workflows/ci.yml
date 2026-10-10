@@ -138,8 +138,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' --include='*.html' --include='*.json' --include='*.webmanifest' 'https?://[^[:space:]"'"']*onrender\.com' src public index.html capacitor.config.ts; then
+          matches="$(grep -RInE --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' --include='*.html' --include='*.json' --include='*.webmanifest' 'onrender[.]com' src public index.html capacitor.config.ts || true)"
+          if [[ -n "$matches" ]]; then
             echo "Hardcoded deployed API URL found in Customer source"
+            printf '%s\n' "$matches"
             exit 1
           fi
 
