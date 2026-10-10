@@ -10,17 +10,19 @@ router.use(requireAuth, requireRole("admin"));
 router.get("/", async (_req, res, next) => {
   try {
     const notificationWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const openSupportFilter = { status: { $in: ["open", "in_progress"] } };
 
     const [
       needsReviewCount,
       needsReview,
       notificationFailureCount,
       notificationFailures,
-      openSupportCount
+      openSupportCount,
+      openSupport
     ] = await Promise.all([
       Payment.countDocuments({ status: "needs_review" }),
       Payment.find({ status: "needs_review" })
-        .select("bookingId customerId provider externalPaymentId amount currency createdAt updatedAt")
+        .select("bookingId customerId provider externalPaymentId amount currency status createdAt updatedAt")
         .sort({ updatedAt: -1 })
         .limit(50)
         .lean(),
@@ -36,7 +38,13 @@ router.get("/", async (_req, res, next) => {
         .sort({ createdAt: -1 })
         .limit(20)
         .lean(),
-      SupportRequest.countDocuments({ status: { $in: ["open", "in_progress"] } })
+      SupportRequest.countDocuments(openSupportFilter),
+      SupportRequest.find(openSupportFilter)
+        .select("customerId bookingId bookingReference subject status createdAt updatedAt")
+        .populate("customerId", "name")
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean()
     ]);
 
     res.json({
@@ -52,7 +60,8 @@ router.get("/", async (_req, res, next) => {
         notificationFailures: notificationFailures.map(item => ({
           ...item,
           error: item.error ? String(item.error).slice(0, 240) : ""
-        }))
+        })),
+        openSupport
       }
     });
   } catch (error) {
