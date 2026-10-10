@@ -11,6 +11,7 @@ import {
   loginCustomer, registerCustomer, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, saveAccountPhone, createSupportRequest
 } from "./api.js";
 import { createQuoteRequestGate, formatServerMoney, pricingViewFromQuote, quoteMatchesSelection } from "./pricingTruth.js";
+import { createTicketsRefreshController } from "./ticketsRefresh.js";
 
 const COUNTRY_CODES=[
 ["JO","🇯🇴 Jordan","+962"],
@@ -296,8 +297,8 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
             </div>
           </div>
           <button className="primary-button" onClick={submitSearch} disabled={searching||loading}>
-            {(searching||loading)?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>}
-            {loading?"Loading trips...":searching?"Searching...":"Search Trips"} {!loading&&<ChevronRight size={18}/>}
+            {(searching||loading)?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>} 
+            {loading?"Loading trips...":searching?"Searching...":"Search Trips"} {!loading&&<ChevronRight size={18}/>} 
           </button>
         </div>
       </section>
@@ -328,7 +329,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
       <div className={"trip-card__visual trip-card__visual--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(4,34,55,.08),rgba(4,34,55,.18)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
         <span className="trip-card__badge">{trip.category}</span>
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
-        {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>}
+        {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>} 
       </div>
       <div className="trip-card__body">
         <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
@@ -828,39 +829,61 @@ function TicketsScreen({ auth, onAuthenticated }) {
   const [loading,setLoading]=useState(Boolean(auth?.token&&hasApi()));
   const [error,setError]=useState("");
   const [revision,setRevision]=useState(0);
+  const ticketsRef=useRef([]);
+  const ticketsTokenRef=useRef(auth?.token||"");
 
   useEffect(()=>{
-    let ignore=false;
-    if(!hasApi()||!auth?.token){setLoading(false);setTickets([]);return;}
-    setLoading(true);setError("");
-    listBookings(auth.token)
-      .then(rows=>{if(!ignore)setTickets(Array.isArray(rows)?rows:[]);})
-      .catch(e=>{if(!ignore)setError(e.message||"Could not load tickets");})
-      .finally(()=>{if(!ignore)setLoading(false);});
-    return()=>{ignore=true;};
-  },[auth?.token,revision]);
-
-  useEffect(()=>{
-    if(!hasApi()||!auth?.token)return;
-    let stopped=false;
-    async function refreshSilently(){
-      if(document.visibilityState==="hidden")return;
-      try{
-        const rows=await listBookings(auth.token);
-        if(!stopped)setTickets(Array.isArray(rows)?rows:[]);
-      }catch{}
+    if(!hasApi()||!auth?.token){
+      ticketsTokenRef.current=auth?.token||"";
+      ticketsRef.current=[];
+      setTickets([]);
+      setLoading(false);
+      setError("");
+      return;
     }
-    const timer=window.setInterval(refreshSilently,5000);
-    const onFocus=()=>refreshSilently();
+
+    const tokenChanged=ticketsTokenRef.current!==auth.token;
+    ticketsTokenRef.current=auth.token;
+    if(tokenChanged){
+      ticketsRef.current=[];
+      setTickets([]);
+    }
+    setError("");
+
+    const refresher=createTicketsRefreshController({
+      loadTickets:()=>listBookings(auth.token),
+      onData:rows=>{
+        ticketsRef.current=rows;
+        setTickets(rows);
+        setError("");
+      },
+      onInitialLoading:next=>{
+        if(next&&ticketsRef.current.length===0)setLoading(true);
+        if(!next)setLoading(false);
+      },
+      onError:(_error,{hasData})=>{
+        setError(hasData
+          ?"Tickets may be out of date. We’ll refresh again when the connection is available."
+          :"Could not load tickets. Please try again.");
+      },
+      isVisible:()=>document.visibilityState!=="hidden",
+      scheduleTimeout:(fn,delay)=>window.setTimeout(fn,delay),
+      cancelTimeout:id=>window.clearTimeout(id)
+    });
+
+    const onVisibilityChange=()=>refresher.handleVisibility(document.visibilityState!=="hidden");
+    const onFocus=event=>event?.isTrusted===false?refresher.refresh("mutation"):refresher.refreshForeground("focus");
+
+    document.addEventListener("visibilitychange",onVisibilityChange);
     window.addEventListener("focus",onFocus);
-    document.addEventListener("visibilitychange",onFocus);
+    void refresher.start(ticketsRef.current);
+
     return()=>{
-      stopped=true;
-      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange",onVisibilityChange);
       window.removeEventListener("focus",onFocus);
-      document.removeEventListener("visibilitychange",onFocus);
+      refresher.stop();
     };
-  },[auth?.token]);
+  },[auth?.token,revision]);
 
   if(hasApi()&&!auth?.token){
     return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="tickets-auth-copy"><Ticket size={38}/><h2>Sign in to view your tickets</h2><p>Your SeaGo bookings stay linked to your account.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
@@ -872,9 +895,9 @@ function TicketsScreen({ auth, onAuthenticated }) {
 
   if(loading) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><LoadingState label="Loading tickets..."/></div>;
 
-  if(error) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="ticket-error-state"><div className="booking-error">{error}</div><button className="secondary-button" onClick={()=>setRevision(x=>x+1)}>Try again</button></div></div>;
+  if(error&&!tickets.length) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="ticket-error-state"><div className="booking-error">{error}</div><button className="secondary-button" onClick={()=>setRevision(x=>x+1)}>Try again</button></div></div>;
 
-  return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>My SeaGo Tickets</h1><p>Everything you need for check-in, all in one place.</p></div></header>{!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated} onSaved={()=>setRevision(x=>x+1)}/>} {tickets.length?<div className="ticket-list">{tickets.map(b=>{
+  return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>My SeaGo Tickets</h1><p>Everything you need for check-in, all in one place.</p></div></header>{error&&<div className="booking-error ticket-refresh-error">{error}</div>}{!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated} onSaved={()=>setRevision(x=>x+1)}/>} {tickets.length?<div className="ticket-list">{tickets.map(b=>{
     const trip=b.tripId||{};
     const departure=b.departureId||{};
     const provider=b.providerId||{};
@@ -1488,16 +1511,16 @@ export default function App(){
     <main>
       {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
-      {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>}
-      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>}
-      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>}
-      {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>}
-      {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onAuthenticated={saveAuth} onBack={()=>setActive("profile")}/>}
-      {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>}
-      {active==="support"&&<SupportScreen auth={auth} navigate={setActive} onBack={()=>setActive("profile")}/>}
+      {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>} 
+      {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>} 
+      {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>} 
+      {active==="profile"&&<ProfileScreen auth={auth} onAuthenticated={saveAuth} onSignOut={signOut} navigate={setActive}/>} 
+      {active==="personal-details"&&<PersonalDetailsScreen auth={auth} onAuthenticated={saveAuth} onBack={()=>setActive("profile")}/>} 
+      {active==="trip-preferences"&&<TripPreferencesScreen favourites={favourites} navigate={setActive} onBack={()=>setActive("profile")}/>} 
+      {active==="support"&&<SupportScreen auth={auth} navigate={setActive} onBack={()=>setActive("profile")}/>} 
       {active==="policies"&&<PoliciesScreen onBack={()=>setActive("profile")} navigate={setActive}/>} 
       {active==="privacy"&&<PrivacyScreen onBack={()=>setActive("policies")}/>} 
-      {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>}
+      {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>} 
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
     <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
