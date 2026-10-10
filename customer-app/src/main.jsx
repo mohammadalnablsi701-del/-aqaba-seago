@@ -6,7 +6,6 @@ import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
 import "./vessel-polish.css";
 import "./cancellation-ux.css";
-import { enableVesselUiPolish } from "./vesselUiPolish.js";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 import { enableCancellationUi } from "./cancellationUi.js";
 
@@ -80,7 +79,6 @@ createRoot(document.getElementById("root")).render(
 );
 
 if(!recovery){
-  enableVesselUiPolish();
   enableAccountDeletionUi();
   enableCancellationUi();
 }
