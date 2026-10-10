@@ -24,13 +24,13 @@ function actionFor(previousStatus,nextStatus){
   throw Object.assign(new Error("Unsupported provider audit transition"),{statusCode:500});
 }
 
-async function releaseProviderCheckoutHolds(providerId,session){
-  const trips=await Trip.find({providerId}).session(session).select("_id");
+async function releaseProviderCheckoutHolds(providerId){
+  const trips=await Trip.find({providerId}).select("_id");
   const tripIds=trips.map(t=>t._id);
   if(!tripIds.length)return;
-  const departures=await Departure.find({tripId:{$in:tripIds},status:"scheduled"}).session(session).select("_id");
+  const departures=await Departure.find({tripId:{$in:tripIds},status:"scheduled"}).select("_id");
   for(const departure of departures){
-    await releaseCheckoutHoldsForDeparture(departure._id,{session});
+    await releaseCheckoutHoldsForDeparture(departure._id);
   }
 }
 
@@ -63,6 +63,7 @@ router.patch("/providers/:providerId/status",async(req,res,next)=>{
     const nextStatus=String(req.body.status||"").trim();
     if(!["pending","approved","rejected","suspended"].includes(nextStatus))return res.status(400).json({error:"Invalid provider status"});
 
+    let previousStatus=null;
     const provider=await withAdminAuditTransaction(async session=>{
       const p=await Provider.findById(req.params.providerId).session(session).populate("ownerUserId","isActive role");
       if(!p)throw Object.assign(new Error("Provider not found"),{statusCode:404});
@@ -71,7 +72,7 @@ router.patch("/providers/:providerId/status",async(req,res,next)=>{
       if(p.status===nextStatus)return p;
       if(!ALLOWED[p.status]?.has(nextStatus))throw Object.assign(new Error(`Cannot change provider status from ${p.status} to ${nextStatus}`),{statusCode:409});
 
-      const previousStatus=p.status;
+      previousStatus=p.status;
       p.status=nextStatus;
       if(nextStatus==="approved"){
         p.approvedAt=new Date();
@@ -81,17 +82,16 @@ router.patch("/providers/:providerId/status",async(req,res,next)=>{
         p.approvedBy=undefined;
       }
       await p.save({session});
-
-      if(["suspended","rejected"].includes(nextStatus)){
-        await releaseProviderCheckoutHolds(p._id,session);
-      }
-
       await createAdminAuditEvent({
         req,action:actionFor(previousStatus,nextStatus),entityType:"provider",entityId:p._id,
         entityLabel:p.businessName,before:{status:previousStatus},after:{status:nextStatus},session
       });
       return p;
     });
+
+    if(previousStatus!==null&&["suspended","rejected"].includes(nextStatus)){
+      await releaseProviderCheckoutHolds(provider._id);
+    }
     res.json(provider);
   }catch(error){next(error);}
 });
