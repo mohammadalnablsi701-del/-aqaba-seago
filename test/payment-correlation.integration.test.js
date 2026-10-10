@@ -75,6 +75,10 @@ test("payment provider correlation and orphan checkout recovery", { skip: !uri }
     commissionValue: 4
   };
 
+  function unboundExternalId(payment) {
+    return `pending_${payment._id}`;
+  }
+
   async function fixture() {
     const customer = await User.create({
       name: "Correlation Customer",
@@ -162,7 +166,7 @@ test("payment provider correlation and orphan checkout recovery", { skip: !uri }
 
   await t.test("A: durable SeaGo reference exists before provider create and normal mapping persists", async () => {
     const f = await fixture();
-    assert.equal(f.payment.externalPaymentId ?? null, null);
+    assert.equal(f.payment.externalPaymentId, unboundExternalId(f.payment));
     const reference = paymentReferenceFor(f.payment);
     assert.equal(reference, String(f.payment._id));
 
@@ -176,7 +180,7 @@ test("payment provider correlation and orphan checkout recovery", { skip: !uri }
     const f = await fixture();
     const checkout = await createExternalCheckoutOnly(f.payment);
     const before = await Payment.findById(f.payment._id).lean();
-    assert.equal(before.externalPaymentId ?? null, null, "simulate crash before external ID persistence");
+    assert.equal(before.externalPaymentId, unboundExternalId(f.payment), "simulate crash before external ID persistence");
     assert.equal(await Payment.countDocuments({ holdId: f.hold._id }), 1);
 
     await signedWebhook({ payment: f.payment, externalPaymentId: checkout.externalPaymentId });
@@ -249,7 +253,7 @@ test("payment provider correlation and orphan checkout recovery", { skip: !uri }
     stub.mock.restore();
 
     const afterFailure = await Payment.findById(f.payment._id).lean();
-    assert.equal(afterFailure.externalPaymentId ?? null, null);
+    assert.equal(afterFailure.externalPaymentId, unboundExternalId(f.payment));
     const recovered = await createCheckoutForHold({ hold: f.hold, customerId: f.customer._id, baseUrl: "https://example.test" });
     assert.equal(recovered.externalPaymentId, `mock_${f.payment._id}`);
     assert.equal(await Payment.countDocuments({ holdId: f.hold._id }), 1);
@@ -287,7 +291,7 @@ test("payment provider correlation and orphan checkout recovery", { skip: !uri }
     await signedWebhook({ payment: f.payment, amount: Number(f.payment.amount) + 1 });
     const payment = await Payment.findById(f.payment._id).lean();
     assert.equal(payment.status, "needs_review");
-    assert.equal(payment.externalPaymentId ?? null, null);
+    assert.equal(payment.externalPaymentId, unboundExternalId(f.payment));
     assert.equal(await Booking.countDocuments({ departureId: f.departure._id }), 0);
   });
 
@@ -296,7 +300,7 @@ test("payment provider correlation and orphan checkout recovery", { skip: !uri }
     await signedWebhook({ payment: f.payment, currency: "USD" });
     const payment = await Payment.findById(f.payment._id).lean();
     assert.equal(payment.status, "needs_review");
-    assert.equal(payment.externalPaymentId ?? null, null);
+    assert.equal(payment.externalPaymentId, unboundExternalId(f.payment));
     assert.equal(await Booking.countDocuments({ departureId: f.departure._id }), 0);
   });
 
