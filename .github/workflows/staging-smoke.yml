@@ -15,9 +15,10 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       STAGING_API: https://aqaba-seago-api-staging.onrender.com
+      PROVIDER_STAGING_URL: https://aqaba-seago-provider-staging.onrender.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +31,8 @@ jobs:
           set -euo pipefail
           expected="$(git log -1 --format=%H -- src package.json package-lock.json)"
           for i in {1..36}; do
-            ready_code="$(curl -sS -o /tmp/ready.json -w "%{http_code}" "$STAGING_API/ready" || true)"
-            deployed="$(curl -fsS "$STAGING_API/health" | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
+            ready_code="$(curl --connect-timeout 5 --max-time 15 -sS -o /tmp/ready.json -w "%{http_code}" "$STAGING_API/ready" || true)"
+            deployed="$(curl --connect-timeout 5 --max-time 15 -fsS "$STAGING_API/health" | node -pe 'JSON.parse(fs.readFileSync(0,"utf8")).commit||""' || true)"
             echo "Backend required from: $expected"
             echo "API deployed commit:  $deployed"
 
@@ -54,14 +55,87 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS "$STAGING_API/health" | grep -q '"ok":true'
-          curl -fsS "$STAGING_API/api/trips" > /tmp/trips.json
+          curl --connect-timeout 5 --max-time 15 -fsS "$STAGING_API/health" | grep -q '"ok":true'
+          curl --connect-timeout 5 --max-time 15 -fsS "$STAGING_API/api/trips" > /tmp/trips.json
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/trips.json","utf8")); if(!Array.isArray(x)) process.exit(1); console.log("Staging public trips:",x.length)'
 
       - name: Verify staging safety mode
         shell: bash
         run: |
           set -euo pipefail
-          body="$(curl -fsS "$STAGING_API/ready")"
+          body="$(curl --connect-timeout 5 --max-time 15 -fsS "$STAGING_API/ready")"
           echo "$body"
           echo "$body" | grep -q '"publicLaunch":false'
+
+      - name: Verify Provider staging origin is allowed by API
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          curl --connect-timeout 5 --max-time 15 -sS -D "$headers" -o /tmp/provider-staging-cors.json \
+            -H "Origin: $PROVIDER_STAGING_URL" \
+            "$STAGING_API/api/auth/google/config"
+          grep -qi "^access-control-allow-origin: $PROVIDER_STAGING_URL" "$headers"
+
+      - name: Wait for Provider staging preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..24}; do
+            code="$(curl --connect-timeout 5 --max-time 15 -L -sS -o /tmp/provider-staging.html -w "%{http_code}" "$PROVIDER_STAGING_URL/" || true)"
+            echo "Provider preview attempt $i -> HTTP ${code:-curl-error}"
+
+            if [ "$code" = "200" ] && grep -qi '<!doctype html' /tmp/provider-staging.html; then
+              module_src="$(node -e 'const fs=require("fs");const h=fs.readFileSync("/tmp/provider-staging.html","utf8");const m=h.match(/<script[^>]+type=["'"'"']module["'"'"'][^>]+src=["'"'"']([^"'"'"']+)/i)||h.match(/<script[^>]+src=["'"'"']([^"'"'"']+)["'"'"'][^>]+type=["'"'"']module/i);if(!m)process.exit(1);process.stdout.write(new URL(m[1],process.argv[1]).href)' "$PROVIDER_STAGING_URL/" || true)"
+              echo "Provider module: ${module_src:-not-found}"
+
+              if [ -n "$module_src" ] && curl --connect-timeout 5 --max-time 15 -fsS "$module_src" -o /tmp/provider-staging.js; then
+                expected_found=no
+                forbidden_found=no
+                if grep -q 'https://aqaba-seago-api-staging.onrender.com' /tmp/provider-staging.js; then expected_found=yes; fi
+                if grep -q 'https://aqaba-seago-api.onrender.com' /tmp/provider-staging.js; then forbidden_found=yes; fi
+                echo "staging API present: $expected_found; production API present: $forbidden_found"
+
+                if [ "$expected_found" = yes ] && [ "$forbidden_found" = no ]; then
+                  exit 0
+                fi
+              fi
+            fi
+            sleep 5
+          done
+          echo "Provider staging preview did not become healthy with the staging API environment."
+          exit 1
+
+      - name: Verify Provider staging assets and PWA scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS' > /tmp/provider-assets.txt
+          const fs=require("fs");
+          const html=fs.readFileSync("/tmp/provider-staging.html","utf8");
+          for(const m of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)){
+            const ref=m[1];
+            if(ref.startsWith("data:")) continue;
+            console.log(new URL(ref,process.env.PROVIDER_STAGING_URL+"/").href);
+          }
+          JS
+          test -s /tmp/provider-assets.txt
+          while IFS= read -r asset; do
+            curl --connect-timeout 5 --max-time 15 -fsS "$asset" -o /dev/null
+          done < /tmp/provider-assets.txt
+          curl --connect-timeout 5 --max-time 15 -fsS "$PROVIDER_STAGING_URL/sw.js" -o /tmp/provider-sw.js
+          curl --connect-timeout 5 --max-time 15 -fsS "$PROVIDER_STAGING_URL/manifest.webmanifest" -o /tmp/provider-manifest.json
+          node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("/tmp/provider-manifest.json","utf8"));if(m.scope!=="./"||m.start_url!=="./")process.exit(1)'
+
+      - name: Browser-level Provider staging shell smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -n "$chrome" ]; then
+            timeout 30s "$chrome" --headless=new --no-sandbox --disable-gpu --virtual-time-budget=7000 --dump-dom "$PROVIDER_STAGING_URL/" \
+              > /tmp/provider-staging-dom.html 2>/tmp/provider-staging-chrome.log
+            grep -q 'Provider sign in' /tmp/provider-staging-dom.html
+          else
+            echo "::warning::Chrome is unavailable; HTTP/asset/environment smoke already passed."
+          fi

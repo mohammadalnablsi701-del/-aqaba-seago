@@ -11,7 +11,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +92,29 @@ jobs:
             test "$code" = "200"
             grep -qi '<!doctype html' /tmp/page.html
           done
+
+      - name: Verify deployed Provider environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          provider="https://mohammadalnablsi701-del.github.io/-aqaba-seago/provider/"
+          curl -fsS "$provider" -o /tmp/provider-production.html
+          module_src="$(node -e 'const fs=require("fs");const h=fs.readFileSync("/tmp/provider-production.html","utf8");const m=h.match(/<script[^>]+type=["'"'"']module["'"'"'][^>]+src=["'"'"']([^"'"'"']+)/i)||h.match(/<script[^>]+src=["'"'"']([^"'"'"']+)["'"'"'][^>]+type=["'"'"']module/i);if(!m)process.exit(1);process.stdout.write(new URL(m[1],process.argv[1]).href)' "$provider")"
+          curl -fsS "$module_src" -o /tmp/provider-production.js
+          grep -q 'https://aqaba-seago-api.onrender.com' /tmp/provider-production.js
+          if grep -q 'https://aqaba-seago-api-staging.onrender.com' /tmp/provider-production.js; then
+            echo "Production Provider bundle contains the staging API URL."
+            exit 1
+          fi
+          curl -fsS "${provider}sw.js" -o /dev/null
+          curl -fsS "${provider}manifest.webmanifest" -o /tmp/provider-production-manifest.json
+          node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("/tmp/provider-production-manifest.json","utf8"));if(m.scope!=="./"||m.start_url!=="./")process.exit(1)'
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -n "$chrome" ]; then
+            "$chrome" --headless=new --no-sandbox --disable-gpu --virtual-time-budget=7000 --dump-dom "$provider" \
+              > /tmp/provider-production-dom.html 2>/tmp/provider-production-chrome.log
+            grep -q 'Provider sign in' /tmp/provider-production-dom.html
+          fi
 
       - name: Verify deployed commit versions
         shell: bash
