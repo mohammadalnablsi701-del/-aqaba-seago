@@ -38,6 +38,7 @@ jobs:
                 '--test',
                 '--test-concurrency=1',
                 'test/payment-event-durability.integration.test.js',
+                'test/refund-event-durability.integration.test.js',
                 'test/payment-correlation.integration.test.js',
                 'test/payment-transitions.integration.test.js',
                 'test/refund-contract.integration.test.js',
