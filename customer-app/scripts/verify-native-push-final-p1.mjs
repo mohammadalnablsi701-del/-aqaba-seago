@@ -105,8 +105,9 @@ seed({
   assert.equal(result.fenceConfirmed,false);
   assert.notEqual(localStorage.getItem(CLEANUP_PENDING_KEY),null);
   const persisted=JSON.parse(localStorage.getItem(CLEANUP_PENDING_KEY));
-  assert.equal(Object.hasOwn(persisted,"fenceConfirmed"),false);
-  assert.equal(Object.hasOwn(persisted,"serverRevoked"),false);
+  assert.equal(persisted.serverFenceWasConfirmedPreviously,true);
+  assert.equal(persisted.fenceConfirmed,false);
+  assert.equal(persisted.serverRevoked,false);
 }
 
 // Corrupted/stale persisted confirmation clears only after a fresh server response.
