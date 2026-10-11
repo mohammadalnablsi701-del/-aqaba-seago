@@ -72,12 +72,18 @@ export function buildCommissionUpdate(currentPricing={},body={}){
   }
 
   if(nextType==="percentage"){
-    const commissionValue=number(legacyPercentage?body.percentage:body.commissionValue,"Commission percentage",{max:100});
+    const source=legacyPercentage
+      ? body.percentage
+      : (body.commissionValue!==undefined?body.commissionValue:(nextType===currentType?currentPricing.commissionValue:undefined));
+    const commissionValue=number(source,"Commission percentage",{max:100});
     return validateFinalCommissionUpdate(currentPricing,{commissionType:nextType,commissionValue,...clearedTiers()});
   }
 
   if(nextType==="fixed_per_booking"){
-    const commissionValue=number(body.commissionValue,"Fixed booking commission");
+    const source=body.commissionValue!==undefined
+      ? body.commissionValue
+      : (nextType===currentType?currentPricing.commissionValue:undefined);
+    const commissionValue=number(source,"Fixed booking commission");
     return validateFinalCommissionUpdate(currentPricing,{commissionType:nextType,commissionValue,...clearedTiers()});
   }
 
