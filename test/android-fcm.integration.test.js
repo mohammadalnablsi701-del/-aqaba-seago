@@ -23,7 +23,7 @@ test("MongoDB preserves Android token metadata, unique ownership, lifecycle fenc
   try{
     await mongoose.connection.dropDatabase();
     await Promise.all([NativePushToken.init(),NativePushLifecycle.init()]);
-    const [a,b,provider]=await User.create([{name:"A",role:"customer"},{name:"B",role:"customer"},{name:"P",role:"provider"}]);
+    const [a,b,provider,deletedCustomer]=await User.create([{name:"A",role:"customer"},{name:"B",role:"customer"},{name:"P",role:"provider"},{name:"Delete Me",role:"customer"}]);
     const app=express();app.use(express.json());app.use("/auth",authRouter);app.use(router);
     server=await new Promise(resolve=>{const s=app.listen(0,"127.0.0.1",()=>resolve(s));});
     async function post(path,user,body){
@@ -74,17 +74,17 @@ test("MongoDB preserves Android token metadata, unique ownership, lifecycle fenc
     assert.equal(fence.generation,14);assert.equal(fence.state,"revoked");
 
     const deletionInstallation="account_delete_installation_456";
-    await NativePushToken.create({...context,userId:b._id,token:"account-delete-fcm-private-token",installationId:deletionInstallation});
-    await NativePushLifecycle.create({userId:b._id,appId:context.appId,installationId:deletionInstallation,generation:5,state:"active"});
-    assert.equal(await NativePushToken.countDocuments({userId:b._id}),1);
-    assert.equal(await NativePushLifecycle.countDocuments({userId:b._id}),1);
+    await NativePushToken.create({...context,userId:deletedCustomer._id,token:"account-delete-fcm-private-token",installationId:deletionInstallation});
+    await NativePushLifecycle.create({userId:deletedCustomer._id,appId:context.appId,installationId:deletionInstallation,generation:5,state:"active"});
+    assert.equal(await NativePushToken.countDocuments({userId:deletedCustomer._id}),1);
+    assert.equal(await NativePushLifecycle.countDocuments({userId:deletedCustomer._id}),1);
     const accountDeletion=await fetch(`http://127.0.0.1:${server.address().port}/auth/account`,{
       method:"DELETE",
-      headers:{Authorization:`Bearer ${jwt.sign({sub:String(b._id),ver:0},process.env.JWT_SECRET)}`}
+      headers:{Authorization:`Bearer ${jwt.sign({sub:String(deletedCustomer._id),ver:0},process.env.JWT_SECRET)}`}
     });
     assert.equal(accountDeletion.status,200);
-    assert.equal(await NativePushToken.countDocuments({userId:b._id}),0);
-    assert.equal(await NativePushLifecycle.countDocuments({userId:b._id}),0);
+    assert.equal(await NativePushToken.countDocuments({userId:deletedCustomer._id}),0);
+    assert.equal(await NativePushLifecycle.countDocuments({userId:deletedCustomer._id}),0);
 
     process.env.FCM_ENABLED="false";
     const disabledRevoke=await post("native-unsubscribe",a,{installationId:registration.installationId,lifecycleGeneration:15});
