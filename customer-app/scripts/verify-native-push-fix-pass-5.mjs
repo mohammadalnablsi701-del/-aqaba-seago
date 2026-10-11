@@ -89,6 +89,8 @@ seed({
     localUnregistered:true
   }
 });
+// Even a stale standalone owner hint must not backfill an ownerless pending cleanup.
+localStorage.setItem(OWNER_KEY,"A");
 {
   const native=await freshNative();
   const {fenceAuthorityKey}=native.nativePushLifecycleInternals;
@@ -99,6 +101,7 @@ seed({
   assert.equal(fenceAuthorityKey({installationId:"X",ownerId:"A",lifecycleEpoch:7,nextLifecycleEpoch:9}),"");
 
   const before=native.nativePushCleanupState({ownerId:"A"});
+  assert.equal(before.ownerId,"");
   assert.equal(before.serverFenceWasConfirmedPreviously,true);
   assert.equal(before.fenceConfirmed,false);
   assert.equal(before.serverRevoked,false);
