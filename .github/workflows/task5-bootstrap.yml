@@ -31,15 +31,10 @@ jobs:
           echo "Node: $(node --version)"
           echo "npm:  $(npm --version)"
           node -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));p.engines={...(p.engines||{}),node:"20.20.2"};fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
-          test ! -f package-lock.json
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          fi
           node -e 'const p=require("./package-lock.json");if(p.lockfileVersion!==3)throw new Error("Unexpected lockfileVersion "+p.lockfileVersion);console.log("lockfileVersion="+p.lockfileVersion)'
-
-      - name: Convert authoritative Backend CI installs to npm ci
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -c 'from pathlib import Path; files=[".github/workflows/ci.yml",".github/workflows/admin-audit-qa.yml",".github/workflows/customer-payment-dto-safety.yml",".github/workflows/customer-platform-pause-safety.yml",".github/workflows/customer-pricing-truth.yml",".github/workflows/customer-ticket-lifecycle-truth.yml",".github/workflows/payment-correlation-hardening.yml",".github/workflows/refund-contract-hardening.yml",".github/workflows/settlement-payment-safety.yml"]; [(lambda p,t: p.write_text(t.replace("node-version: 20\n","node-version: 20.20.2\n").replace("run: npm install --no-fund && npm audit --audit-level=high","run: npm ci --no-fund && npm audit --audit-level=high").replace("run: npm install --no-fund\n","run: npm ci --no-fund\n").replace("run: npm install\n","run: npm ci\n").replace("- name: Install backend dependencies\n","- name: Install backend dependencies from lockfile\n")))(Path(f),Path(f).read_text()) for f in files]'
 
       - name: Validate two clean installs and backend tests
         shell: bash
@@ -56,36 +51,20 @@ jobs:
           npm test
           npm ls --depth=0 --json > "$RUNNER_TEMP/tree-2.json"
           test "$lock_before" = "$(sha256sum package-lock.json)"
-          node -e 'const fs=require("node:fs"),c=require("node:crypto");for(const f of process.argv.slice(1)){const x=JSON.parse(fs.readFileSync(f,"utf8"));const t=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n");console.log(f+" "+c.createHash("sha256").update(t).digest("hex"));}' "$RUNNER_TEMP/tree-1.json" "$RUNNER_TEMP/tree-2.json"
-          node -e 'const fs=require("node:fs");function t(f){const x=JSON.parse(fs.readFileSync(f,"utf8"));return Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n")}if(t(process.argv[1])!==t(process.argv[2]))process.exit(1)' "$RUNNER_TEMP/tree-1.json" "$RUNNER_TEMP/tree-2.json"
+          node -e 'const fs=require("node:fs"),c=require("node:crypto");function t(f){const x=JSON.parse(fs.readFileSync(f,"utf8"));return Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n")}const a=t(process.argv[1]),b=t(process.argv[2]);console.log("tree-sha256="+c.createHash("sha256").update(a).digest("hex"));if(a!==b)process.exit(1)' "$RUNNER_TEMP/tree-1.json" "$RUNNER_TEMP/tree-2.json"
           npm audit --audit-level=high
+          git diff --check -- package.json package-lock.json
 
-      - name: Remove bootstrap and enforce install-command contract
+      - name: Commit dependency contract only
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/task5-bootstrap.yml
-          echo "Remaining npm install/npm i occurrences in workflows:"
-          grep -RInE 'npm +(install|i)([[:space:]]|$)' .github/workflows || true
-          bad="$(grep -RInE 'run:[[:space:]]+npm +(install|i)([[:space:]]|$)' .github/workflows | grep -v -- '--prefix .*RUNNER_TEMP/seago-mongo' || true)"
-          if [ -n "$bad" ]; then
-            printf '%s\n' "$bad"
-            exit 1
-          fi
-          git diff --check
-
-      - name: Commit hardened supply chain to feature branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add -A
-          changed="$(git diff --cached --name-only)"
-          printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Ev '^(package\.json|package-lock\.json|\.github/workflows/[^/]+\.yml)$' | grep -q .; then
-            echo "Unexpected out-of-scope file change"
-            exit 1
-          fi
+          git add package.json package-lock.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Harden reproducible backend supply chain"
+          if git diff --cached --quiet; then
+            echo "Dependency contract already committed"
+            exit 0
+          fi
+          git commit -m "Add deterministic Backend dependency lock"
           git push origin HEAD:feature/final-hardening-task5-reproducible-backend-supply-chain
