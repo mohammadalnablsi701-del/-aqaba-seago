@@ -132,7 +132,7 @@ export function createMockProvider() {
     parseWebhook(rawBody) {
       const body = JSON.parse(rawBody.toString("utf8"));
       return {
-        eventId: String(body.eventId || ""),
+        eventId: typeof body.eventId === "string" ? body.eventId.trim() : "",
         paymentReference: body.paymentReference ? String(body.paymentReference) : null,
         externalPaymentId: String(body.externalPaymentId || ""),
         status: body.status,
@@ -145,7 +145,7 @@ export function createMockProvider() {
     parseRefundWebhook(rawBody) {
       const body = JSON.parse(rawBody.toString("utf8"));
       return {
-        eventId: String(body.eventId || ""),
+        eventId: typeof body.eventId === "string" ? body.eventId.trim() : "",
         refundReference: body.refundReference ? String(body.refundReference) : null,
         providerRefundId: body.providerRefundId ? String(body.providerRefundId) : null,
         status: body.status,
