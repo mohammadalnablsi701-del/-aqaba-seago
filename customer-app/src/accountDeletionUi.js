@@ -1,4 +1,5 @@
 import { deleteAccount } from "./api.js";
+import { revokeCurrentNotificationCredentials } from "./notificationCredentialLifecycle.js";
 
 function readAuth(){
   try{return JSON.parse(localStorage.getItem("seago_auth")||"null");}catch{return null;}
@@ -33,6 +34,7 @@ export function enableAccountDeletionUi(){
         button.disabled=true;
         button.textContent="Deleting account...";
         try{
+          await revokeCurrentNotificationCredentials(auth.token);
           await deleteAccount(auth.token);
           localStorage.removeItem("seago_auth");
           localStorage.removeItem("seago_favourites");

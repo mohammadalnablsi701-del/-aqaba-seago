@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "customer-app/**"
+      - "shared/**"
       - ".github/workflows/mobile-release.yml"
   workflow_dispatch:
     inputs:
@@ -36,6 +37,8 @@ jobs:
     name: Android release AAB
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      VITE_NATIVE_PUSH_ENABLED: ${{ vars.VITE_NATIVE_PUSH_ENABLED || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -112,6 +115,12 @@ jobs:
       - name: Create Android project
         working-directory: customer-app
         run: npx cap add android
+
+      - name: Validate and inject Android Firebase configuration
+        working-directory: customer-app
+        env:
+          FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_CONFIG_BASE64 }}
+        run: node scripts/configure-android-firebase.mjs
 
       - name: Install native image tools
         run: |

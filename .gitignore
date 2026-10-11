@@ -8,3 +8,8 @@ backups/
 *.p12
 *.p8
 *.mobileprovision
+google-services.json
+*service-account*.json
+customer-app/android/
+customer-app/ios/
+customer-app/dist/

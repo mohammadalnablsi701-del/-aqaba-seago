@@ -12,6 +12,9 @@ import {
 } from "./api.js";
 import { createQuoteRequestGate, formatServerMoney, pricingViewFromQuote, quoteMatchesSelection } from "./pricingTruth.js";
 import { createTicketsRefreshController } from "./ticketsRefresh.js";
+import { isNativeSeaGo, enableNativePush, nativePushPermission, syncNativePushAuth, resumeNativePush } from "./nativePush.js";
+import { sendNativeTestPush } from "./api.js";
+import { revokeCurrentNotificationCredentials } from "./notificationCredentialLifecycle.js";
 
 const COUNTRY_CODES=[
 ["JO","🇯🇴 Jordan","+962"],
@@ -1251,14 +1254,22 @@ function NotificationsScreen({auth,onUnreadChange,onAuthenticated}){
   const[data,setData]=useState({unread:0,items:[]});const[loading,setLoading]=useState(Boolean(auth?.token));const[error,setError]=useState("");
   const[push,setPush]=useState({supported:true,permission:"default",subscribed:false});const[pushBusy,setPushBusy]=useState(false);const[pushMsg,setPushMsg]=useState("");
   const standalone=window.matchMedia?.("(display-mode: standalone)")?.matches||window.navigator.standalone===true;
-  const isiPhone=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isiPhone=!isNativeSeaGo() && /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   async function load(){if(!auth?.token){setLoading(false);onUnreadChange?.(0);return;}setLoading(true);try{const next=await listNotifications(auth.token);setData(next);onUnreadChange?.(Number(next?.unread||0));setError("");}catch(e){setError(e.message)}finally{setLoading(false)}}
-  useEffect(()=>{load();pushNotificationStatus().then(setPush).catch(()=>{})},[auth?.token]);
+  useEffect(()=>{
+    load();
+    (isNativeSeaGo()?nativePushPermission():pushNotificationStatus()).then(setPush).catch(()=>setPushMsg("Could not read notification settings."));
+    const status=event=>{setPush(event.detail);setPushMsg(event.detail.message||"");};
+    const received=()=>load();
+    window.addEventListener("seago:native-push-status",status);
+    window.addEventListener("seago:native-notification",received);
+    return()=>{window.removeEventListener("seago:native-push-status",status);window.removeEventListener("seago:native-notification",received);};
+  },[auth?.token]);
   async function open(n){if(!n.readAt){try{await markNotificationRead(n._id,auth.token);setData(d=>{const unread=Math.max(0,d.unread-1);onUnreadChange?.(unread);return {...d,unread,items:d.items.map(x=>x._id===n._id?{...x,readAt:new Date().toISOString()}:x)}})}catch{}}}
   async function readAll(){await markAllNotificationsRead(auth.token);onUnreadChange?.(0);setData(d=>({unread:0,items:d.items.map(x=>({...x,readAt:x.readAt||new Date().toISOString()}))}))}
-  async function enablePush(){setPushBusy(true);setPushMsg("");try{await enablePushNotifications(auth.token);setPush(await pushNotificationStatus());setPushMsg("Push notifications enabled.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
-  async function testPush(){setPushBusy(true);setPushMsg("");try{const r=await sendTestPush(auth.token);setPushMsg(r.sent>0?"Test push sent.":"No active push subscription found.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
+  async function enablePush(){setPushBusy(true);setPushMsg("");try{await (isNativeSeaGo()?enableNativePush(auth.token):enablePushNotifications(auth.token));const status=await (isNativeSeaGo()?nativePushPermission():pushNotificationStatus());setPush(status);setPushMsg(status.subscribed?"Push notifications enabled.":"Notifications are not enabled.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
+  async function testPush(){setPushBusy(true);setPushMsg("");try{const r=await (isNativeSeaGo()?sendNativeTestPush(auth.token):sendTestPush(auth.token));setPushMsg(r.sent>0?"Test push sent.":r.skipped?"Notifications are not available yet.":r.failed>0?"Notification delivery failed. Please try again later.":"No active push subscription found.");}catch(e){setPushMsg(e.message)}finally{setPushBusy(false)}}
 
   if(!auth?.token)return <div className="screen standard-screen notification-screen"><header className="standard-header notifications-header"><BrandLogo compact/><div><span>TRIP UPDATES</span><h1>Alerts</h1><p>Booking confirmations, reminders and important changes.</p></div></header><div className="alerts-signin"><div className="alerts-signin__icon"><Bell size={28}/></div><h2>Stay in the loop</h2><p>Sign in to receive booking updates, departure reminders and important SeaGo alerts.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
 
@@ -1271,7 +1282,8 @@ function NotificationsScreen({auth,onUnreadChange,onAuthenticated}){
       {!push.subscribed&&push.supported&&<button disabled={pushBusy||(isiPhone&&!standalone)} onClick={enablePush}>{pushBusy?"Enabling...":"Enable"}</button>}
       {push.subscribed&&<button disabled={pushBusy} onClick={testPush}>Test</button>}
       {isiPhone&&!standalone&&<small>Add SeaGo to your Home Screen first, then open it there to enable push notifications.</small>}
-      {push.permission==="denied"&&<small>Notifications are blocked in your iPhone settings for SeaGo.</small>}
+      {push.permission==="denied"&&<small>Notifications are blocked in your device settings for SeaGo.</small>}
+      {isNativeSeaGo()&&!push.supported&&<small>Native notifications are not available yet.</small>}
       {pushMsg&&<small>{pushMsg}</small>}
     </section>
 
@@ -1346,6 +1358,14 @@ export default function App(){
   const [paymentReturn,setPaymentReturn]=useState(()=>Boolean(new URLSearchParams(window.location.search).get("payment")));
   const [favourites,setFavourites]=useState(()=>{try{return JSON.parse(localStorage.getItem("seago_favourites")||"[\"snorkel-coral\"]")}catch{return ["snorkel-coral"]}});
   const [auth,setAuth]=useState(readStoredAuth());
+  useEffect(()=>{
+    if(!isNativeSeaGo())return;
+    // Controller serializes revocation before account rebinding; status events carry safe errors.
+    void syncNativePushAuth(auth?.token||"").catch(()=>console.warn("Native notification settings could not be synchronized."));
+    const resume=()=>{if(document.visibilityState==="visible" && auth?.token)void resumeNativePush().catch(()=>console.warn("Native notification settings could not be synchronized."));};
+    document.addEventListener("visibilitychange",resume);
+    return()=>document.removeEventListener("visibilitychange",resume);
+  },[auth?.token]);
   const [menuOpen,setMenuOpen]=useState(false);
   const [alertsUnread,setAlertsUnread]=useState(0);
   const historyReady=useRef(false);
@@ -1484,7 +1504,8 @@ export default function App(){
     localStorage.setItem("seago_auth",JSON.stringify(data));
   }
 
-  function signOut() {
+  async function signOut() {
+    await revokeCurrentNotificationCredentials(auth?.token);
     setAuth(null);
     setAlertsUnread(0);
     localStorage.removeItem("seago_auth");
