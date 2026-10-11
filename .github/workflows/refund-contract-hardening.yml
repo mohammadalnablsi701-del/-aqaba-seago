@@ -38,6 +38,7 @@ jobs:
                 '--test',
                 'test/payment-provider.test.js',
                 'test/refund-contract.integration.test.js',
+                'test/refund-retry-semantics.integration.test.js',
                 'test/refund-admin-visibility.integration.test.js',
                 'test/payment-correlation.integration.test.js',
                 'test/payment-transitions.integration.test.js',
