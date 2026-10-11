@@ -27,7 +27,11 @@ export function productionErrorMetadata(err) {
 export function publicErrorResponse(err) {
   const statusCode = normalizeStatusCode(err);
   if (statusCode >= 500) {
-    return { statusCode, error: "Internal server error" };
+    const publicMessage = String(err?.publicMessage || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .trim()
+      .slice(0, 240);
+    return { statusCode, error: publicMessage || "Internal server error" };
   }
 
   const rawMessage = String(err?.message || "Request rejected")
