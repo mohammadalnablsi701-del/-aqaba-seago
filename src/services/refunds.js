@@ -476,9 +476,10 @@ export async function processRefundWebhook({ providerName, rawBody, signature })
         if (!refund) throw Object.assign(new Error("Refund not found"), { statusCode: 404 });
         const payment = await Payment.findById(refund.paymentId).session(session);
         if (!payment) {
-          const reviewed = await reviewInSession({ refund, payment: null, reason: "payment_missing", session });
-          output = { refund: reviewed, payment: null, duplicate: false };
-          return;
+          // A provider event cannot be durably correlated without its parent Payment.
+          // Fail the whole transaction so neither event evidence nor Refund state lies
+          // about successful processing; a later retry can succeed after data repair.
+          throw Object.assign(new Error("Refund payment not found"), { statusCode: 409 });
         }
 
         const seen = await PaymentEvent.findOne({ provider: providerName, eventId }).session(session)
