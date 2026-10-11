@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import express from "express";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import pushRouter from "../src/routes/push.js";
 import User from "../src/models/User.js";
 import NativePushToken, {
   NATIVE_PUSH_APP_ID,
   NATIVE_PUSH_FIREBASE_PROJECT_ID
 } from "../src/models/NativePushToken.js";
+import NativePushInstallationState from "../src/models/NativePushInstallationState.js";
 import { sendAndroidFcmToUser, classifyFcmFailure } from "../src/services/nativePush.js";
 import { sendNotificationChannelsToUser } from "../src/services/notificationChannels.js";
 import { nativePushFeatureEnabled, resolvePushChannel } from "../customer-app/src/nativePushConfig.js";
@@ -21,6 +23,53 @@ const INSTALLATION="installation_1234567890";
 const TOKEN="fcm-test-token-abcdefghijklmnopqrstuvwxyz-0123456789";
 
 function authToken(id){return jwt.sign({sub:id,ver:0},process.env.JWT_SECRET,{expiresIn:"1h"});}
+function same(left,right){return String(left)===String(right);}
+function matches(row,filter){return Object.entries(filter).every(([key,value])=>same(row[key],value));}
+function applyUpdate(row,update){
+  if(update.$set)Object.assign(row,update.$set);
+  if(update.$inc)for(const [key,value] of Object.entries(update.$inc))row[key]=Number(row[key]||0)+Number(value);
+  if(update.$unset)for(const key of Object.keys(update.$unset))delete row[key];
+  return row;
+}
+function duplicate(){const error=new Error("duplicate");error.code=11000;return error;}
+function makeStore(){
+  const states=[];const tokens=[];let next=1;
+  return {states,tokens,
+    stateFind:async filter=>states.find(row=>matches(row,filter))||null,
+    stateUpdate:async(filter,update,options={})=>{
+      let row=states.find(item=>matches(item,filter));
+      if(!row&&options.upsert){
+        const candidate={_id:`s-${next++}`,...filter};
+        if(states.some(item=>item.appId===candidate.appId&&item.installationId===candidate.installationId))throw duplicate();
+        row=applyUpdate(candidate,update);states.push(row);
+      }else if(row)applyUpdate(row,update);
+      return row?{...row}:null;
+    },
+    stateCreate:async docs=>docs.map(doc=>{
+      if(states.some(item=>item.appId===doc.appId&&item.installationId===doc.installationId))throw duplicate();
+      const row={_id:`s-${next++}`,...doc};states.push(row);return {...row};
+    }),
+    tokenFind:async filter=>tokens.find(row=>matches(row,filter))||null,
+    tokenUpdate:async(filter,update,options={})=>{
+      let row=tokens.find(item=>matches(item,filter));
+      if(!row&&options.upsert){
+        const candidate={_id:`t-${next++}`,...filter,...(update.$set||{})};
+        if(tokens.some(item=>item.token===candidate.token||(item.appId===candidate.appId&&item.installationId===candidate.installationId)))throw duplicate();
+        row=candidate;tokens.push(row);
+      }else if(row){
+        const candidate=applyUpdate({...row},update);
+        if(tokens.some(item=>item._id!==row._id&&(item.token===candidate.token||(item.appId===candidate.appId&&item.installationId===candidate.installationId))))throw duplicate();
+        Object.assign(row,candidate);
+      }
+      return row?{...row}:null;
+    },
+    tokenDelete:async filter=>{
+      let count=0;for(let i=tokens.length-1;i>=0;i--){if(matches(tokens[i],filter)){tokens.splice(i,1);count++;}}
+      return {deletedCount:count};
+    }
+  };
+}
+
 async function startApp(){
   const app=express();app.use(express.json());app.use("/api/push",pushRouter);
   const server=app.listen(0,"127.0.0.1");
@@ -35,8 +84,14 @@ async function post(baseUrl,path,token,body={}){
 async function withAuthHarness(run){
   const oldSecret=process.env.JWT_SECRET;
   const oldFindById=User.findById;
-  const oldUpdate=NativePushToken.findOneAndUpdate;
-  const oldDelete=NativePushToken.deleteMany;
+  const oldStartSession=mongoose.startSession;
+  const oldStateFind=NativePushInstallationState.findOne;
+  const oldStateUpdate=NativePushInstallationState.findOneAndUpdate;
+  const oldStateCreate=NativePushInstallationState.create;
+  const oldTokenFind=NativePushToken.findOne;
+  const oldTokenUpdate=NativePushToken.findOneAndUpdate;
+  const oldTokenDelete=NativePushToken.deleteMany;
+  const store=makeStore();
   process.env.JWT_SECRET="android-fcm-code-prep-test-secret-123456789";
   const users=new Map([
     [CUSTOMER,{_id:CUSTOMER,role:"customer",isActive:true,authVersion:0}],
@@ -44,47 +99,60 @@ async function withAuthHarness(run){
     [ADMIN,{_id:ADMIN,role:"admin",isActive:true,authVersion:0}]
   ]);
   User.findById=id=>({select:async()=>users.get(String(id))||null});
-  try{await run();}
+  mongoose.startSession=async()=>({withTransaction:async fn=>fn(),endSession:async()=>{}});
+  NativePushInstallationState.findOne=store.stateFind;
+  NativePushInstallationState.findOneAndUpdate=store.stateUpdate;
+  NativePushInstallationState.create=store.stateCreate;
+  NativePushToken.findOne=store.tokenFind;
+  NativePushToken.findOneAndUpdate=store.tokenUpdate;
+  NativePushToken.deleteMany=store.tokenDelete;
+  try{await run(store);}
   finally{
-    User.findById=oldFindById;NativePushToken.findOneAndUpdate=oldUpdate;NativePushToken.deleteMany=oldDelete;
+    User.findById=oldFindById;mongoose.startSession=oldStartSession;
+    NativePushInstallationState.findOne=oldStateFind;NativePushInstallationState.findOneAndUpdate=oldStateUpdate;NativePushInstallationState.create=oldStateCreate;
+    NativePushToken.findOne=oldTokenFind;NativePushToken.findOneAndUpdate=oldTokenUpdate;NativePushToken.deleteMany=oldTokenDelete;
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
   }
 }
 
-test("native endpoints are customer-only and Android registration stores explicit FCM metadata",async()=>withAuthHarness(async()=>{
-  const writes=[];const deletes=[];
-  NativePushToken.findOneAndUpdate=async(filter,update,options)=>{writes.push({filter,update,options});return update.$set;};
-  NativePushToken.deleteMany=async filter=>{deletes.push(filter);return {deletedCount:1};};
+test("native endpoints are customer-only and Android registration stores explicit FCM metadata with an epoch fence",async()=>withAuthHarness(async store=>{
   const {server,baseUrl}=await startApp();
   try{
     const customer=authToken(CUSTOMER),provider=authToken(PROVIDER),admin=authToken(ADMIN);
-    const payload={token:TOKEN,platform:"android",installationId:INSTALLATION};
-    assert.equal((await post(baseUrl,"/api/push/native-subscribe",customer,payload)).status,200);
+    const payload={token:TOKEN,platform:"android",installationId:INSTALLATION,lifecycleEpoch:1};
+    const subscribed=await post(baseUrl,"/api/push/native-subscribe",customer,payload);
+    assert.equal(subscribed.status,200);
+    assert.equal(subscribed.body.lifecycleEpoch,1);
     assert.equal((await post(baseUrl,"/api/push/native-subscribe",provider,payload)).status,403);
     assert.equal((await post(baseUrl,"/api/push/native-subscribe",admin,payload)).status,403);
-    assert.equal(writes.length,1);
-    assert.deepEqual(writes[0].filter,{appId:NATIVE_PUSH_APP_ID,installationId:INSTALLATION,userId:CUSTOMER});
-    assert.equal(writes[0].update.$set.provider,"fcm");
-    assert.equal(writes[0].update.$set.firebaseProjectId,NATIVE_PUSH_FIREBASE_PROJECT_ID);
-    assert.equal(writes[0].update.$set.appId,NATIVE_PUSH_APP_ID);
-    assert.equal(writes[0].update.$set.platform,"android");
-    assert.equal(writes[0].options.runValidators,true);
-    assert.equal((await post(baseUrl,"/api/push/native-unsubscribe",provider,{installationId:INSTALLATION})).status,403);
-    assert.equal((await post(baseUrl,"/api/push/native-unsubscribe",admin,{installationId:INSTALLATION})).status,403);
-    assert.equal((await post(baseUrl,"/api/push/native-unsubscribe",customer,{installationId:INSTALLATION})).status,200);
-    assert.equal(deletes.length,1);
-    assert.equal(String(deletes[0].userId),CUSTOMER);
+    assert.equal(store.tokens.length,1);
+    assert.equal(store.tokens[0].provider,"fcm");
+    assert.equal(store.tokens[0].firebaseProjectId,NATIVE_PUSH_FIREBASE_PROJECT_ID);
+    assert.equal(store.tokens[0].appId,NATIVE_PUSH_APP_ID);
+    assert.equal(store.tokens[0].platform,"android");
+    assert.equal(store.states.length,1);
+    assert.equal(store.states[0].currentEpoch,1);
+    assert.equal(store.states[0].active,true);
+    assert.equal((await post(baseUrl,"/api/push/native-unsubscribe",provider,{installationId:INSTALLATION,lifecycleEpoch:1})).status,403);
+    assert.equal((await post(baseUrl,"/api/push/native-unsubscribe",admin,{installationId:INSTALLATION,lifecycleEpoch:1})).status,403);
+    const revoked=await post(baseUrl,"/api/push/native-unsubscribe",customer,{installationId:INSTALLATION,lifecycleEpoch:1});
+    assert.equal(revoked.status,200);
+    assert.equal(revoked.body.lifecycleEpoch,2);
+    assert.equal(store.tokens.length,0);
+    assert.equal(store.states[0].currentEpoch,2);
+    assert.equal(store.states[0].active,false);
   }finally{await new Promise(resolve=>server.close(resolve));}
 }));
 
-test("cross-installation duplicate token conflicts fail closed without silent reassignment",async()=>withAuthHarness(async()=>{
-  NativePushToken.findOneAndUpdate=async()=>{const error=new Error("duplicate");error.code=11000;throw error;};
-  NativePushToken.deleteMany=async()=>({deletedCount:0});
+test("cross-installation duplicate token conflicts fail closed without silent reassignment",async()=>withAuthHarness(async store=>{
+  store.tokens.push({_id:"existing",userId:CUSTOMER,appId:NATIVE_PUSH_APP_ID,installationId:"installation_other_123456",token:TOKEN,platform:"android",provider:"fcm"});
   const {server,baseUrl}=await startApp();
   try{
-    const response=await post(baseUrl,"/api/push/native-subscribe",authToken(CUSTOMER),{token:TOKEN,platform:"android",installationId:INSTALLATION});
+    const response=await post(baseUrl,"/api/push/native-subscribe",authToken(CUSTOMER),{token:TOKEN,platform:"android",installationId:INSTALLATION,lifecycleEpoch:1});
     assert.equal(response.status,409);
-    assert.deepEqual(response.body,{error:"Native push credential conflict"});
+    assert.equal(response.body.code,"NATIVE_PUSH_CREDENTIAL_CONFLICT");
+    assert.equal(store.tokens.length,1);
+    assert.equal(store.tokens[0].installationId,"installation_other_123456");
   }finally{await new Promise(resolve=>server.close(resolve));}
 }));
 
@@ -179,7 +247,7 @@ test("push test endpoint returns independent webPush/nativePush results when FCM
 }));
 
 test("customer native feature flag selects only Capacitor Android and leaves web as Web Push",()=>{
-  assert.equal(nativePushFeatureEnabled({VITE_NATIVE_PUSH_ENABLED:"false"}),false);
+  assert.equal(nativePushFeatureEnabled({VITE_NATIVE_PUSH_ENABLED:"false"}),false;
   assert.equal(resolvePushChannel({enabled:false,isNative:true,platform:"android"}),"native-disabled");
   assert.equal(resolvePushChannel({enabled:true,isNative:true,platform:"android"}),"native-android");
   assert.equal(resolvePushChannel({enabled:true,isNative:false,platform:"web"}),"web");
