@@ -9,10 +9,12 @@ export const ADMIN_AUDIT_ACTIONS=[
   "provider_access_reset",
   "trip_platform_paused",
   "trip_platform_allowed",
-  "commission_updated"
+  "commission_updated",
+  "settlement_marked_paid",
+  "settlement_payment_reversed"
 ];
 
-export const ADMIN_AUDIT_ENTITY_TYPES=["provider","trip"];
+export const ADMIN_AUDIT_ENTITY_TYPES=["provider","trip","settlement"];
 
 const schema=new mongoose.Schema({
   actorUserId:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
