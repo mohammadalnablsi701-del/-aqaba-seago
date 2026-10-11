@@ -18,6 +18,11 @@ test('payment operations UI is read-only, bounded, generic and secret-safe',()=>
   assert.match(component,/No payment events available\./);
   assert.match(component,/No force-paid, refund, retry, replay, or manual state controls\./);
   assert.match(component,/createdAt|updatedAt|externalPaymentId|refundedAmount/);
+  assert.match(component,/Requested amount/);
+  assert.match(component,/SeaGo refund reference/);
+  assert.match(component,/Provider refund ID/);
+  assert.match(component,/Review reason/);
+  assert.match(component,/Visibility only\. Refund controls are not available in this task\./);
   assert.match(component,/status:"all"/);
   assert.match(component,/booking:"any"/);
   assert.match(component,/needsReview:"any"/);
@@ -28,7 +33,7 @@ test('payment operations UI is read-only, bounded, generic and secret-safe',()=>
   assert.match(api,/\/api\/admin\/payments/);
   assert.doesNotMatch(api,/method\s*:\s*["'](?:POST|PATCH|PUT|DELETE)/i);
   assert.doesNotMatch(component,/Force paid|Force failed|Retry payment|Retry webhook|Replay event|Partial refund|Cancel payment|Change external ID|Edit amount|Edit currency/i);
-  assert.doesNotMatch(component,/dangerouslySetInnerHTML|innerHTML|checkoutUrl|rawLastEvent|Authorization header|webhook signatures|secret tokens/i);
+  assert.doesNotMatch(component,/idempotencyKey|attemptCount|providerStatus|lastReconciledAt|dangerouslySetInnerHTML|innerHTML|checkoutUrl|rawLastEvent|Authorization header|webhook signatures|secret tokens/i);
 });
 
 test('Q rapid payment list changes are latest-request-wins and abort stale requests',async()=>{
