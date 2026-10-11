@@ -5,6 +5,10 @@ const schema=new mongoose.Schema({
   token:{type:String,required:true,unique:true,trim:true},
   installationId:{type:String,trim:true},
   platform:{type:String,enum:["android","ios"],required:true,index:true},
+  // No defaults: legacy/APNs rows must never silently become FCM registrations.
+  provider:{type:String,enum:["fcm","apns"]},
+  firebaseProjectId:{type:String},
+  firebaseAppId:{type:String},
   appId:{type:String,default:"com.aqabaseago.app",trim:true},
   lastUsedAt:{type:Date,default:Date.now}
 },{timestamps:true});

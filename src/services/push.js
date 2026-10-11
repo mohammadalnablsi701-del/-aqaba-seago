@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import PushSubscription from "../models/PushSubscription.js";
+import { sendNativePushToUser } from "./nativeFcm.js";
 import {
   credentialFingerprint,
   pushFailureCode,
@@ -77,7 +78,7 @@ export async function deliverWebPush(subscription,payload,{send=webpush.sendNoti
   };
 }
 
-export async function sendPushToUser(userId,{title,body,data={}}){
+export async function sendWebPushToUser(userId,{title,body,data={}}){
   if(!userId||!configure())return {sent:0,failed:0,skipped:true,permanentFailures:0,transientFailures:0};
   const rows=await PushSubscription.find({userId});
   let sent=0,failed=0,permanentFailures=0,transientFailures=0;
@@ -110,4 +111,22 @@ export async function sendPushToUser(userId,{title,body,data={}}){
     }
   }
   return {sent,failed,skipped:false,permanentFailures,transientFailures};
+}
+
+export async function sendPushToUser(userId,payload,{web=sendWebPushToUser,native=sendNativePushToUser}={}){
+  const outcomes=await Promise.allSettled([web(userId,payload),native(userId,payload)]);
+  const channels={};
+  for(const [index,name] of ["web_push","android_fcm"].entries()){
+    const outcome=outcomes[index];
+    if(outcome.status==="fulfilled") channels[name]=outcome.value;
+    else{
+      console.error(JSON.stringify({event:"push_delivery",channel:name,result:"failed",code:"push_delivery_failed"}));
+      channels[name]={sent:0,failed:1,skipped:false,permanentFailures:0,transientFailures:1};
+    }
+  }
+  const results=Object.values(channels);
+  return {sent:results.reduce((n,r)=>n+r.sent,0),failed:results.reduce((n,r)=>n+r.failed,0),
+    permanentFailures:results.reduce((n,r)=>n+(r.permanentFailures||0),0),
+    transientFailures:results.reduce((n,r)=>n+(r.transientFailures||0),0),
+    skipped:results.every(r=>r.skipped),channels};
 }

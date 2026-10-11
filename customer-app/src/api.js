@@ -17,8 +17,13 @@ async function request(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if(response.status===401&&options.token){
-      localStorage.removeItem("seago_auth");
-      window.dispatchEvent(new CustomEvent("seago:session-expired"));
+      // A late cleanup request from the previous account must not sign out the new one.
+      let currentToken;
+      try{currentToken=JSON.parse(localStorage.getItem("seago_auth")||"null")?.token;}catch{}
+      if(currentToken===options.token){
+        localStorage.removeItem("seago_auth");
+        window.dispatchEvent(new CustomEvent("seago:session-expired"));
+      }
     }
     const error = new Error(payload.error || `Request failed: ${response.status}`);
     error.status = response.status;
@@ -212,5 +217,7 @@ export async function googleSignIn(credential,role="customer"){
 }
 
 export const deleteAccount=token=>request("/api/auth/account",{method:"DELETE",token});
-export const registerNativePushToken=({token:deviceToken,platform,installationId},token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken,platform,installationId})});
-export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId})});
+export const registerNativePushToken=(registration,token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify(registration),signal:AbortSignal.timeout(10000)});
+export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId}),signal:AbortSignal.timeout(10000)});
+export const nativePushStatus=token=>request("/api/push/native-status",{token,signal:AbortSignal.timeout(10000)});
+export const sendNativeTestPush=token=>request("/api/push/native-test",{method:"POST",token,signal:AbortSignal.timeout(20000)});
