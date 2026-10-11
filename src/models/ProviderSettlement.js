@@ -16,6 +16,7 @@ const providerSettlementSchema=new mongoose.Schema({
   status:{type:String,enum:["paid"],default:"paid",index:true},
   paidAt:{type:Date,default:Date.now,index:true},
   paidBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
+  reason:{type:String,trim:true,maxlength:500},
   note:{type:String,trim:true,maxlength:500}
 },{timestamps:true});
 
