@@ -7,6 +7,7 @@ import { NATIVE_PUSH_CONTEXT as context } from "../shared/nativePushContext.js";
 function deferred(){let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});return {promise,resolve,reject};}
 function harness(options={}){
   const handlers=new Map(),stored=new Map(options.stored||[]),calls=[],states=[],taps=[];
+  let deleteAttempt=0;
   const plugin={
     checkPermissions:async()=>({receive:options.permission||"granted"}),
     requestPermissions:async()=>({receive:options.requested||"granted"}),
@@ -17,7 +18,12 @@ function harness(options={}){
   };
   const nativeBridge={
     isConfigured:async()=>{calls.push(["isConfigured"]);return {configured:options.configured!==false};},
-    deleteToken:async()=>{calls.push(["deleteToken"]);if(options.deleteTokenPromise)await options.deleteTokenPromise;if(options.deleteTokenError)throw new Error("private firebase failure");}
+    deleteToken:async()=>{
+      calls.push(["deleteToken"]);deleteAttempt+=1;
+      if(typeof options.deleteTokenHandler==="function")return options.deleteTokenHandler(deleteAttempt);
+      if(options.deleteTokenPromise)await options.deleteTokenPromise;
+      if(options.deleteTokenError)throw new Error("private firebase failure");
+    }
   };
   const api={
     status:async()=>{calls.push(["status"]);if(options.backendError)throw new Error("backend down");return {enabled:options.backend!==false};},
@@ -141,12 +147,38 @@ test("logout Firebase deleteToken completion is a hard barrier before immediate 
   assert.equal(h.calls.filter(c=>c[0]==="register").length,registerCount+1);
 });
 
-test("Firebase token deletion failure is privacy-safe and fail-closed for later registration",async()=>{
-  const h=harness({deleteTokenError:true});
+test("Firebase token deletion failure is recoverable by a later explicit enable after a serialized retry succeeds",async()=>{
+  const retry=deferred();
+  const h=harness({deleteTokenHandler:async attempt=>{
+    if(attempt===1)throw new Error("private firebase failure");
+    if(attempt===2)await retry.promise;
+  }});
+  await h.controller.enable("customer-a");
+  const registerCount=h.calls.filter(c=>c[0]==="register").length;
+  await assert.rejects(h.controller.disable("customer-a"),/fully remove/);
+  assert.equal(h.controller.status().subscribed,false);
+  const enableB=h.controller.enable("customer-b");
+  await flush();
+  assert.equal(h.calls.filter(c=>c[0]==="deleteToken").length,2);
+  assert.equal(h.calls.filter(c=>c[0]==="register").length,registerCount);
+  assert.equal(h.controller.status().subscribed,false);
+  retry.resolve();
+  await enableB;
+  assert.equal(h.calls.filter(c=>c[0]==="register").length,registerCount+1);
+  assert.equal(h.controller.status().subscribed,true);
+  assert.equal(h.stored.get("seago_android_push_opt_in"),"true");
+  assert.doesNotMatch(JSON.stringify(h.states),/private firebase failure/);
+});
+
+test("Firebase token deletion retry failure remains privacy-safe and fail-closed",async()=>{
+  const h=harness({deleteTokenHandler:async()=>{throw new Error("private firebase failure");}});
   await h.controller.enable("customer-a");
   await assert.rejects(h.controller.disable("customer-a"),/fully remove/);
   await assert.rejects(h.controller.enable("customer-b"),/fully remove/);
+  assert.equal(h.calls.filter(c=>c[0]==="deleteToken").length,2);
   assert.equal(h.calls.filter(c=>c[0]==="register").length,1);
+  assert.equal(h.controller.status().subscribed,false);
+  assert.equal(h.stored.get("seago_android_push_opt_in"),undefined);
   assert.doesNotMatch(JSON.stringify(h.states),/private firebase failure/);
 });
 
