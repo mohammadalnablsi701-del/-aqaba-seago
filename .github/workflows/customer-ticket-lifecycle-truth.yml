@@ -15,12 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node 20
+      - name: Setup Node 20.20.2
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Install backend dependencies
-        run: npm install
+          node-version: 20.20.2
+      - name: Install backend dependencies from lockfile
+        run: npm ci
       - name: Run lifecycle and PDF unit regressions
         run: node --test test/customer-ticket-lifecycle.test.js test/ticket-pdf.test.js
       - name: Install disposable MongoDB replica set runner
