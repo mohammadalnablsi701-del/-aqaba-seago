@@ -3,7 +3,12 @@ import Booking from "../models/Booking.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
-import { verifyTicketToken } from "../services/tickets.js";
+import {
+  enforcePublicTicketPolicy,
+  signTicketToken,
+  verifyPublicTicketToken,
+  verifyTicketToken
+} from "../services/tickets.js";
 import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
 import { renderTicketPdf } from "../services/ticketPdf.js";
 
@@ -23,25 +28,52 @@ function idsMatch(left, right) {
   return String(left) === String(right?._id || right);
 }
 
-async function loadTicket(token) {
-  const payload = verifyTicketToken(token);
-  const booking = await Booking.findById(payload.bookingId)
+function publicTicketError(code, statusCode) {
+  return Object.assign(new Error(code), { statusCode, code });
+}
+
+function setPublicTicketHeaders(res) {
+  res.set({
+    "Cache-Control": "private, no-store, max-age=0",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff"
+  });
+}
+
+async function findTicketBooking(bookingId) {
+  return Booking.findById(bookingId)
     .populate({ path: "customerId", select: "name" })
     .populate({ path: "tripId", select: "titleAr titleEn vesselName category durationMinutes departureLocation" })
     .populate({ path: "providerId", select: "businessName ownerUserId" })
     .populate({ path: "departureId", select: "startsAt status" });
-  if (!booking) throw Object.assign(new Error("Ticket not found"), { statusCode: 404 });
+}
 
-  // Compact v2 tokens bind only to bookingId. Legacy v1 payloads may also carry
-  // provider/departure identifiers; when present, require them to agree with the
-  // persisted booking instead of trusting stale or mismatched signed metadata.
+function assertLegacyBindings(payload, booking, { publicAccess = false } = {}) {
   if (payload.departureId !== undefined && !idsMatch(payload.departureId, booking.departureId)) {
+    if (publicAccess) throw publicTicketError("invalid_ticket_link", 400);
     throw Object.assign(new Error("Invalid ticket binding"), { statusCode: 400 });
   }
   if (payload.providerId !== undefined && !idsMatch(payload.providerId, booking.providerId)) {
+    if (publicAccess) throw publicTicketError("invalid_ticket_link", 400);
     throw Object.assign(new Error("Invalid ticket binding"), { statusCode: 400 });
   }
+}
 
+async function loadBoardingTicket(token) {
+  const payload = verifyTicketToken(token);
+  const booking = await findTicketBooking(payload.bookingId);
+  if (!booking) throw Object.assign(new Error("Ticket not found"), { statusCode: 404 });
+  assertLegacyBindings(payload, booking);
+  return { payload, booking };
+}
+
+async function loadPublicTicket(token) {
+  const payload = verifyPublicTicketToken(token);
+  const booking = await findTicketBooking(payload.bookingId);
+  if (!booking) throw publicTicketError("ticket_not_available", 404);
+  assertLegacyBindings(payload, booking, { publicAccess: true });
+  enforcePublicTicketPolicy(payload, booking);
   return { payload, booking };
 }
 
@@ -59,30 +91,31 @@ function checkInRejection(lifecycle, checkedInAt = null) {
 }
 
 router.get("/pdf", async (req, res, next) => {
+  setPublicTicketHeaders(res);
   try {
     const token = String(req.query.token || "").trim();
-    const { booking } = await loadTicket(token);
+    const { booking } = await loadPublicTicket(token);
     if (!["confirmed", "cancelled", "refunded"].includes(booking.status)) {
-      return res.status(404).json({ error: "Ticket not available" });
+      return res.status(404).json({ error: "ticket_not_available" });
     }
 
-    const pdf = await renderTicketPdf({ booking, token });
+    // The public bearer link is never embedded into the boarding QR. Generate
+    // the existing QR-only v2 credential after public access has been verified.
+    const boardingToken = signTicketToken(booking);
+    const pdf = await renderTicketPdf({ booking, token: boardingToken });
     const ref = "SG-" + String(booking._id).slice(-8).toUpperCase();
     res.set({
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="SeaGo-${ref}-ticket.pdf"`,
-      "Cache-Control": "private, no-store, max-age=0",
-      "Pragma": "no-cache",
-      "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff"
+      "Content-Disposition": `inline; filename="SeaGo-${ref}-ticket.pdf"`
     });
     res.status(200).send(pdf);
   } catch (err) { next(err); }
 });
 
 router.get("/validate", async (req, res, next) => {
+  setPublicTicketHeaders(res);
   try {
-    const { booking } = await loadTicket(req.query.token);
+    const { booking } = await loadPublicTicket(req.query.token);
     const trip = booking.tripId || {};
     const provider = booking.providerId || {};
     const departure = booking.departureId || {};
@@ -119,7 +152,6 @@ router.get("/validate", async (req, res, next) => {
               : "Ticket not valid";
     const stateClass = lifecycle.state === "ready" ? "ok" : lifecycle.state === "checked_in" ? "warn" : "bad";
     res.set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
-    res.set("X-Content-Type-Options","nosniff");
     res.type("html").send(`<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Aqaba SeaGo Ticket</title>
@@ -142,7 +174,7 @@ ${response.vesselName?`<div class="row"><span>Vessel</span><b>${escapeHtml(respo
 
 router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req, res, next) => {
   try {
-    const { booking } = await loadTicket(req.body.token);
+    const { booking } = await loadBoardingTicket(req.body.token);
 
     if (req.user.role === "provider") {
       const access=await requireProviderCapability(req.user,"checkin");
@@ -187,7 +219,7 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
 
 router.post("/check-in", requireAuth, requireRole("provider","admin"), async (req, res, next) => {
   try {
-    const { booking } = await loadTicket(req.body.token);
+    const { booking } = await loadBoardingTicket(req.body.token);
     let providerAccess = null;
 
     // Authorize before returning lifecycle detail so a provider cannot probe the

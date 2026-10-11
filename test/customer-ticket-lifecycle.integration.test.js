@@ -23,6 +23,11 @@ function legacyTicket(payload, secret) {
   return `${body}.${sig}`;
 }
 
+function publicTokenFrom(row) {
+  if (!row.ticketValidationUrl) return null;
+  return new URL(row.ticketValidationUrl).searchParams.get("token");
+}
+
 async function json(response) {
   const body = await response.json();
   return { response, body };
@@ -158,13 +163,33 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
     assert.deepEqual(Object.keys(row.ticketLifecycle).sort(), ["state", "usable", "used"]);
     assert.deepEqual(Object.keys(row.departureId).sort(), ["_id", "startsAt", "status"]);
 
-    const validation = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(row.ticketToken)}`));
+    if (truth[0] === "departure_expired") {
+      assert.equal(row.ticketValidationUrl, null, "authenticated history must not mint a new expired public bearer link");
+      const expiredLegacy = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(row.ticketToken)}`));
+      assert.equal(expiredLegacy.response.status, 410);
+      assert.equal(expiredLegacy.body.error, "expired_ticket_link");
+      continue;
+    }
+
+    const publicToken = publicTokenFrom(row);
+    assert.ok(publicToken, `bounded public link missing for ${truth[0]}`);
+    assert.equal(publicToken.startsWith("3."), true, "new customer public link must use v3");
+
+    const validation = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(publicToken)}`));
     assert.equal(validation.response.status, 200);
+    assert.equal(validation.response.headers.get("referrer-policy"), "no-referrer");
+    assert.match(validation.response.headers.get("cache-control") || "", /no-store/);
+    assert.equal(validation.response.headers.get("x-content-type-options"), "nosniff");
     assert.equal(validation.body.signatureValid, true);
     assert.equal(validation.body.boardable, row.ticketLifecycle.usable, `boardability parity failed for ${truth[0]}`);
     assert.equal(validation.body.valid, row.ticketLifecycle.usable, `validator parity failed for ${truth[0]}`);
     assert.equal(validation.body.lifecycleState, row.ticketLifecycle.state);
     assert.equal(validation.body.used, row.ticketLifecycle.used);
+
+    // Existing v1/v2 public URLs are temporarily compatible, but only until the
+    // server-derived planned end. This preserves upcoming production links.
+    const legacyCompatibility = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(row.ticketToken)}`));
+    assert.equal(legacyCompatibility.response.status, 200);
   }
 
   const readyRow = rows.find(row => row._id === String(ready._id));
@@ -192,8 +217,10 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
   assert.deepEqual(otherList.body.map(row => row._id), [String(otherBooking._id)]);
 
   await t.test("invalid signature and mismatched legacy binding are rejected before lifecycle acceptance", async () => {
-    const badSignature = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(readyRow.ticketToken + "x")}`));
+    const readyPublicToken = publicTokenFrom(readyRow);
+    const badSignature = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(readyPublicToken + "x")}`));
     assert.equal(badSignature.response.status, 400);
+    assert.equal(badSignature.body.error, "invalid_ticket_link");
 
     const mismatched = legacyTicket({
       v: 1,
@@ -203,6 +230,46 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
     }, secret);
     const binding = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(mismatched)}`));
     assert.equal(binding.response.status, 400);
+    assert.equal(binding.body.error, "invalid_ticket_link");
+  });
+
+  await t.test("public PDF uses bounded link headers while boarding QR credential remains provider-only", async () => {
+    const publicToken = publicTokenFrom(readyRow);
+    const pdf = await fetch(`${base}/api/tickets/pdf?token=${encodeURIComponent(publicToken)}`);
+    assert.equal(pdf.status, 200);
+    assert.match(pdf.headers.get("content-type") || "", /^application\/pdf/);
+    assert.match(pdf.headers.get("content-disposition") || "", /inline/);
+    assert.equal(pdf.headers.get("referrer-policy"), "no-referrer");
+    assert.match(pdf.headers.get("cache-control") || "", /no-store/);
+    assert.equal(pdf.headers.get("x-content-type-options"), "nosniff");
+    const bytes = new Uint8Array(await pdf.arrayBuffer());
+    assert.equal(Buffer.from(bytes.subarray(0, 5)).toString("ascii"), "%PDF-");
+
+    const inspectWithPublicLink = await json(await fetch(`${base}/api/tickets/inspect`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${providerToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ token: publicToken })
+    }));
+    assert.equal(inspectWithPublicLink.response.status, 400, "public link must not become a provider boarding credential");
+
+    const authWithPublicLink = await json(await fetch(`${base}/api/bookings`, {
+      headers: { authorization: `Bearer ${publicToken}` }
+    }));
+    assert.equal(authWithPublicLink.response.status, 401, "public link must not authenticate a customer session");
+  });
+
+  await t.test("application error logging never emits the full public bearer token", async () => {
+    const publicToken = publicTokenFrom(readyRow);
+    const originalError = console.error;
+    const captured = [];
+    console.error = (...args) => { captured.push(args.map(value => String(value)).join(" ")); };
+    try {
+      const response = await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(publicToken + "x")}`);
+      assert.equal(response.status, 400);
+    } finally {
+      console.error = originalError;
+    }
+    assert.equal(captured.join("\n").includes(publicToken), false);
   });
 
   await t.test("expired scheduled departure rejects QR check-in without mutation", async () => {
