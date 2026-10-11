@@ -17,6 +17,7 @@ export function isSuccessfulTerminalPaymentStatus(status){return SUCCESS_TERMINA
 
 const FAILURE_TERMINAL_PAYMENT_STATUSES=new Set(["failed","cancelled","expired"]);
 const CHECKOUT_MUTABLE_PAYMENT_STATUSES=new Set(["created","pending"]);
+const MAX_PROVIDER_EVENT_ID_LENGTH=200;
 
 export function paymentReferenceFor(payment){
   if(!payment?._id)throw new TypeError("Payment identity is required");
@@ -137,10 +138,28 @@ async function persistCheckoutMapping({payment,checkout}){
   return current;
 }
 
-async function recordPaymentEvent({providerName,event,payment}){
-  try{
-    await PaymentEvent.create({provider:providerName,eventId:event.eventId,externalPaymentId:event.externalPaymentId,paymentId:payment._id,eventStatus:event.status,amount:event.amount,currency:event.currency,raw:event.raw,processedAt:new Date()});
-  }catch(e){if(e?.code!==11000)throw e;}
+async function recordPaymentEventInSession({providerName,event,payment,session}){
+  if(!session)throw new TypeError("PaymentEvent persistence requires a transaction session");
+  const [record]=await PaymentEvent.create([{
+    provider:providerName,
+    eventId:event.eventId,
+    externalPaymentId:event.externalPaymentId,
+    paymentId:payment._id,
+    eventStatus:event.status,
+    amount:event.amount,
+    currency:event.currency,
+    raw:event.raw,
+    processedAt:new Date()
+  }],{session});
+  return record;
+}
+
+async function claimPaymentEventInSession({providerName,event,payment,session}){
+  const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
+  if(seen)return {duplicate:true,backfilled:false};
+  const legacyDuplicate=payment.lastEventId===event.eventId;
+  await recordPaymentEventInSession({providerName,event,payment,session});
+  return {duplicate:legacyDuplicate,backfilled:legacyDuplicate};
 }
 
 async function confirmPaidHoldInSession({payment,event,session}){
@@ -349,116 +368,141 @@ async function markCorrelationReview({payment,event,session}){
   return payment;
 }
 
+async function claimOrDuplicate({providerName,event,payment,session}){
+  const claim=await claimPaymentEventInSession({providerName,event,payment,session});
+  return claim.duplicate;
+}
+
 export async function processPaymentWebhook({ providerName, rawBody, signature }) {
   const provider = getPaymentProvider(providerName);
   provider.verifyWebhook({ rawBody, signature });
   const event = provider.parseWebhook(rawBody);
+  const eventId=typeof event.eventId==="string"?event.eventId.trim():"";
   const allowedStatuses = new Set(["pending", "paid", "failed", "cancelled", "expired"]);
   const paymentReference=event.paymentReference?canonicalPaymentReference(event.paymentReference):null;
-  if (!event.eventId || !event.externalPaymentId || !allowedStatuses.has(event.status) ||
+  if (!eventId || eventId.length>MAX_PROVIDER_EVENT_ID_LENGTH || !event.externalPaymentId || !allowedStatuses.has(event.status) ||
       !Number.isFinite(event.amount) || event.amount < 0 || (event.paymentReference && !paymentReference)) {
     throw Object.assign(new Error("Malformed payment event"), { statusCode: 400 });
   }
+  event.eventId=eventId;
 
   const session = await mongoose.startSession();
   let result;
   let confirmationBookingId;
   try {
-    await session.withTransaction(async () => {
-      // MongoDB may retry this callback after a write conflict. Always reload
-      // the state and reset side effects instead of using a stale preflight read.
-      confirmationBookingId = null;
-      const paymentByExternal=await Payment.findOne({
-        provider:providerName,externalPaymentId:event.externalPaymentId
-      }).session(session);
-      let payment=paymentByExternal;
+    try {
+      await session.withTransaction(async () => {
+        // MongoDB may retry this callback after a write conflict. Always reload
+        // the state and reset post-commit side effects instead of using stale state.
+        confirmationBookingId = null;
+        const paymentByExternal=await Payment.findOne({
+          provider:providerName,externalPaymentId:event.externalPaymentId
+        }).session(session);
+        let payment=paymentByExternal;
 
-      if(paymentReference){
-        const paymentByReference=await Payment.findOne({_id:paymentReference,provider:providerName}).session(session);
-        if(!paymentByReference){
-          if(paymentByExternal){
-            const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
-            if(seen||paymentByExternal.lastEventId===event.eventId){result={duplicate:true,payment:paymentByExternal};return;}
-            await markCorrelationReview({payment:paymentByExternal,event,session});
-            result={duplicate:false,payment:paymentByExternal};
+        if(paymentReference){
+          const paymentByReference=await Payment.findOne({_id:paymentReference,provider:providerName}).session(session);
+          if(!paymentByReference){
+            if(paymentByExternal){
+              if(await claimOrDuplicate({providerName,event,payment:paymentByExternal,session})){
+                result={duplicate:true,payment:paymentByExternal};
+                return;
+              }
+              await markCorrelationReview({payment:paymentByExternal,event,session});
+              result={duplicate:false,payment:paymentByExternal};
+              return;
+            }
+            throw Object.assign(new Error("Payment not found"),{statusCode:404});
+          }
+          payment=paymentByReference;
+          if(paymentByExternal&&String(paymentByExternal._id)!==String(payment._id)){
+            if(await claimOrDuplicate({providerName,event,payment,session})){
+              result={duplicate:true,payment};
+              return;
+            }
+            await markCorrelationReview({payment,event,session});
+            result={duplicate:false,payment};
             return;
           }
-          throw Object.assign(new Error("Payment not found"),{statusCode:404});
-        }
-        payment=paymentByReference;
-        if(paymentByExternal&&String(paymentByExternal._id)!==String(payment._id)){
-          const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
-          if(seen||payment.lastEventId===event.eventId){result={duplicate:true,payment};return;}
-          await markCorrelationReview({payment,event,session});
-          result={duplicate:false,payment};
-          return;
-        }
-        if(hasBoundExternalPaymentId(payment)&&String(payment.externalPaymentId)!==event.externalPaymentId){
-          const seen=await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
-          if(seen||payment.lastEventId===event.eventId){result={duplicate:true,payment};return;}
-          await markCorrelationReview({payment,event,session});
-          result={duplicate:false,payment};
-          return;
-        }
-      }
-
-      if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
-      const seen = await PaymentEvent.exists({provider:providerName,eventId:event.eventId}).session(session);
-      if (seen || payment.lastEventId === event.eventId) {
-        result = { duplicate: true, payment };
-        return;
-      }
-
-      // Never resurrect a refunded payment or overwrite a successful result.
-      // Record ignored events separately without saving a stale Payment document.
-      if (isSuccessfulTerminalPaymentStatus(payment.status) || payment.status === "needs_review" ||
-          (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status) && event.status !== "paid")) {
-        result = { duplicate: false, payment };
-        return;
-      }
-
-      const hold = await CheckoutHold.findById(payment.holdId).session(session);
-      const moneyMatches=hold&&sameMoney(event.amount,payment.amount)&&event.currency===payment.currency;
-      if (!moneyMatches) {
-        payment.status = "needs_review";
-      } else {
-        // First binding after a crash/DB failure is allowed only after provider,
-        // SeaGo reference, amount and currency have all matched in this transaction.
-        if(paymentReference&&!hasBoundExternalPaymentId(payment))payment.externalPaymentId=event.externalPaymentId;
-
-        if (event.status === "paid") {
-          if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)) {
-            // A late success after seats were released requires reconciliation,
-            // never automatic rebooking or a second seat allocation.
-            payment.status = "needs_review";
-          } else {
-            const confirmed = await confirmPaidHoldInSession({payment,event,session});
-            confirmationBookingId = confirmed?.bookingId || null;
-            result = { duplicate: false, payment: confirmed?.payment || payment };
+          if(hasBoundExternalPaymentId(payment)&&String(payment.externalPaymentId)!==event.externalPaymentId){
+            if(await claimOrDuplicate({providerName,event,payment,session})){
+              result={duplicate:true,payment};
+              return;
+            }
+            await markCorrelationReview({payment,event,session});
+            result={duplicate:false,payment};
             return;
           }
-        } else if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(event.status)) {
-          if (hold.status === "paid" || payment.bookingId) {
-            payment.status = "needs_review";
-          } else {
-            await releaseHold(hold, event.status === "expired" ? "expired" : "released", session);
-            payment.status = event.status;
-            payment.failedAt = new Date();
-          }
+        }
+
+        if (!payment) throw Object.assign(new Error("Payment not found"), { statusCode: 404 });
+        if(await claimOrDuplicate({providerName,event,payment,session})){
+          result={duplicate:true,payment};
+          return;
+        }
+
+        // Never resurrect a refunded payment or overwrite a successful result.
+        // The authenticated provider event is already durably claimed in this
+        // transaction, so ignored/reviewed events retain reconciliation evidence.
+        if (isSuccessfulTerminalPaymentStatus(payment.status) || payment.status === "needs_review" ||
+            (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status) && event.status !== "paid")) {
+          result = { duplicate: false, payment };
+          return;
+        }
+
+        const hold = await CheckoutHold.findById(payment.holdId).session(session);
+        const moneyMatches=hold&&sameMoney(event.amount,payment.amount)&&event.currency===payment.currency;
+        if (!moneyMatches) {
+          payment.status = "needs_review";
         } else {
-          payment.status = "pending";
+          // First binding after a crash/DB failure is allowed only after provider,
+          // SeaGo reference, amount and currency have all matched in this transaction.
+          if(paymentReference&&!hasBoundExternalPaymentId(payment))payment.externalPaymentId=event.externalPaymentId;
+
+          if (event.status === "paid") {
+            if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(payment.status)) {
+              // A late success after seats were released requires reconciliation,
+              // never automatic rebooking or a second seat allocation.
+              payment.status = "needs_review";
+            } else {
+              const confirmed = await confirmPaidHoldInSession({payment,event,session});
+              confirmationBookingId = confirmed?.bookingId || null;
+              result = { duplicate: false, payment: confirmed?.payment || payment };
+              return;
+            }
+          } else if (FAILURE_TERMINAL_PAYMENT_STATUSES.has(event.status)) {
+            if (hold.status === "paid" || payment.bookingId) {
+              payment.status = "needs_review";
+            } else {
+              await releaseHold(hold, event.status === "expired" ? "expired" : "released", session);
+              payment.status = event.status;
+              payment.failedAt = new Date();
+            }
+          } else {
+            payment.status = "pending";
+          }
         }
-      }
-      payment.lastEventId = event.eventId;
-      payment.rawLastEvent = event.raw;
-      await payment.save({session});
-      result = { duplicate: false, payment };
-    });
+        payment.lastEventId = event.eventId;
+        payment.rawLastEvent = event.raw;
+        await payment.save({session});
+        result = { duplicate: false, payment };
+      });
+    } catch (error) {
+      if(error?.code!==11000)throw error;
+      // A concurrent delivery can win the (provider,eventId) unique-key race.
+      // Only acknowledge it as a safe duplicate after the winning durable event
+      // is visible; unrelated duplicate-key failures remain retryable errors.
+      const existing=await PaymentEvent.findOne({provider:providerName,eventId:event.eventId}).select("paymentId").lean();
+      if(!existing)throw error;
+      const payment=await Payment.findById(existing.paymentId);
+      if(!payment)throw error;
+      confirmationBookingId=null;
+      result={duplicate:true,payment};
+    }
   } finally {
     await session.endSession();
   }
 
-  if (!result.duplicate) await recordPaymentEvent({providerName,event,payment:result.payment});
   if (confirmationBookingId) {
     try { await sendBookingConfirmation(confirmationBookingId); }
     catch (err) { console.error("Booking confirmation notification failed", err); }

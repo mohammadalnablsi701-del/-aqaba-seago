@@ -14,10 +14,16 @@ for(const state of ['paid','partially_refunded','refunded']){
    process.env.MOCK_PAYMENT_WEBHOOK_SECRET='test-only-webhook-key';
    t.after(()=>{if(secret===undefined)delete process.env.MOCK_PAYMENT_WEBHOOK_SECRET;else process.env.MOCK_PAYMENT_WEBHOOK_SECRET=secret});
    const payment={_id:'p',status:state,amount:20,refundedAmount:state==='refunded'?20:0,save:()=>assert.fail('Terminal payment must not be saved')};
-   t.mock.method(mongoose,'startSession',async()=>({withTransaction:async fn=>fn(),endSession:async()=>{}}));
+   const session={withTransaction:async fn=>fn(),endSession:async()=>{}};
+   t.mock.method(mongoose,'startSession',async()=>session);
    t.mock.method(Payment,'findOne',()=>query(payment));
    t.mock.method(PaymentEvent,'exists',()=>query(false));
-   let events=0;t.mock.method(PaymentEvent,'create',async()=>{events++});
+   let events=0;t.mock.method(PaymentEvent,'create',async(docs,options)=>{
+    events++;
+    assert.equal(Array.isArray(docs),true,'transactional PaymentEvent insert uses document array');
+    assert.equal(options?.session,session,'PaymentEvent insert stays inside the active transaction session');
+    return [{}];
+   });
    t.mock.method(CheckoutHold,'findById',()=>assert.fail('Terminal event must not touch inventory'));
    const rawBody=Buffer.from(JSON.stringify({eventId:'new-event',externalPaymentId:'x',status:incoming,amount:20,currency:'JOD'}));
    const signature=crypto.createHmac('sha256',process.env.MOCK_PAYMENT_WEBHOOK_SECRET).update(rawBody).digest('hex');

@@ -2,12 +2,14 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import Refund from "../models/Refund.js";
 import Payment from "../models/Payment.js";
+import PaymentEvent from "../models/PaymentEvent.js";
 import Booking from "../models/Booking.js";
 import { getPaymentProvider } from "../payments/index.js";
 
 const REFUND_STATES = new Set(["requested", "pending", "succeeded", "failed", "needs_review"]);
 const PROVIDER_RESULT_STATES = new Set(["pending", "succeeded", "failed"]);
 const MONEY_EPSILON = 0.005;
+const MAX_PROVIDER_EVENT_ID_LENGTH = 200;
 
 export function refundMoney(value) {
   const number = Number(value || 0);
@@ -457,20 +459,74 @@ export async function processRefundWebhook({ providerName, rawBody, signature })
     throw Object.assign(new Error("Refund webhook is unsupported"), { statusCode: 400 });
   }
   const event = provider.parseRefundWebhook(rawBody);
+  const eventId = typeof event.eventId === "string" ? event.eventId.trim() : "";
   const reference = String(event.refundReference || "").trim();
-  if (!event.eventId || !/^rf_[a-f\d]{32}$/i.test(reference) || !PROVIDER_RESULT_STATES.has(event.status) ||
-      !Number.isFinite(Number(event.amount)) || Number(event.amount) < 0 || !String(event.currency || "").trim()) {
+  if (!eventId || eventId.length > MAX_PROVIDER_EVENT_ID_LENGTH || !/^rf_[a-f\d]{32}$/i.test(reference) ||
+      !PROVIDER_RESULT_STATES.has(event.status) || !Number.isFinite(Number(event.amount)) ||
+      Number(event.amount) < 0 || !String(event.currency || "").trim()) {
     throw Object.assign(new Error("Malformed refund event"), { statusCode: 400 });
   }
-  return applyProviderRefundResult({
-    refundReference: reference,
-    providerName,
-    result: {
-      refundReference: reference,
-      providerRefundId: event.providerRefundId || null,
-      status: event.status,
-      amount: Number(event.amount),
-      currency: String(event.currency)
+
+  const session = await mongoose.startSession();
+  let output;
+  try {
+    try {
+      await session.withTransaction(async () => {
+        const refund = await Refund.findOne({ reference }).session(session);
+        if (!refund) throw Object.assign(new Error("Refund not found"), { statusCode: 404 });
+        const payment = await Payment.findById(refund.paymentId).session(session);
+        if (!payment) {
+          const reviewed = await reviewInSession({ refund, payment: null, reason: "payment_missing", session });
+          output = { refund: reviewed, payment: null, duplicate: false };
+          return;
+        }
+
+        const seen = await PaymentEvent.findOne({ provider: providerName, eventId }).session(session)
+          .select("eventType refundId paymentId");
+        if (seen) {
+          if (seen.eventType === "refund" && String(seen.refundId || "") === String(refund._id)) {
+            output = { refund, payment, duplicate: true };
+            return;
+          }
+          throw Object.assign(new Error("Provider event identity conflict"), { statusCode: 409 });
+        }
+
+        const normalized = normalizeProviderResult({
+          refundReference: reference,
+          providerRefundId: event.providerRefundId || null,
+          status: event.status,
+          amount: Number(event.amount),
+          currency: String(event.currency)
+        }, refund);
+
+        await PaymentEvent.create([{
+          provider: providerName,
+          eventId,
+          externalPaymentId: String(payment.externalPaymentId),
+          paymentId: payment._id,
+          eventType: "refund",
+          refundId: refund._id,
+          eventStatus: `refund_${normalized.status}`,
+          amount: normalized.amount,
+          currency: normalized.currency,
+          processedAt: new Date()
+        }], { session });
+
+        const applied = await applyResultInSession({ refund, providerName, result: normalized, session });
+        output = applied?.refund ? applied : { refund: applied, payment: null, duplicate: false };
+      });
+    } catch (error) {
+      if (error?.code !== 11000) throw error;
+      const existing = await PaymentEvent.findOne({ provider: providerName, eventId })
+        .select("eventType refundId paymentId").lean();
+      if (!existing || existing.eventType !== "refund") throw error;
+      const refund = await Refund.findById(existing.refundId);
+      const payment = await Payment.findById(existing.paymentId);
+      if (!refund || !payment || refund.reference !== reference) throw error;
+      output = { refund, payment, duplicate: true };
     }
-  });
+    return output;
+  } finally {
+    await session.endSession();
+  }
 }
