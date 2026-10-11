@@ -8,11 +8,9 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.concurrent.atomic.AtomicBoolean;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.FirebaseMessaging;
 
 @CapacitorPlugin(name = "SeaGoFirebase")
 public class SeaGoFirebasePlugin extends Plugin {
@@ -38,16 +36,19 @@ public class SeaGoFirebasePlugin extends Plugin {
     private boolean isExpectedFirebaseReady() {
         if (!hasExpectedResources()) return false;
         try {
-            Class<?> firebaseAppClass = Class.forName("com.google.firebase.FirebaseApp");
-            Object firebaseApp = firebaseAppClass.getMethod("getInstance").invoke(null);
-            Object options = firebaseAppClass.getMethod("getOptions").invoke(firebaseApp);
-            Class<?> optionsClass = options.getClass();
-            String projectId = String.valueOf(optionsClass.getMethod("getProjectId").invoke(options));
-            String applicationId = String.valueOf(optionsClass.getMethod("getApplicationId").invoke(options));
-            return EXPECTED_PROJECT_ID.equals(projectId) && EXPECTED_APP_ID.equals(applicationId);
-        } catch (Throwable ignored) {
+            FirebaseApp firebaseApp = FirebaseApp.getInstance();
+            return EXPECTED_PROJECT_ID.equals(firebaseApp.getOptions().getProjectId()) &&
+                EXPECTED_APP_ID.equals(firebaseApp.getOptions().getApplicationId());
+        } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    static void settleDeleteTokenTask(Task<Void> task, Runnable onSuccess, Runnable onFailure) {
+        task.addOnCompleteListener(Runnable::run, completedTask -> {
+            if (completedTask.isSuccessful()) onSuccess.run();
+            else onFailure.run();
+        });
     }
 
     @PluginMethod
@@ -64,26 +65,13 @@ public class SeaGoFirebasePlugin extends Plugin {
             return;
         }
         try {
-            Class<?> messagingClass = Class.forName("com.google.firebase.messaging.FirebaseMessaging");
-            Object messaging = messagingClass.getMethod("getInstance").invoke(null);
-            Object task = messagingClass.getMethod("deleteToken").invoke(messaging);
-            Class<?> listenerClass = Class.forName("com.google.android.gms.tasks.OnCompleteListener");
-            AtomicBoolean completed = new AtomicBoolean(false);
-            InvocationHandler handler = (proxy, method, args) -> {
-                if (!"onComplete".equals(method.getName()) || args == null || args.length != 1 || !completed.compareAndSet(false, true)) return null;
-                try {
-                    Object completedTask = args[0];
-                    Method isSuccessful = completedTask.getClass().getMethod("isSuccessful");
-                    if (Boolean.TRUE.equals(isSuccessful.invoke(completedTask))) call.resolve();
-                    else call.reject("Firebase token deletion failed");
-                } catch (Throwable ignored) {
-                    call.reject("Firebase token deletion failed");
-                }
-                return null;
-            };
-            Object listener = Proxy.newProxyInstance(listenerClass.getClassLoader(), new Class<?>[]{listenerClass}, handler);
-            task.getClass().getMethod("addOnCompleteListener", listenerClass).invoke(task, listener);
-        } catch (Throwable ignored) {
+            Task<Void> deletion = FirebaseMessaging.getInstance().deleteToken();
+            settleDeleteTokenTask(
+                deletion,
+                call::resolve,
+                () -> call.reject("Firebase token deletion failed")
+            );
+        } catch (RuntimeException ignored) {
             call.reject("Firebase token deletion failed");
         }
     }
