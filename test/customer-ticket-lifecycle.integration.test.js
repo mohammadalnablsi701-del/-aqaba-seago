@@ -17,6 +17,12 @@ function auth(userId, secret) {
   return jwt.sign({ sub: String(userId) }, secret, { expiresIn: "1h" });
 }
 
+function legacyTicket(payload, secret) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
 async function json(response) {
   const body = await response.json();
   return { response, body };
@@ -73,7 +79,7 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
   const completedUsedDep = await departure(7, "completed");
   const pastScheduledDep = await Departure.create({
     tripId: trip._id,
-    startsAt: new Date(Date.now() - 3600000),
+    startsAt: new Date(Date.now() - 2 * 3600000),
     capacity: 20,
     reservedSeats: 1,
     status: "scheduled"
@@ -112,6 +118,11 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
   const pastScheduled = await makeBooking({ departureId: pastScheduledDep._id, marker: 8 });
   const otherBooking = await makeBooking({ customerId: otherCustomer._id, departureId: otherDep._id, marker: 9 });
 
+  // A platform pause blocks new selling but does not invalidate an already
+  // confirmed booking. This protects the existing-booking safety contract.
+  trip.platformStatus = "paused";
+  await trip.save();
+
   const app = createApp();
   const server = app.listen(0, "127.0.0.1");
   await new Promise(resolve => server.once("listening", resolve));
@@ -128,7 +139,7 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
 
   const { response: listResponse, body: rows } = await list();
   assert.equal(listResponse.status, 200);
-  assert.equal(rows.length, 8, "completed/cancelled/refunded/used bookings must remain visible");
+  assert.equal(rows.length, 8, "completed/cancelled/refunded/used/expired bookings must remain visible");
   assert.equal(rows.some(row => row._id === String(otherBooking._id)), false, "another customer's booking must not be returned");
 
   const expected = new Map([
@@ -139,7 +150,7 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
     [String(departureCancelled._id), ["departure_cancelled", false, false]],
     [String(completed._id), ["trip_completed", false, false]],
     [String(completedUsed._id), ["checked_in", false, true]],
-    [String(pastScheduled._id), ["ready", true, false]]
+    [String(pastScheduled._id), ["departure_expired", false, false]]
   ]);
 
   for (const row of rows) {
@@ -151,12 +162,18 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
 
     const validation = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(row.ticketToken)}`));
     assert.equal(validation.response.status, 200);
+    assert.equal(validation.body.signatureValid, true);
+    assert.equal(validation.body.boardable, row.ticketLifecycle.usable, `boardability parity failed for ${truth[0]}`);
     assert.equal(validation.body.valid, row.ticketLifecycle.usable, `validator parity failed for ${truth[0]}`);
     assert.equal(validation.body.lifecycleState, row.ticketLifecycle.state);
     assert.equal(validation.body.used, row.ticketLifecycle.used);
   }
 
   const readyRow = rows.find(row => row._id === String(ready._id));
+  const expiredRow = rows.find(row => row._id === String(pastScheduled._id));
+  assert.equal(readyRow.ticketLifecycle.state, "ready", "platform pause must not invalidate an existing confirmed booking");
+  assert.equal(expiredRow.ticketLifecycle.state, "departure_expired");
+
   const topLevelKeys = Object.keys(readyRow).sort();
   assert.deepEqual(topLevelKeys, [
     "_id", "adults", "cancellation", "checkedInAt", "children", "createdAt", "customer", "departureId",
@@ -176,7 +193,34 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
   assert.equal(otherList.response.status, 200);
   assert.deepEqual(otherList.body.map(row => row._id), [String(otherBooking._id)]);
 
-  await t.test("provider check-in turns a ready customer ticket into checked-in truth", async () => {
+  await t.test("invalid signature and mismatched legacy binding are rejected before lifecycle acceptance", async () => {
+    const badSignature = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(readyRow.ticketToken + "x")}`));
+    assert.equal(badSignature.response.status, 400);
+
+    const mismatched = legacyTicket({
+      v: 1,
+      bookingId: String(ready._id),
+      departureId: String(otherDep._id),
+      providerId: String(provider._id)
+    }, secret);
+    const binding = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(mismatched)}`));
+    assert.equal(binding.response.status, 400);
+  });
+
+  await t.test("expired scheduled departure rejects QR check-in without mutation", async () => {
+    const checkIn = await json(await fetch(`${base}/api/tickets/check-in`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${providerToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ token: expiredRow.ticketToken })
+    }));
+    assert.equal(checkIn.response.status, 409);
+    assert.equal(checkIn.body.code, "departure_expired");
+    const stored = await Booking.findById(pastScheduled._id).lean();
+    assert.equal(stored.checkedInAt, undefined);
+    assert.equal(stored.checkInCount, 0);
+  });
+
+  await t.test("provider check-in turns a pause-safe ready customer ticket into checked-in truth", async () => {
     const checkIn = await json(await fetch(`${base}/api/tickets/check-in`, {
       method: "POST",
       headers: { authorization: `Bearer ${providerToken}`, "content-type": "application/json" },
@@ -184,6 +228,14 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
     }));
     assert.equal(checkIn.response.status, 200);
     assert.ok(checkIn.body.checkedInAt);
+
+    const replay = await json(await fetch(`${base}/api/tickets/check-in`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${providerToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ token: readyRow.ticketToken })
+    }));
+    assert.equal(replay.response.status, 409);
+    assert.equal(replay.body.code, "already_checked_in");
 
     const afterCheckIn = await list();
     const row = afterCheckIn.body.find(item => item._id === String(ready._id));
