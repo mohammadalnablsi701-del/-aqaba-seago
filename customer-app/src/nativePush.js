@@ -42,6 +42,9 @@ function rememberFenceConfirmation(state,nextLifecycleEpoch){
 }
 function applyInMemoryFenceAuthority(state){
   if(!state)return state;
+  if(state.serverFenceWasConfirmedPreviously!==true){
+    return {...state,fenceConfirmed:false,serverRevoked:false};
+  }
   const key=fenceAuthorityKey(state);
   const authority=key?inMemoryFenceConfirmations.get(key):null;
   if(!authority)return {...state,fenceConfirmed:false,serverRevoked:false};
