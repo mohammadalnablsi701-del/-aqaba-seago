@@ -9,11 +9,11 @@ import {
 function parseMode(argv) {
   const allowed = new Set(["--dry-run", "--apply"]);
   const unknown = argv.filter(arg => !allowed.has(arg));
-  if (unknown.length) throw new Error(`Unknown cleanup argument: ${unknown[0]}`);
+  if (unknown.length) throw new Error("Unknown cleanup argument");
 
   const dryRun = argv.includes("--dry-run");
   const apply = argv.includes("--apply");
-  if (dryRun === apply) throw new Error("Choose exactly one mode: --dry-run or --apply");
+  if (dryRun === apply) throw new Error("Choose exactly one cleanup mode");
   return apply ? "apply" : "dry-run";
 }
 
@@ -39,7 +39,7 @@ function printSummary({ databaseName, environment, mode, summary }) {
 async function main() {
   const mode = parseMode(process.argv.slice(2));
   const uri = String(process.env.MONGODB_URI || "").trim();
-  if (!uri) throw new Error("MONGODB_URI is required");
+  if (!uri) throw new Error("Missing database configuration");
 
   await mongoose.connect(uri, {
     autoIndex: false,
@@ -66,12 +66,11 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch(() => {
   console.error(JSON.stringify({
     event: "notification_log_privacy_cleanup",
     result: "aborted",
-    code: "cleanup_aborted",
-    message: String(error?.message || "cleanup failed").slice(0, 300)
+    code: "cleanup_aborted"
   }));
   process.exitCode = 1;
 });
