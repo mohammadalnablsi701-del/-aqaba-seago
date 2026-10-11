@@ -25,15 +25,27 @@ schema.pre("validate",function(next){
   next();
 });
 
+function validationValue(context,path){
+  if(typeof context?.getUpdate==="function"){
+    const update=context.getUpdate()||{};
+    if(update.$set&&Object.prototype.hasOwnProperty.call(update.$set,path))return update.$set[path];
+    if(Object.prototype.hasOwnProperty.call(update,path))return update[path];
+  }
+  return context?.[path];
+}
+
 schema.path("provider").validate(function(provider){
   if(!provider)return true;
-  if(this.platform==="android")return provider==="fcm";
-  if(this.platform==="ios")return provider==="apns";
+  const platform=validationValue(this,"platform");
+  if(platform==="android")return provider==="fcm";
+  if(platform==="ios")return provider==="apns";
   return false;
 },"Native push provider does not match platform");
 
 schema.path("firebaseProjectId").validate(function(projectId){
-  if(this.platform!=="android"||this.provider!=="fcm")return true;
+  const platform=validationValue(this,"platform");
+  const provider=validationValue(this,"provider");
+  if(platform!=="android"||provider!=="fcm")return true;
   return projectId===NATIVE_PUSH_FIREBASE_PROJECT_ID;
 },"Android FCM project does not match Aqaba SeaGo");
 
