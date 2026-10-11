@@ -18,8 +18,21 @@ test("legacy NotificationLog JSON never exposes plaintext recipient or raw error
 
   assert.equal(legacy.recipient, null);
   assert.equal(legacy.error, null);
+  assert.equal(legacy.externalId, "legacy_external_safe");
+  assert.doesNotMatch(JSON.stringify(legacy), /legacy@example\.test|raw provider error/);
+});
+
+test("legacy NotificationLog JSON drops unsafe external IDs", () => {
+  const legacy = NotificationLog.hydrate({
+    _id: "507f1f77bcf86cd799439013",
+    key: "legacy-unsafe-external",
+    type: "legacy",
+    externalId: "https://provider.test/message?recipient=private@example.test",
+    status: "sent",
+    provider: "resend"
+  }).toJSON();
   assert.equal(legacy.externalId, null);
-  assert.doesNotMatch(JSON.stringify(legacy), /legacy@example\.test|raw provider error|legacy_external_safe/);
+  assert.doesNotMatch(JSON.stringify(legacy), /private@example\.test|provider\.test/);
 });
 
 test("modern NotificationLog JSON keeps admin UI operational using safe aliases", () => {
