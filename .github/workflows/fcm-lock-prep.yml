@@ -1,0 +1,39 @@
+name: Temporary FCM Lockfile Prep
+
+on:
+  push:
+    branches: [feature/android-fcm-code-prep]
+    paths:
+      - "package.json"
+      - ".github/workflows/fcm-lock-prep.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/android-fcm-code-prep
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Resolve pinned backend lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit lockfile only when changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: lock Firebase Admin SDK"
+          git push origin HEAD:feature/android-fcm-code-prep
