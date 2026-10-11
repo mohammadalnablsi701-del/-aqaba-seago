@@ -326,8 +326,12 @@ export async function disableNativePush(authToken,{
 
   ++lifecycleGeneration;
   const registrationsToSettle=[...inFlightRegistrations];
-  const callerOwner=text(ownerId)||currentAuthOwnerId();
-  const state=nativePushCleanupState({ownerId:callerOwner});
+  const authenticatedOwner=currentAuthOwnerId();
+  const callerOwner=text(ownerId)||authenticatedOwner;
+  const authorityOwner=authenticatedOwner
+    ? (callerOwner===authenticatedOwner?callerOwner:"")
+    : (!authToken?callerOwner:"");
+  const state=nativePushCleanupState({ownerId:authorityOwner});
   if(!state.hadCredential){
     await clearListeners({timeoutMs:listenerCleanupTimeoutMs,logger});
     return {serverRevoked:false,localUnregistered:false,hadCredential:false,cleanupPending:false,cleanupComplete:true,native:true};
@@ -335,7 +339,7 @@ export async function disableNativePush(authToken,{
 
   const id=state.installationId;
   const pendingOwner=state.ownerId;
-  const existingPending=applyInMemoryFenceAuthority(readCleanupPending(),{ownerId:callerOwner});
+  const existingPending=applyInMemoryFenceAuthority(readCleanupPending(),{ownerId:authorityOwner});
   let pending=existingPending||{
     installationId:id,
     ownerId:pendingOwner,
