@@ -32,10 +32,11 @@ async function repairLegacyPaymentIndex() {
 }
 
 function isCriticalNativePushLifecycleIndex(index){
-  const keys=index?.key;
-  if(!keys||index?.unique!==true)return false;
-  const entries=Object.entries(keys);
-  return entries.length===2&&keys.appId===1&&keys.installationId===1;
+  if(index?.unique!==true||!index?.key||typeof index.key!=="object")return false;
+  const entries=Object.entries(index.key);
+  return entries.length===2&&
+    entries[0][0]==="appId"&&entries[0][1]===1&&
+    entries[1][0]==="installationId"&&entries[1][1]===1;
 }
 
 export async function verifyNativePushLifecycleIndexes({model=NativePushInstallationState}={}){
