@@ -43,7 +43,11 @@ The web app can continue using Google Sign-In. The installed native app currentl
 
 ## Notifications
 
-Web Push remains available to supported browsers. Native push registration plumbing is present using `@capacitor/push-notifications`, with authenticated API endpoints for storing Android/iOS device tokens. Native push should not be enabled in the UI until the production FCM/APNs credentials and native app configuration are installed.
+Web Push remains an independent channel and continues to use VAPID. Android native push is prepared for Firebase Cloud Messaging but is disabled by default with `VITE_NATIVE_PUSH_ENABLED=false` and backend `FCM_ENABLED=false`. iOS tokens, if registered by legacy/native plumbing, are identified as `provider=apns` and are never sent through the Android FCM sender.
+
+For a future Android FCM build, store the real `google-services.json` only as the GitHub Actions secret `FIREBASE_ANDROID_CONFIG_BASE64`. The mobile workflow decodes it after `cap add android`, validates `project_id=aqaba-seago-7c92` and `package_name=com.aqabaseago.app`, and writes it only to the generated `customer-app/android/app/google-services.json`. A requested native-FCM build fails closed when the secret is missing or mismatched. The generated file is gitignored.
+
+The backend uses Firebase Admin application-default credentials only when explicitly enabled. Configure `GOOGLE_APPLICATION_CREDENTIALS` as a path to a secret file on the server; never put service-account JSON or any Firebase server credential in Git or in a `VITE_*` variable. No Firebase Console registration, service account, private key, or production enablement is part of code preparation.
 
 ## Account deletion and legal URLs
 

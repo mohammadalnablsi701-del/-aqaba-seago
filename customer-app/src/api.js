@@ -1,24 +1,69 @@
 import { applyCustomerTicketState } from "./ticketLifecycle.js";
+import { nativePushFeatureEnabled, resolvePushChannel } from "./nativePushConfig.js";
 
-const API_BASE = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = String((import.meta.env && import.meta.env.VITE_API_BASE_URL) || "").replace(/\/$/, "");
+
+async function runtimePushContext(){
+  try{
+    const {Capacitor}=await import("@capacitor/core");
+    const isNative=Capacitor.isNativePlatform();
+    const platform=Capacitor.getPlatform();
+    const enabled=nativePushFeatureEnabled();
+    return {isNative,platform,channel:resolvePushChannel({enabled,isNative,platform})};
+  }catch{
+    return {isNative:false,platform:"web",channel:"web"};
+  }
+}
+
+function authOwnerId(value){
+  return String(value?.user?.id||value?.user?._id||"").trim();
+}
+
+function currentStoredAuthSession(){
+  try{
+    const value=JSON.parse(localStorage.getItem("seago_auth")||"null");
+    return {token:String(value?.token||""),ownerId:authOwnerId(value)};
+  }catch{return {token:"",ownerId:""};}
+}
+
+async function cleanupAndroidNativePush(authToken,{runtimeContext=runtimePushContext,nativeCleanup,ownerId=""}={}){
+  const runtime=await runtimeContext();
+  if(!(runtime.isNative&&runtime.platform==="android"))return {cleaned:false};
+  const cleanup=nativeCleanup||(await import("./nativePush.js")).disableNativePush;
+  return {cleaned:true,...await cleanup(String(authToken||""),{ownerId:String(ownerId||"")})};
+}
+
+export async function expireAuthenticatedSession({runtimeContext=runtimePushContext,nativeCleanup,logger=console}={}){
+  const previousSession=currentStoredAuthSession();
+  localStorage.removeItem("seago_auth");
+  let cleanupResult={cleaned:false};
+  try{
+    cleanupResult=await cleanupAndroidNativePush("",{runtimeContext,nativeCleanup,ownerId:previousSession.ownerId});
+  }catch{
+    try{logger?.warn?.("Native push session cleanup failed");}catch{}
+    cleanupResult={cleaned:true,serverRevoked:false,localUnregistered:false,cleanupPending:true,cleanupComplete:false};
+  }
+  window.dispatchEvent(new CustomEvent("seago:session-expired"));
+  return cleanupResult;
+}
 
 async function request(path, options = {}) {
   if (!API_BASE) throw new Error("API_NOT_CONFIGURED");
+  const {token,skipNativeSessionCleanup=false,...fetchOptions}=options;
 
   const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
   });
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if(response.status===401&&options.token){
-      localStorage.removeItem("seago_auth");
-      window.dispatchEvent(new CustomEvent("seago:session-expired"));
+    if(response.status===401&&token&&!skipNativeSessionCleanup){
+      await expireAuthenticatedSession();
     }
     const error = new Error(payload.error || `Request failed: ${response.status}`);
     error.status = response.status;
@@ -49,8 +94,43 @@ export async function getQuote(departureId, adults, children = 0, mealPlan = "wi
   return request(`/api/departures/${departureId}/quote?${qs}`, options);
 }
 
-function reconcileAuthPush(result){
-  if(result?.token)void reconcileExistingPushSubscription(result.token).catch(()=>{});
+export async function reconcileAuthPush(result,{runtimeContext=runtimePushContext,nativeCleanup,nativeState}={}){
+  if(!result?.token)return result;
+  const runtime=await runtimeContext();
+  if(runtime.isNative){
+    if(runtime.platform==="android"){
+      const nativeModule=(!nativeCleanup||!nativeState)?await import("./nativePush.js"):null;
+      const inspect=nativeState||nativeModule.nativePushCleanupState;
+      const state=inspect();
+      if(!state?.hadCredential)return result;
+
+      const cleanup=nativeCleanup||nativeModule.disableNativePush;
+      const stored=currentStoredAuthSession();
+      const incomingOwner=authOwnerId(result);
+      let cleanupToken="";
+      let cleanupOwner="";
+      const storedMatches=Boolean(stored.token)&&(
+        state.ownerId
+          ? Boolean(stored.ownerId)&&stored.ownerId===state.ownerId
+          : !state.cleanupPending
+      );
+      if(storedMatches){
+        cleanupToken=stored.token;
+        cleanupOwner=stored.ownerId;
+      }else if(!stored.token&&state.ownerId&&incomingOwner&&state.ownerId===incomingOwner){
+        cleanupToken=String(result.token);
+        cleanupOwner=incomingOwner;
+      }
+
+      const cleanupResult=await cleanup(cleanupToken,{ownerId:cleanupOwner});
+      const complete=cleanupResult?.cleanupComplete===true||(
+        cleanupResult?.serverRevoked===true&&cleanupResult?.localUnregistered===true
+      );
+      if(!complete)throw new Error("Native notification credential cleanup failed");
+    }
+    return result;
+  }
+  void reconcileExistingPushSubscription(result.token).catch(()=>{});
   return result;
 }
 
@@ -146,6 +226,9 @@ async function currentWebPushSubscription(){
 }
 
 export async function enablePushNotifications(token){
+  const runtime=await runtimePushContext();
+  if(runtime.channel==="native-android")return (await import("./nativePush.js")).enableNativePush(token);
+  if(runtime.isNative)throw new Error("Native push is disabled for this build");
   if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))throw new Error("Push notifications are not supported on this device/browser");
   const permission=await Notification.requestPermission();
   if(permission!=="granted")throw new Error("Notification permission was not granted");
@@ -160,6 +243,8 @@ export async function enablePushNotifications(token){
 }
 
 export async function reconcileExistingPushSubscription(token){
+  const runtime=await runtimePushContext();
+  if(runtime.isNative)return {reconciled:false};
   if(!token||typeof Notification==="undefined"||Notification.permission!=="granted")return {reconciled:false};
   const subscription=await currentWebPushSubscription();
   if(!subscription)return {reconciled:false};
@@ -168,6 +253,11 @@ export async function reconcileExistingPushSubscription(token){
 }
 
 export async function disablePushNotifications(token,{timeoutMs=1500}={}){
+  const runtime=await runtimePushContext();
+  if(runtime.isNative){
+    if(runtime.platform==="android")return (await import("./nativePush.js")).disableNativePush(token);
+    return {serverRevoked:false,native:true};
+  }
   const subscription=await currentWebPushSubscription().catch(()=>null);
   if(!subscription)return {serverRevoked:false,browserUnsubscribed:false,hadSubscription:false};
 
@@ -191,6 +281,9 @@ export async function disablePushNotifications(token,{timeoutMs=1500}={}){
 }
 
 export async function pushNotificationStatus(){
+  const runtime=await runtimePushContext();
+  if(runtime.channel==="native-android")return (await import("./nativePush.js")).nativePushPermission();
+  if(runtime.isNative)return {supported:false,permission:"disabled",subscribed:false,native:true};
   if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return {supported:false,permission:"unsupported",subscribed:false};
   const registration=await navigator.serviceWorker.ready;
   const subscription=await registration.pushManager.getSubscription();
@@ -213,4 +306,4 @@ export async function googleSignIn(credential,role="customer"){
 
 export const deleteAccount=token=>request("/api/auth/account",{method:"DELETE",token});
 export const registerNativePushToken=({token:deviceToken,platform,installationId},token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken,platform,installationId})});
-export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId})});
+export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,skipNativeSessionCleanup:true,body:JSON.stringify({installationId})});

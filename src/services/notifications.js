@@ -4,7 +4,7 @@ import User from "../models/User.js";
 import Payment from "../models/Payment.js";
 import NotificationLog from "../models/NotificationLog.js";
 import InAppNotification from "../models/InAppNotification.js";
-import { sendPushToUser } from "./push.js";
+import { sendNotificationChannelsToUser } from "./notificationChannels.js";
 import { signPublicTicketToken } from "./tickets.js";
 import {
   credentialFingerprint,
@@ -47,7 +47,10 @@ async function createInApp({key,userId,type,title,body,bookingId=null,data={}}){
     throw e;
   }
   const push=minimizedPushEnvelope({data,notificationId:String(row._id)});
-  sendPushToUser(userId,push).catch(()=>console.error(JSON.stringify({event:"push_delivery",channel:"web_push",result:"failed",code:"push_delivery_transient"})));
+  void sendNotificationChannelsToUser(userId,push).then(({webPush,nativePush})=>{
+    if(webPush?.failed)console.error(JSON.stringify({event:"push_delivery",channel:"web_push",result:"failed",code:webPush.errorCode||"push_delivery_transient"}));
+    if(nativePush?.failed)console.error(JSON.stringify({event:"push_delivery",channel:"native_fcm",result:"failed",code:nativePush.errorCode||"fcm_delivery_transient"}));
+  }).catch(()=>console.error(JSON.stringify({event:"push_delivery",channel:"dispatch",result:"failed",code:"push_dispatch_failed"})));
   return row;
 }
 

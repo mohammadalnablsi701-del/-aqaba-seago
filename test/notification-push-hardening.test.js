@@ -223,12 +223,14 @@ test("authenticated web subscription lifecycle is deduplicated, owner-scoped and
 test("native push registration contract uses authenticated installation binding without exposing token in response",async()=>{
   const routeSource=source("../src/routes/push.js");
   const nativeSource=source("../customer-app/src/nativePush.js");
-  assert.match(routeSource,/router\.post\("\/native-subscribe",requireAuth/);
+  assert.match(routeSource,/router\.post\("\/native-subscribe",requireAuth,requireRole\("customer"\)/);
   assert.match(routeSource,/installationId/);
-  assert.match(routeSource,/deleteMany\(\{appId:APP_ID,installationId,token:\{\$ne:token\}\}\)/);
+  assert.match(routeSource,/ownershipFilter=\{appId:APP_ID,installationId,userId:req\.user\._id\}/);
+  assert.doesNotMatch(routeSource,/ownershipFilter=\{appId:APP_ID,installationId,\$or:/);
+  assert.doesNotMatch(routeSource,/deleteMany\(\{appId:APP_ID,installationId,token:/);
   assert.match(routeSource,/res\.json\(\{ok:true\}\)/);
   assert.match(nativeSource,/registration.*registerToken/s);
-  assert.match(nativeSource,/disableNativePush\(authToken\)/);
+  assert.match(nativeSource,/disableNativePush\(authToken/);
   assert.doesNotMatch(nativeSource,/localStorage\.setItem\([^,]+,token/);
 });
 
