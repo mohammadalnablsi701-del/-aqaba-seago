@@ -23,7 +23,7 @@ jobs:
         run: npm ci --engine-strict
       - name: Install isolated MongoDB test runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
-      - name: Run Mongo-backed native push ownership and lifecycle fence tests
+      - name: Run Mongo-backed native push ownership, lifecycle fence, and index readiness tests
         shell: bash
         run: |
           set -euo pipefail
@@ -36,7 +36,8 @@ jobs:
             try{
               for(const file of [
                 'test/native-push-ownership-mongo.integration.test.js',
-                'test/native-push-lifecycle-fence-mongo.integration.test.js'
+                'test/native-push-lifecycle-fence-mongo.integration.test.js',
+                'test/native-push-index-readiness-mongo.integration.test.js'
               ]){
                 const child=spawn(process.execPath,['--test',file],{
                   env:{...process.env,SEAGO_TEST_MONGODB_URI:db.getUri()},
