@@ -117,3 +117,58 @@ test("mock provider rejects idempotency/reference reuse for a different intent",
     /different payment intent/
   );
 });
+
+test("mock refund is idempotent and recoverable by SeaGo refund reference", async () => {
+  const provider = createMockProvider();
+  const request = {
+    refundReference: "rf_11111111111111111111111111111111",
+    providerIdempotencyKey: "refund:rf_11111111111111111111111111111111",
+    externalPaymentId: "mock_payment_refund_test",
+    amount: 12.5,
+    currency: "JOD"
+  };
+  const first = await provider.refundPayment(request);
+  const second = await provider.refundPayment(request);
+  const recovered = await provider.findRefundByReference({ refundReference: request.refundReference });
+  assert.deepEqual(second, first);
+  assert.deepEqual(recovered, first);
+  assert.equal(first.status, "succeeded");
+  assert.equal(first.amount, 12.5);
+  assert.equal(first.currency, "JOD");
+  assert.ok(first.providerRefundId);
+});
+
+test("mock refund rejects idempotency identity reuse for a different amount", async () => {
+  const provider = createMockProvider();
+  const request = {
+    refundReference: "rf_22222222222222222222222222222222",
+    providerIdempotencyKey: "refund:rf_22222222222222222222222222222222",
+    externalPaymentId: "mock_payment_refund_conflict",
+    amount: 10,
+    currency: "JOD"
+  };
+  await provider.refundPayment(request);
+  await assert.rejects(provider.refundPayment({ ...request, amount: 11 }), /different refund intent/);
+});
+
+test("mock refund webhook parser exposes normalized safe correlation fields", () => {
+  const provider = createMockProvider();
+  const raw = Buffer.from(JSON.stringify({
+    kind: "refund",
+    eventId: "refund_evt_1",
+    refundReference: "rf_33333333333333333333333333333333",
+    providerRefundId: "provider_refund_1",
+    status: "succeeded",
+    amount: "9.25",
+    currency: "JOD",
+    ignoredRawSecret: "not returned"
+  }));
+  assert.deepEqual(provider.parseRefundWebhook(raw), {
+    eventId: "refund_evt_1",
+    refundReference: "rf_33333333333333333333333333333333",
+    providerRefundId: "provider_refund_1",
+    status: "succeeded",
+    amount: 9.25,
+    currency: "JOD"
+  });
+});
