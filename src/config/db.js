@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import Payment from "../models/Payment.js";
+import NativePushInstallationState from "../models/NativePushInstallationState.js";
 import { releaseExpiredCheckoutHolds } from "../services/payments.js";
+
+const NATIVE_PUSH_INDEX_NOT_READY="NATIVE_PUSH_LIFECYCLE_INDEX_NOT_READY";
 
 async function listPaymentIndexes() {
   try {
@@ -28,6 +31,38 @@ async function repairLegacyPaymentIndex() {
   }
 }
 
+function isCriticalNativePushLifecycleIndex(index){
+  const keys=index?.key;
+  if(!keys||index?.unique!==true)return false;
+  const entries=Object.entries(keys);
+  return entries.length===2&&keys.appId===1&&keys.installationId===1;
+}
+
+export async function verifyNativePushLifecycleIndexes({model=NativePushInstallationState}={}){
+  const indexes=await model.collection.indexes();
+  const critical=indexes.find(isCriticalNativePushLifecycleIndex);
+  if(!critical){
+    const error=new Error("Native push lifecycle index verification failed");
+    error.code=NATIVE_PUSH_INDEX_NOT_READY;
+    throw error;
+  }
+  return critical;
+}
+
+export async function initializeNativePushLifecycleIndexes({model=NativePushInstallationState}={}){
+  try{
+    await model.init();
+    // Explicitly request schema indexes even when background/automatic index
+    // behavior is disabled or has already completed for this model instance.
+    await model.createIndexes();
+    await verifyNativePushLifecycleIndexes({model});
+  }catch{
+    const error=new Error("Native push lifecycle index initialization failed");
+    error.code=NATIVE_PUSH_INDEX_NOT_READY;
+    throw error;
+  }
+}
+
 export async function connectDb(uri) {
   mongoose.set("strictQuery", true);
   await mongoose.connect(uri);
@@ -36,3 +71,8 @@ export async function connectDb(uri) {
   // overdue holds, using the same atomic cleanup as the scheduled worker.
   await releaseExpiredCheckoutHolds({limit:200});
 }
+
+export const nativePushIndexReadinessInternals={
+  isCriticalNativePushLifecycleIndex,
+  NATIVE_PUSH_INDEX_NOT_READY
+};
