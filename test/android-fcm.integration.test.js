@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import express from "express";
 import jwt from "jsonwebtoken";
 import router from "../src/routes/push.js";
+import authRouter from "../src/routes/auth.js";
 import User from "../src/models/User.js";
 import NativePushToken from "../src/models/NativePushToken.js";
 import NativePushLifecycle from "../src/models/NativePushLifecycle.js";
@@ -12,7 +13,7 @@ import { sendNativePushToUser } from "../src/services/nativeFcm.js";
 
 function deferred(){let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});return {promise,resolve,reject};}
 
-test("MongoDB preserves Android token metadata, unique ownership, lifecycle fencing, refresh and revocation",{skip:!process.env.SEAGO_TEST_MONGODB_URI},async()=>{
+test("MongoDB preserves Android token metadata, unique ownership, lifecycle fencing, refresh, revocation and account deletion cleanup",{skip:!process.env.SEAGO_TEST_MONGODB_URI},async()=>{
   const previous={secret:process.env.JWT_SECRET,enabled:process.env.FCM_ENABLED};
   process.env.JWT_SECRET="isolated-android-fcm-integration-test-secret";
   process.env.FCM_ENABLED="true";
@@ -23,7 +24,7 @@ test("MongoDB preserves Android token metadata, unique ownership, lifecycle fenc
     await mongoose.connection.dropDatabase();
     await Promise.all([NativePushToken.init(),NativePushLifecycle.init()]);
     const [a,b,provider]=await User.create([{name:"A",role:"customer"},{name:"B",role:"customer"},{name:"P",role:"provider"}]);
-    const app=express();app.use(express.json());app.use(router);
+    const app=express();app.use(express.json());app.use("/auth",authRouter);app.use(router);
     server=await new Promise(resolve=>{const s=app.listen(0,"127.0.0.1",()=>resolve(s));});
     async function post(path,user,body){
       const response=await fetch(`http://127.0.0.1:${server.address().port}/${path}`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${jwt.sign({sub:String(user._id),ver:0},process.env.JWT_SECRET)}`},body:JSON.stringify(body)});
@@ -49,8 +50,6 @@ test("MongoDB preserves Android token metadata, unique ownership, lifecycle fenc
     const result=await sendNativePushToUser(a._id,{}, {messaging:()=>({send:async message=>delivered.push(message.token)}),log:()=>{}});
     assert.equal(result.sent,1);assert.deepEqual(delivered,[refreshed.token]);
 
-    // Deterministic stale request race: old subscribe enters its transaction, revoke commits,
-    // then the old transaction is released and must fail rather than recreating the token.
     await post("native-unsubscribe",a,{installationId:registration.installationId,lifecycleGeneration:12});
     assert.equal(await NativePushToken.countDocuments({userId:a._id,installationId:registration.installationId}),0);
     const reachedFenceWrite=deferred(),releaseOldSubscribe=deferred();
@@ -73,6 +72,19 @@ test("MongoDB preserves Android token metadata, unique ownership, lifecycle fenc
     assert.equal(await NativePushToken.countDocuments({userId:a._id,installationId:registration.installationId}),0);
     const fence=await NativePushLifecycle.findOne({userId:a._id,appId:context.appId,installationId:registration.installationId}).lean();
     assert.equal(fence.generation,14);assert.equal(fence.state,"revoked");
+
+    const deletionInstallation="account_delete_installation_456";
+    await NativePushToken.create({...context,userId:b._id,token:"account-delete-fcm-private-token",installationId:deletionInstallation});
+    await NativePushLifecycle.create({userId:b._id,appId:context.appId,installationId:deletionInstallation,generation:5,state:"active"});
+    assert.equal(await NativePushToken.countDocuments({userId:b._id}),1);
+    assert.equal(await NativePushLifecycle.countDocuments({userId:b._id}),1);
+    const accountDeletion=await fetch(`http://127.0.0.1:${server.address().port}/auth/account`,{
+      method:"DELETE",
+      headers:{Authorization:`Bearer ${jwt.sign({sub:String(b._id),ver:0},process.env.JWT_SECRET)}`}
+    });
+    assert.equal(accountDeletion.status,200);
+    assert.equal(await NativePushToken.countDocuments({userId:b._id}),0);
+    assert.equal(await NativePushLifecycle.countDocuments({userId:b._id}),0);
 
     process.env.FCM_ENABLED="false";
     const disabledRevoke=await post("native-unsubscribe",a,{installationId:registration.installationId,lifecycleGeneration:15});
