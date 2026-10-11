@@ -69,8 +69,8 @@ function nativeCleanupOptions({serverUnsubscribe,unregister,logger}={}){
   return {
     native:true,
     android:true,
-    serverUnsubscribe:serverUnsubscribe||async()=>{},
-    pushNotifications:{unregister:unregister||async()=>{}},
+    serverUnsubscribe:serverUnsubscribe||(async()=>{}),
+    pushNotifications:{unregister:unregister||(async()=>{})},
     logger:logger||{warn(){}}
   };
 }
