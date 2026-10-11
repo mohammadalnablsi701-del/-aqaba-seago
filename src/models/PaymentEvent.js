@@ -5,6 +5,8 @@ const schema=new mongoose.Schema({
   eventId:{type:String,required:true},
   externalPaymentId:{type:String,required:true,index:true},
   paymentId:{type:mongoose.Schema.Types.ObjectId,ref:"Payment",required:true,index:true},
+  eventType:{type:String,enum:["payment","refund"],default:"payment"},
+  refundId:{type:mongoose.Schema.Types.ObjectId,ref:"Refund"},
   eventStatus:{type:String},
   amount:Number,
   currency:String,
