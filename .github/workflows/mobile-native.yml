@@ -93,6 +93,10 @@ jobs:
         working-directory: customer-app
         run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android synced artifact"
 
+      - name: Run Firebase Task completion unit test
+        working-directory: customer-app/android
+        run: ./gradlew testDebugUnitTest --tests "com.aqabaseago.app.SeaGoFirebasePluginTaskTest" --stacktrace
+
       - name: Build debug APK
         working-directory: customer-app/android
         run: ./gradlew assembleDebug --stacktrace
