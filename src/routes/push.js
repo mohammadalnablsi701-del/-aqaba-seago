@@ -202,8 +202,9 @@ router.post("/native-subscribe",requireAuth,requireRole("customer"),async(req,re
     if(!INSTALLATION_ID.test(installationId))return res.status(400).json({error:"Invalid installation id"});
     if(!lifecycleEpoch)return res.status(400).json({error:"Invalid native push lifecycle epoch"});
 
+    const ownershipFilter={appId:APP_ID,installationId,userId:req.user._id};
     const result=await subscribeNativeInstallation({
-      userId:req.user._id,
+      userId:ownershipFilter.userId,
       token,
       platform,
       installationId,
