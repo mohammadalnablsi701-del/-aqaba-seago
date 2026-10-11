@@ -142,7 +142,8 @@ test("missing or invalid startsAt fails closed", () => {
 });
 
 test("missing or invalid trip duration fails closed instead of creating an infinite window", () => {
-  const missing = booking({ durationMinutes: undefined });
+  const missing = booking();
+  missing.tripId = {};
   assert.equal(deriveTicketLifecycle(missing, { now: baseNow }).state, "unavailable");
   const invalid = booking({ durationMinutes: "not-a-number" });
   assert.equal(deriveTicketLifecycle(invalid, { now: baseNow }).state, "unavailable");
