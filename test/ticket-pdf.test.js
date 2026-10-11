@@ -11,10 +11,11 @@ test("renderTicketPdf creates a readable PDF with a QR ticket", async () => {
     tripId: {
       titleEn: "Sukar",
       vesselName: "Sukar",
+      durationMinutes: 60,
       departureLocation: { name: "Aqaba Marina" }
     },
     providerId: { businessName: "Aladdin Yachts & Marine Tours" },
-    departureId: { startsAt: new Date("2026-10-11T15:00:00.000Z"), status: "scheduled" },
+    departureId: { startsAt: new Date(Date.now() + 60 * 60 * 1000), status: "scheduled" },
     adults: 2,
     children: 2,
     mealPlan: "with_buffet",
