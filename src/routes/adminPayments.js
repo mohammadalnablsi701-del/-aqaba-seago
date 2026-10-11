@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Payment from "../models/Payment.js";
 import PaymentEvent from "../models/PaymentEvent.js";
+import Refund from "../models/Refund.js";
 import Booking from "../models/Booking.js";
 import CheckoutHold from "../models/CheckoutHold.js";
 import User from "../models/User.js";
@@ -141,11 +142,37 @@ function reviewSummary(payment, warnings) {
     : "Backend payment processing marked this payment for manual review; no more specific safe reason is persisted.";
 }
 
-function refundState(payment) {
+function legacyRefundState(payment) {
   if (payment.status === "refunded") return "refunded";
   if (payment.status === "partially_refunded") return "partially_refunded";
   if (safeMoney(payment.refundedAmount) > 0) return "recorded";
   return "none";
+}
+
+function adminRefundDto(payment, refunds) {
+  const latest = refunds[0] || null;
+  return {
+    state: latest?.state || legacyRefundState(payment),
+    amount: safeMoney(payment.refundedAmount),
+    reference: latest?.reference || payment.refundReference || null,
+    providerRefundId: latest?.providerRefundId || null,
+    requestedAmount: latest ? safeMoney(latest.amount) : null,
+    currency: latest?.currency || payment.currency || "JOD",
+    reviewReason: latest?.reviewReason || null,
+    requestedAt: latest?.requestedAt || null,
+    completedAt: latest?.completedAt || null,
+    refundedAt: payment.refundedAt || null,
+    requests: refunds.map(refund => ({
+      reference: refund.reference,
+      state: refund.state,
+      amount: safeMoney(refund.amount),
+      currency: refund.currency,
+      providerRefundId: refund.providerRefundId || null,
+      reviewReason: refund.reviewReason || null,
+      requestedAt: refund.requestedAt || refund.createdAt || null,
+      completedAt: refund.completedAt || null
+    }))
+  };
 }
 
 function parseListQuery(query) {
@@ -334,7 +361,7 @@ router.get("/:paymentId", async (req, res, next) => {
       .lean();
     if (!payment) return res.status(404).json({ error: "Payment not found" });
 
-    const [booking, hold, customer, events] = await Promise.all([
+    const [booking, hold, customer, events, refunds] = await Promise.all([
       payment.bookingId ? Booking.findById(payment.bookingId)
         .select("customerSnapshot providerId tripId departureId status pricing createdAt updatedAt")
         .lean() : null,
@@ -346,6 +373,11 @@ router.get("/:paymentId", async (req, res, next) => {
         .select("provider eventId externalPaymentId eventStatus amount currency processedAt createdAt")
         .sort({ processedAt: -1, _id: -1 })
         .limit(50)
+        .lean(),
+      Refund.find({ paymentId: payment._id })
+        .select("reference state amount currency providerRefundId reviewReason requestedAt completedAt createdAt updatedAt")
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(20)
         .lean()
     ]);
 
@@ -420,12 +452,7 @@ router.get("/:paymentId", async (req, res, next) => {
         summary: reviewSummary(payment, warnings),
         warnings
       },
-      refund: {
-        state: refundState(payment),
-        amount: safeMoney(payment.refundedAmount),
-        reference: payment.refundReference || null,
-        refundedAt: payment.refundedAt || null
-      },
+      refund: adminRefundDto(payment, refunds),
       events: events.map(event => ({
         eventId: event.eventId,
         gateway: event.provider,
