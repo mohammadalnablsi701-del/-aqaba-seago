@@ -174,6 +174,23 @@ seed();
   localStorage.setItem(EPOCH_KEY,"2");
   setAuth("B","auth-B");
   assert.equal(native.nativePushCleanupState().fenceConfirmed,false);
+
+  // Even if a caller tries to label B's credential as owner A, A's proof is not reused.
+  let forcedOwnerServerCalls=0;
+  const forcedOwnerResult=await settlesWithin(native.disableNativePush("auth-B",options({
+    ownerId:"A",
+    serverUnsubscribe:async()=>{
+      forcedOwnerServerCalls++;
+      throw new Error("backend ownership conflict");
+    },
+    unregister:async()=>{}
+  })));
+  assert.equal(forcedOwnerServerCalls,1);
+  assert.equal(forcedOwnerResult.cleanupComplete,false);
+  assert.equal(forcedOwnerResult.fenceConfirmed,false);
+  assert.notEqual(localStorage.getItem(CLEANUP_PENDING_KEY),null);
+
+  // Normal B context cannot validate or revoke A's pending state either.
   let bServerCalls=0;
   const bResult=await settlesWithin(native.disableNativePush("auth-B",options({
     ownerId:"B",
