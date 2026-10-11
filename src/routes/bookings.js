@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validateAllowedFields, isBoundedString } from "../middleware/validation.js";
-import { signTicketToken } from "../services/tickets.js";
+import { publicTicketExpiry, signPublicTicketToken, signTicketToken } from "../services/tickets.js";
 import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
 import { cancelBooking, cancellationPolicyFor, customerCancellationEligibility } from "../services/cancellations.js";
 import { salePricing, tripForAudience } from "../services/pricingVisibility.js";
@@ -57,7 +57,16 @@ function toCustomerBookingDto(row, reqUser, baseUrl) {
     departureId,
     tripId: source.tripId
   });
+
+  // Boarding QR remains the existing v2 credential. Public-link issuance is a
+  // separate bounded credential and fails closed to null when timing cannot be
+  // proven or the planned trip end has already passed. Authenticated history
+  // remains visible independently of the public bearer URL.
   const ticketToken = signTicketToken(row);
+  const publicExpiry = publicTicketExpiry(row);
+  const publicTicketToken = publicExpiry !== null && Date.now() < publicExpiry
+    ? signPublicTicketToken(row)
+    : null;
 
   return {
     _id: source._id,
@@ -80,7 +89,9 @@ function toCustomerBookingDto(row, reqUser, baseUrl) {
     },
     ticketLifecycle: lifecycle,
     ticketToken,
-    ticketValidationUrl: `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(ticketToken)}`
+    ticketValidationUrl: publicTicketToken
+      ? `${baseUrl}/api/tickets/validate?token=${encodeURIComponent(publicTicketToken)}`
+      : null
   };
 }
 
