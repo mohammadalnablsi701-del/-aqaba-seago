@@ -1,5 +1,4 @@
-import {settlementLedger, recordSettlement} from "../services/settlements.js";
-import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import ProviderSettlement from "../models/ProviderSettlement.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";import{isTripSellable,sellableNowDepartureFilter,tripSalesSemantics}from"../services/tripSales.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
+import express from "express";import mongoose from "mongoose";import Provider from "../models/Provider.js";import User from "../models/User.js";import CheckoutHold from "../models/CheckoutHold.js";import Payment from "../models/Payment.js";import NotificationLog from "../models/NotificationLog.js";import Booking from "../models/Booking.js";import Departure from "../models/Departure.js";import Trip from "../models/Trip.js";import SupportRequest from "../models/SupportRequest.js";import{releaseExpiredCheckoutHolds,releaseCheckoutHoldsForDeparture}from"../services/payments.js";import{requireAuth,requireRole}from"../middleware/auth.js";import{isTripSellable,sellableNowDepartureFilter,tripSalesSemantics}from"../services/tripSales.js";const router=express.Router();router.use(requireAuth,requireRole("admin"));
 
 function overviewDate(value,end=false){
   const s=String(value||"").trim();
@@ -102,55 +101,6 @@ router.get("/overview",async(req,res,next)=>{
   }catch(e){next(e);}
 });
 
-
-router.get("/settlements",async(req,res,next)=>{
-  try{
-    const from=overviewDate(req.query.from,false),to=overviewDate(req.query.to,true);
-    if(req.query.from&&!from)return res.status(400).json({error:"Invalid from date"});
-    if(req.query.to&&!to)return res.status(400).json({error:"Invalid to date"});
-    if(from&&to&&from>to)return res.status(400).json({error:"From date must be before to date"});
-    const providerId=String(req.query.providerId||"").trim();
-    if(providerId&&!/^[a-f0-9]{24}$/i.test(providerId))return res.status(400).json({error:"Invalid provider"});
-    const data=await settlementLedger({from,to,providerId});
-    const history=await ProviderSettlement.find(providerId?{providerId}:{})
-      .populate("providerId","businessName").populate("paidBy","name email")
-      .sort({paidAt:-1}).limit(100).lean();
-    res.json({
-      generatedAt:new Date(),currency:"JOD",
-      filters:{from:req.query.from||null,to:req.query.to||null,providerId:providerId||null},
-      providers:data.providersList.map(p=>({id:p._id,businessName:p.businessName,status:p.status})),
-      totals:data.totals,reconciliationRequired:data.reconciliationRequired,
-      breakdown:data.breakdown.map(({unsettledPaymentIds,unsettledBookingIds,items,...x})=>x),
-      history:history.map(s=>({
-        id:s._id,providerId:s.providerId?._id||s.providerId,providerName:s.providerId?.businessName||"Provider",
-        periodFrom:s.periodFrom,periodTo:s.periodTo,currency:s.currency,
-        grossSales:s.grossSales,refunds:s.refunds,seaGoCommission:s.seaGoCommission,
-        providerNet:s.providerNet,amountPaid:s.amountPaid,status:s.status,paidAt:s.paidAt,
-        paidBy:s.paidBy?{name:s.paidBy.name,email:s.paidBy.email}:null,note:s.note||""
-      }))
-    });
-  }catch(e){next(e);}
-});
-
-router.post("/settlements/pay",async(req,res,next)=>{
-  try{
-    const from=overviewDate(req.body.from,false),to=overviewDate(req.body.to,true);
-    const providerId=String(req.body.providerId||"").trim();
-    if(!from||!to)return res.status(400).json({error:"From and to dates are required"});
-    if(from>to)return res.status(400).json({error:"From date must be before to date"});
-    if(!/^[a-f0-9]{24}$/i.test(providerId))return res.status(400).json({error:"Invalid provider"});
-    const provider=await Provider.findById(providerId).select("_id businessName");
-    if(!provider)return res.status(404).json({error:"Provider not found"});
-    const settlement=await recordSettlement({from,to,providerId,paidBy:req.user._id,note:req.body.note});
-    res.status(201).json({
-      ok:true,id:settlement._id,providerId:provider._id,providerName:provider.businessName,
-      amountPaid:settlement.amountPaid,currency:settlement.currency,paidAt:settlement.paidAt
-    });
-  }catch(e){
-    if(e?.code===11000)return res.status(409).json({error:"One or more payments were already settled. Refresh and try again."});
-    next(e);
-  }
-});
 
 router.get("/trips",async(_req,res,next)=>{try{
   const rows=await Trip.find({}).populate("providerId","businessName status").sort({createdAt:-1});

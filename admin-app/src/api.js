@@ -60,7 +60,40 @@ export const setSupportRequestStatus=(token,id,status)=>req("/api/admin/support-
 export const overview=(token,{from="",to="",providerId=""}={},options={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/overview"+(q.toString()?"?"+q.toString():""),{token,...options});};
 export const operations=(token,options={})=>req("/api/admin/operations",{token,...options});
 export const settlements=(token,{from="",to="",providerId=""}={},options={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/settlements"+(q.toString()?"?"+q.toString():""),{token,...options});};
-export const markSettlementPaid=(token,{providerId,from,to,note=""})=>req("/api/admin/settlements/pay",{token,method:"POST",body:JSON.stringify({providerId,from,to,note})});
+export const markSettlementPaid=(token,{providerId,from,to})=>runLockedSensitiveAction(`settlement:${providerId}:${from}:${to}:pay`,async()=>{
+  const data=await settlements(token,{from,to,providerId});
+  const row=(data.breakdown||[]).find(item=>String(item.providerId)===String(providerId));
+  if(!row)throw new Error("Settlement preview is no longer available. Refresh and try again.");
+  const amount=Number(row.payableNow??row.outstanding??0);
+  if(!(amount>0))throw new Error(Number(row.reversedOutstanding||0)>0?"This balance was reversed and cannot be re-recorded through Mark Paid.":"No payable provider balance remains in this period.");
+  const currency=data.currency||"JOD";
+  return runSensitiveAction({
+    title:"Mark settlement paid",subject:row.providerName||"Provider",confirmLabel:"Mark paid",danger:true,reasonRequired:true,reasonLabel:"Payment reason",
+    impact:"This action records that the provider has actually been paid.",
+    details:[
+      {label:"Provider",value:row.providerName||"Provider"},
+      {label:"Settlement period / reference",value:`${from} → ${to}`},
+      {label:"Settlement amount",value:`${amount.toFixed(2)} ${currency}`},
+      {label:"Currency",value:currency},
+      {label:"Current status",value:"Outstanding"},
+      {label:"New status",value:"Paid"}
+    ],
+    execute:reason=>req("/api/admin/settlements/pay",{token,method:"POST",body:JSON.stringify({providerId,from,to,reason})})
+  });
+});
+export const reverseSettlementPayment=(token,settlement)=>runLockedSensitiveAction(`settlement:${settlement.id}:reverse`,()=>runSensitiveAction({
+  title:"Reverse settlement payment record",subject:settlement.providerName||"Provider",confirmLabel:"Reverse payment record",danger:true,reasonRequired:true,reasonLabel:"Correction reason",
+  impact:"This records an append-only correction. The original Paid history remains visible; effective paid becomes zero. It does not initiate a bank transfer or refund.",
+  details:[
+    {label:"Provider",value:settlement.providerName||"Provider"},
+    {label:"Settlement reference",value:String(settlement.id)},
+    {label:"Settlement amount",value:`${Number(settlement.amountPaid||0).toFixed(2)} ${settlement.currency||"JOD"}`},
+    {label:"Currency",value:settlement.currency||"JOD"},
+    {label:"Current status",value:"Paid"},
+    {label:"New effective state",value:"Payment record reversed"}
+  ],
+  execute:reason=>req("/api/admin/settlements/"+settlement.id+"/reverse",{token,method:"POST",body:JSON.stringify({reason})})
+}));
 export const readiness=(token,options={})=>req("/api/admin/readiness",{token,...options});
 export const demoCleanupPreview=(token,options={})=>req("/api/admin/demo-cleanup-preview",{token,...options});
 export const cleanupDemo=(token,providerId,confirmation)=>req("/api/admin/demo-cleanup",{token,method:"POST",body:JSON.stringify({providerId,confirmation})});
