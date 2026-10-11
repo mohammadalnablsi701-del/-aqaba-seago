@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import PushSubscription from "../models/PushSubscription.js";
 import NativePushToken from "../models/NativePushToken.js";
+import NativePushLifecycle from "../models/NativePushLifecycle.js";
 import { requireAuth } from "../middleware/auth.js";
 import { normalizeJordanPhone } from "../services/phoneOtp.js";
 import { issuePasswordReset, claimPasswordResetToken, invalidatePasswordResetTokens } from "../services/passwordRecovery.js";
@@ -159,6 +160,7 @@ router.delete("/account",requireAuth,async(req,res,next)=>{
     await Promise.all([
       PushSubscription.deleteMany({userId}),
       NativePushToken.deleteMany({userId}),
+      NativePushLifecycle.deleteMany({userId}),
       invalidatePasswordResetTokens(userId)
     ]);
     res.json({ok:true,message:"Account deleted"});
