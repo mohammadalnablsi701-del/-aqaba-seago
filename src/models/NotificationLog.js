@@ -4,11 +4,12 @@ const schema = new mongoose.Schema({
   key: { type: String, required: true, unique: true, index: true },
   bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", index: true },
   type: { type: String, required: true, index: true },
-  recipient: { type: String, required: true },
+  recipientHint: String,
+  recipientFingerprint: { type: String, index: true },
   status: { type: String, enum: ["sent","failed","skipped"], required: true },
   provider: { type: String, default: "resend" },
-  externalId: String,
-  error: String,
+  providerMessageId: String,
+  errorCode: String,
   sentAt: Date
 }, { timestamps: true });
 

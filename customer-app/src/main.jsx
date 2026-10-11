@@ -8,6 +8,7 @@ import "./vessel-polish.css";
 import "./cancellation-ux.css";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 import { enableCancellationUi } from "./cancellationUi.js";
+import { enableNotificationLogoutGuard } from "./notificationCredentialLifecycle.js";
 
 const params=new URLSearchParams(window.location.search);
 if(params.get("open")==="tickets") sessionStorage.setItem("seago_active_screen","tickets");
@@ -81,10 +82,11 @@ createRoot(document.getElementById("root")).render(
 if(!recovery){
   enableAccountDeletionUi();
   enableCancellationUi();
+  enableNotificationLogoutGuard();
 }
 
 if(!nativeApp&&"serviceWorker" in navigator){
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register(import.meta.env.BASE_URL+"sw.js").catch(err=>console.error("Service worker registration failed",err));
+    navigator.serviceWorker.register(import.meta.env.BASE_URL+"sw.js").catch(()=>console.error("Service worker registration failed"));
   });
 }
