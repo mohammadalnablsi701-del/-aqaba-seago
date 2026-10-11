@@ -5,7 +5,7 @@ import Payment from "../models/Payment.js";
 import NotificationLog from "../models/NotificationLog.js";
 import InAppNotification from "../models/InAppNotification.js";
 import { sendPushToUser } from "./push.js";
-import { signTicketToken } from "./tickets.js";
+import { signPublicTicketToken } from "./tickets.js";
 
 const API_URL = String(process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://aqaba-seago-api.onrender.com").replace(/\/$/,"");
 const FROM = process.env.EMAIL_FROM || "Aqaba SeaGo <onboarding@resend.dev>";
@@ -48,7 +48,7 @@ async function loadBooking(bookingId){
   return Booking.findById(bookingId)
     .populate("customerId","name email phone")
     .populate("providerId","businessName ownerUserId phone")
-    .populate("tripId","titleEn titleAr category departureLocation")
+    .populate("tripId","titleEn titleAr category durationMinutes departureLocation")
     .populate("departureId","startsAt status");
 }
 
@@ -115,7 +115,7 @@ export async function sendBookingConfirmation(bookingId){
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
   const payment=await Payment.findOne({bookingId:b._id}).select("_id");
-  const ticketToken=signTicketToken(b);
+  const ticketToken=signPublicTicketToken(b);
   const ticketPdfUrl=`${API_URL}/api/tickets/pdf?token=${encodeURIComponent(ticketToken)}`;
 
   await createInApp({key:`booking-confirmed:customer:${b._id}`,userId:b.customerId?._id,type:"booking_confirmed",title:"Booking confirmed",body:`Your ${b.tripId?.titleEn||b.tripId?.titleAr||"SeaGo trip"} booking SG-${ref} is confirmed.`,bookingId:b._id,data:{screen:"tickets"}});
