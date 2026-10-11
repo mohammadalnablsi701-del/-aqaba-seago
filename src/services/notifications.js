@@ -6,6 +6,12 @@ import NotificationLog from "../models/NotificationLog.js";
 import InAppNotification from "../models/InAppNotification.js";
 import { sendPushToUser } from "./push.js";
 import { signPublicTicketToken } from "./tickets.js";
+import {
+  credentialFingerprint,
+  emailFailureCode,
+  maskEmail,
+  minimizedPushEnvelope
+} from "../utils/notificationPrivacy.js";
 
 const API_URL = String(process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "https://aqaba-seago-api.onrender.com").replace(/\/$/,"");
 const FROM = process.env.EMAIL_FROM || "Aqaba SeaGo <onboarding@resend.dev>";
@@ -40,7 +46,8 @@ async function createInApp({key,userId,type,title,body,bookingId=null,data={}}){
     if(e?.code===11000&&key)return InAppNotification.findOne({key});
     throw e;
   }
-  sendPushToUser(userId,{title,body,data:{...data,notificationId:String(row._id)}}).catch(err=>console.error("Push notification failed",err));
+  const push=minimizedPushEnvelope({data,notificationId:String(row._id)});
+  sendPushToUser(userId,push).catch(()=>console.error(JSON.stringify({event:"push_delivery",channel:"web_push",result:"failed",code:"push_delivery_transient"})));
   return row;
 }
 
@@ -52,19 +59,34 @@ async function loadBooking(bookingId){
     .populate("departureId","startsAt status");
 }
 
+async function writeEmailLog({key,bookingId,type,to,status,providerMessageId=null,errorCode=null,sentAt=null}){
+  return NotificationLog.findOneAndUpdate(
+    {key},
+    {$set:{
+      bookingId,
+      type,
+      recipientHint:maskEmail(to),
+      recipientFingerprint:credentialFingerprint(to),
+      status,
+      provider:"resend",
+      providerMessageId,
+      errorCode,
+      sentAt
+    }},
+    {upsert:true,new:true,setDefaultsOnInsert:true}
+  );
+}
+
 async function sendEmail({key,bookingId,type,to,subject,html}){
   if(!to) return null;
   const existing=await NotificationLog.findOne({key});
   if(existing?.status==="sent") return existing;
 
+  const recipientFingerprint=credentialFingerprint(to);
   const apiKey=String(process.env.RESEND_API_KEY||"").trim();
   if(!apiKey){
-    const doc=await NotificationLog.findOneAndUpdate(
-      {key},
-      {$set:{bookingId,type,recipient:to,status:"skipped",provider:"resend",error:"RESEND_API_KEY not configured"}},
-      {upsert:true,new:true,setDefaultsOnInsert:true}
-    );
-    console.log(`Email skipped (${type}) to ${to}: RESEND_API_KEY not configured`);
+    const doc=await writeEmailLog({key,bookingId,type,to,status:"skipped",errorCode:"email_provider_unconfigured"});
+    console.warn(JSON.stringify({event:"email_delivery",type,result:"skipped",code:"email_provider_unconfigured",recipientFingerprint}));
     return doc;
   }
 
@@ -75,19 +97,21 @@ async function sendEmail({key,bookingId,type,to,subject,html}){
       body:JSON.stringify({from:FROM,to:[to],subject,html})
     });
     const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(j?.message||`Email provider error ${r.status}`);
-    return NotificationLog.findOneAndUpdate(
-      {key},
-      {$set:{bookingId,type,recipient:to,status:"sent",provider:"resend",externalId:j.id||null,error:null,sentAt:new Date()}},
-      {upsert:true,new:true,setDefaultsOnInsert:true}
-    );
-  }catch(e){
-    await NotificationLog.findOneAndUpdate(
-      {key},
-      {$set:{bookingId,type,recipient:to,status:"failed",provider:"resend",error:String(e.message||e)}},
-      {upsert:true,new:true,setDefaultsOnInsert:true}
-    );
-    console.error("Email send failed",type,to,e.message);
+    if(!r.ok){
+      const errorCode=emailFailureCode(r.status);
+      await writeEmailLog({key,bookingId,type,to,status:"failed",errorCode});
+      console.error(JSON.stringify({event:"email_delivery",type,result:"failed",code:errorCode,statusCode:r.status,recipientFingerprint}));
+      return null;
+    }
+    return writeEmailLog({
+      key,bookingId,type,to,status:"sent",
+      providerMessageId:String(j?.id||"").slice(0,200)||null,
+      errorCode:null,sentAt:new Date()
+    });
+  }catch{
+    const errorCode="email_delivery_transient";
+    await writeEmailLog({key,bookingId,type,to,status:"failed",errorCode});
+    console.error(JSON.stringify({event:"email_delivery",type,result:"failed",code:errorCode,recipientFingerprint}));
     return null;
   }
 }
@@ -114,7 +138,7 @@ export async function sendBookingConfirmation(bookingId){
   const ref=String(b._id).slice(-8).toUpperCase();
   const provider=await Provider.findById(b.providerId?._id||b.providerId);
   const owner=provider?.ownerUserId?await User.findById(provider.ownerUserId).select("email name"):null;
-  const payment=await Payment.findOne({bookingId:b._id}).select("_id");
+  await Payment.findOne({bookingId:b._id}).select("_id");
   const ticketToken=signPublicTicketToken(b);
   const ticketPdfUrl=`${API_URL}/api/tickets/pdf?token=${encodeURIComponent(ticketToken)}`;
 
@@ -128,7 +152,7 @@ export async function sendBookingConfirmation(bookingId){
     bookingId:b._id,type:"booking_confirmed_customer",to:b.customerId?.email,
     subject:`SeaGo booking confirmed · SG-${ref}`,
     html:shell("Booking confirmed",`<p>Hi ${escapeHtml(b.customerId?.name||"there")}, your SeaGo booking is confirmed.</p>${bookingTable(b)}<p><a href="${escapeHtml(ticketPdfUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 16px;background:#0b6fa4;color:#ffffff!important;text-decoration:none;border-radius:10px;font-weight:700">View ticket PDF</a></p><p style="font-size:12px;color:#7b8c99">This secure link opens your ticket directly without requiring sign-in. Keep it private.</p>`)
-  }).catch(err=>console.error("Customer confirmation email failed",err));
+  }).catch(()=>console.error(JSON.stringify({event:"email_delivery",type:"booking_confirmed_customer",result:"failed",code:"email_delivery_transient"})));
 
   if(owner?.email){
     sendEmail({
@@ -136,7 +160,7 @@ export async function sendBookingConfirmation(bookingId){
       bookingId:b._id,type:"booking_confirmed_provider",to:owner.email,
       subject:`New SeaGo booking · SG-${ref}`,
       html:shell("New booking received",`<p>A new confirmed booking was received for ${escapeHtml(provider.businessName)}.</p>${bookingTable(b)}`)
-    }).catch(err=>console.error("Provider confirmation email failed",err));
+    }).catch(()=>console.error(JSON.stringify({event:"email_delivery",type:"booking_confirmed_provider",result:"failed",code:"email_delivery_transient"})));
   }
 }
 
@@ -188,8 +212,8 @@ export async function processUpcomingReminders(){
 export async function sendTestEmail(to){
   const recipient=String(to||"").trim();
   if(!recipient) return null;
-  const log=await sendEmail({key:`email-test:${recipient}`,bookingId:null,type:"email_test",to:recipient,subject:"Aqaba SeaGo — Email test successful",html:shell("Email test successful",`<p>Your Aqaba SeaGo email delivery is configured correctly.</p><p>If you received this message, Resend and the SeaGo backend are connected successfully.</p>`)});
-  if(log?.status==="sent") console.log("SeaGo test email sent", recipient, log.externalId||"");
-  else console.log("SeaGo test email status", recipient, log?.status||"unknown", log?.error||"");
+  const fingerprint=credentialFingerprint(recipient);
+  const log=await sendEmail({key:`email-test:${fingerprint}`,bookingId:null,type:"email_test",to:recipient,subject:"Aqaba SeaGo — Email test successful",html:shell("Email test successful",`<p>Your Aqaba SeaGo email delivery is configured correctly.</p><p>If you received this message, Resend and the SeaGo backend are connected successfully.</p>`)});
+  console.log(JSON.stringify({event:"email_test",result:log?.status||"unknown",recipientFingerprint:fingerprint,providerMessageId:log?.providerMessageId||null,errorCode:log?.errorCode||null}));
   return log;
 }
