@@ -247,7 +247,10 @@ test("push test endpoint returns independent webPush/nativePush results when FCM
 }));
 
 test("customer native feature flag selects only Capacitor Android and leaves web as Web Push",()=>{
-  assert.equal(nativePushFeatureEnabled({VITE_NATIVE_PUSH_ENABLED:"false"}),false;
+  assert.equal(
+    nativePushFeatureEnabled({VITE_NATIVE_PUSH_ENABLED:"false"}),
+    false
+  );
   assert.equal(resolvePushChannel({enabled:false,isNative:true,platform:"android"}),"native-disabled");
   assert.equal(resolvePushChannel({enabled:true,isNative:true,platform:"android"}),"native-android");
   assert.equal(resolvePushChannel({enabled:true,isNative:false,platform:"web"}),"web");
