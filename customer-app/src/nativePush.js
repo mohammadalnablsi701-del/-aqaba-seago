@@ -1,19 +1,25 @@
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
-import { registerNativePushToken, unregisterNativePushToken } from "./api.js";
+import { expireAuthenticatedSession } from "./api.js";
+import { registerNativePushToken, unregisterNativePushToken } from "./nativePushTransport.js";
 import { nativePushFeatureEnabled } from "./nativePushConfig.js";
 
 const INSTALLATION_KEY="seago_native_installation_id";
+const EPOCH_KEY="seago_native_push_lifecycle_epoch";
 const REGISTERED_KEY="seago_native_push_registered";
 const OWNER_KEY="seago_native_push_owner_id";
 const CLEANUP_PENDING_KEY="seago_native_push_cleanup_pending";
+const DEFAULT_SETTLEMENT_TIMEOUT_MS=1000;
+const DEFAULT_REVOKE_TIMEOUT_MS=5000;
 let listenerHandles=[];
 let lifecycleGeneration=0;
 const inFlightRegistrations=new Set();
 
 function text(value){return String(value||"").trim();}
+function validEpoch(value){const epoch=Number(value);return Number.isSafeInteger(epoch)&&epoch>=1?epoch:0;}
 function currentInstallationId(){return text(localStorage.getItem(INSTALLATION_KEY));}
 function currentOwnerId(){return text(localStorage.getItem(OWNER_KEY));}
+function currentLifecycleEpoch(){return validEpoch(localStorage.getItem(EPOCH_KEY));}
 function currentAuthOwnerId(){
   try{
     const auth=JSON.parse(localStorage.getItem("seago_auth")||"null");
@@ -26,10 +32,16 @@ function readCleanupPending(){
   try{
     const value=JSON.parse(raw);
     if(!value||typeof value!=="object")return null;
+    const lifecycleEpoch=validEpoch(value.lifecycleEpoch)||currentLifecycleEpoch()||1;
+    const nextLifecycleEpoch=validEpoch(value.nextLifecycleEpoch);
+    const fenceConfirmed=value.fenceConfirmed===true;
     return {
       installationId:text(value.installationId),
       ownerId:text(value.ownerId),
-      serverRevoked:value.serverRevoked===true,
+      lifecycleEpoch,
+      nextLifecycleEpoch,
+      fenceConfirmed,
+      serverRevoked:fenceConfirmed&&value.serverRevoked===true,
       localUnregistered:value.localUnregistered===true
     };
   }catch{return null;}
@@ -38,7 +50,10 @@ function writeCleanupPending(state){
   localStorage.setItem(CLEANUP_PENDING_KEY,JSON.stringify({
     installationId:text(state?.installationId),
     ownerId:text(state?.ownerId),
-    serverRevoked:state?.serverRevoked===true,
+    lifecycleEpoch:validEpoch(state?.lifecycleEpoch)||1,
+    nextLifecycleEpoch:validEpoch(state?.nextLifecycleEpoch)||0,
+    fenceConfirmed:state?.fenceConfirmed===true,
+    serverRevoked:state?.fenceConfirmed===true&&state?.serverRevoked===true,
     localUnregistered:state?.localUnregistered===true
   }));
 }
@@ -48,12 +63,13 @@ function clearCleanupForInstallation(id){
   if(!pending||pending.installationId===target)localStorage.removeItem(CLEANUP_PENDING_KEY);
   if(currentInstallationId()===target){
     localStorage.removeItem(INSTALLATION_KEY);
+    localStorage.removeItem(EPOCH_KEY);
     localStorage.removeItem(OWNER_KEY);
     localStorage.removeItem(REGISTERED_KEY);
   }
 }
 function cleanupComplete(state,{android=true}={}){
-  return Boolean(state?.serverRevoked&&(android?state?.localUnregistered:true));
+  return Boolean(state?.serverRevoked&&state?.fenceConfirmed&&(android?state?.localUnregistered:true));
 }
 
 export function nativePushCleanupState(){
@@ -61,25 +77,35 @@ export function nativePushCleanupState(){
   const pending=readCleanupPending();
   const installationId=pending?.installationId||currentInstallationId();
   const ownerId=pending?.ownerId||currentOwnerId();
+  const lifecycleEpoch=pending?.lifecycleEpoch||currentLifecycleEpoch();
   const registered=localStorage.getItem(REGISTERED_KEY)==="1";
   return {
     hadCredential:Boolean(rawPending||installationId||registered),
     cleanupPending:Boolean(rawPending),
     installationId,
     ownerId,
+    lifecycleEpoch,
+    nextLifecycleEpoch:pending?.nextLifecycleEpoch||0,
+    fenceConfirmed:pending?.fenceConfirmed===true,
     serverRevoked:pending?.serverRevoked===true,
     localUnregistered:pending?.localUnregistered===true,
     registered
   };
 }
 
-function installationId(){
-  let value=currentInstallationId();
-  if(!value){
-    value=(globalThis.crypto?.randomUUID?.()||`install-${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,"_");
-    localStorage.setItem(INSTALLATION_KEY,value);
+function installationState(){
+  let installationId=currentInstallationId();
+  let lifecycleEpoch=currentLifecycleEpoch();
+  if(!installationId){
+    installationId=(globalThis.crypto?.randomUUID?.()||`install-${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,"_");
+    lifecycleEpoch=1;
+    localStorage.setItem(INSTALLATION_KEY,installationId);
+    localStorage.setItem(EPOCH_KEY,"1");
+  }else if(!lifecycleEpoch){
+    lifecycleEpoch=1;
+    localStorage.setItem(EPOCH_KEY,"1");
   }
-  return value;
+  return {installationId,lifecycleEpoch};
 }
 
 export function isNativeSeaGo(){return Capacitor.isNativePlatform();}
@@ -101,55 +127,55 @@ function safeWarn(logger,message){
   try{logger?.warn?.(message);}catch{}
 }
 
-function noteCompensatingServerRevoke(id,ownerId){
-  const pending=readCleanupPending();
-  if(!pending||pending.installationId!==id)return;
-  writeCleanupPending({...pending,serverRevoked:true,ownerId:pending.ownerId||ownerId});
-}
-
-function noteCompensatingFailure(id,ownerId){
-  const currentId=currentInstallationId();
-  const pending=readCleanupPending();
-  if(pending&&pending.installationId===id){
-    writeCleanupPending({...pending,serverRevoked:false,ownerId:pending.ownerId||ownerId});
-    return;
-  }
-  if(currentId&&currentId!==id)return;
-  writeCleanupPending({
-    installationId:id,
-    ownerId,
-    serverRevoked:false,
-    localUnregistered:!currentId
-  });
-  if(!currentId){
-    localStorage.setItem(INSTALLATION_KEY,id);
-    if(ownerId)localStorage.setItem(OWNER_KEY,ownerId);
+async function settleBounded(tasks,timeoutMs){
+  if(!tasks.length)return;
+  const duration=Number.isFinite(Number(timeoutMs))&&Number(timeoutMs)>=0?Number(timeoutMs):DEFAULT_SETTLEMENT_TIMEOUT_MS;
+  if(duration===0)return;
+  let timer;
+  try{
+    await Promise.race([
+      Promise.allSettled(tasks),
+      new Promise(resolve=>{timer=setTimeout(resolve,duration);})
+    ]);
+  }finally{
+    if(timer)clearTimeout(timer);
   }
 }
 
-async function registerToken(info,authToken,platform,id,generation,{
-  serverSubscribe=registerNativePushToken,
-  serverUnsubscribe=unregisterNativePushToken,
-  ownerId="",
-  logger=console
+async function callBounded(factory,timeoutMs){
+  const duration=Number.isFinite(Number(timeoutMs))&&Number(timeoutMs)>0?Number(timeoutMs):DEFAULT_REVOKE_TIMEOUT_MS;
+  let timer;
+  try{
+    return await Promise.race([
+      Promise.resolve().then(factory),
+      new Promise((_,reject)=>{
+        timer=setTimeout(()=>{
+          const error=new Error("Native push lifecycle operation timed out");
+          error.code="NATIVE_PUSH_LIFECYCLE_TIMEOUT";
+          reject(error);
+        },duration);
+      })
+    ]);
+  }finally{
+    if(timer)clearTimeout(timer);
+  }
+}
+
+function confirmedNextEpoch(response,revokeEpoch){
+  const next=validEpoch(response?.lifecycleEpoch);
+  if(next!==revokeEpoch+1)throw new Error("Invalid native push lifecycle fence response");
+  return next;
+}
+
+async function registerToken(info,authToken,platform,id,lifecycleEpoch,generation,{
+  serverSubscribe=registerNativePushToken
 }={}){
   if(generation!==lifecycleGeneration)return;
   const token=text(info?.value);
   if(!token)return;
-  await serverSubscribe({token,platform,installationId:id},authToken);
-  if(generation!==lifecycleGeneration){
-    const state=nativePushCleanupState();
-    const activeSameLifecycleCredential=!state.cleanupPending&&currentInstallationId()===id&&(!ownerId||currentOwnerId()===ownerId);
-    if(activeSameLifecycleCredential)return;
-    try{
-      await serverUnsubscribe(id,authToken);
-      noteCompensatingServerRevoke(id,ownerId);
-    }catch{
-      noteCompensatingFailure(id,ownerId);
-      safeWarn(logger,"Native push compensating revoke failed");
-    }
-    return;
-  }
+  const response=await serverSubscribe({token,platform,installationId:id,lifecycleEpoch},authToken);
+  if(validEpoch(response?.lifecycleEpoch)!==lifecycleEpoch)throw new Error("Invalid native push lifecycle subscribe response");
+  if(generation!==lifecycleGeneration)return;
   localStorage.setItem(REGISTERED_KEY,"1");
 }
 
@@ -157,28 +183,40 @@ export async function enableNativePush(authToken,{
   enabled=isNativePushEnabled(),
   pushNotifications=PushNotifications,
   serverSubscribe=registerNativePushToken,
-  serverUnsubscribe=unregisterNativePushToken,
   platform=Capacitor.getPlatform(),
   ownerId=currentAuthOwnerId(),
+  sessionExpiry=expireAuthenticatedSession,
   logger=console
 }={}){
   if(!enabled)return {supported:false,permission:"disabled",subscribed:false,native:isNativeSeaGo()};
   if(!authToken)throw new Error("Authentication is required for push notifications");
+  const prior=nativePushCleanupState();
+  if(prior.cleanupPending)throw new Error("Native notification credential cleanup is pending");
+  const normalizedOwner=text(ownerId);
+  if(currentOwnerId()&&normalizedOwner&&currentOwnerId()!==normalizedOwner)throw new Error("Native notification installation ownership conflict");
+
   let permissions=await pushNotifications.checkPermissions();
   if(permissions.receive==="prompt")permissions=await pushNotifications.requestPermissions();
   if(permissions.receive!=="granted")throw new Error("Notification permission was not granted");
   const generation=++lifecycleGeneration;
   await clearListeners();
-  const id=installationId();
-  if(ownerId)localStorage.setItem(OWNER_KEY,text(ownerId));
+  const {installationId:id,lifecycleEpoch}=installationState();
+  if(normalizedOwner)localStorage.setItem(OWNER_KEY,normalizedOwner);
   listenerHandles.push(await pushNotifications.addListener("registration",info=>{
     if(generation!==lifecycleGeneration)return;
+    let unauthorized=false;
     let task;
-    task=registerToken(info,authToken,platform,id,generation,{serverSubscribe,serverUnsubscribe,ownerId:text(ownerId),logger})
-      .catch(()=>{
+    task=registerToken(info,authToken,platform,id,lifecycleEpoch,generation,{serverSubscribe})
+      .catch(error=>{
+        unauthorized=error?.status===401;
         if(generation===lifecycleGeneration)localStorage.removeItem(REGISTERED_KEY);
       })
-      .finally(()=>{inFlightRegistrations.delete(task);});
+      .finally(()=>{
+        inFlightRegistrations.delete(task);
+        if(unauthorized){
+          void Promise.resolve().then(()=>sessionExpiry({logger})).catch(()=>{});
+        }
+      });
     inFlightRegistrations.add(task);
     void task;
   }));
@@ -188,7 +226,7 @@ export async function enableNativePush(authToken,{
   listenerHandles.push(await pushNotifications.addListener("pushNotificationActionPerformed",()=>{}));
   listenerHandles.push(await pushNotifications.addListener("pushNotificationReceived",()=>{}));
   await pushNotifications.register();
-  return {supported:true,permission:"granted",subscribed:localStorage.getItem(REGISTERED_KEY)==="1",native:true};
+  return {supported:true,permission:"granted",subscribed:localStorage.getItem(REGISTERED_KEY)==="1",native:true,lifecycleEpoch};
 }
 
 export async function disableNativePush(authToken,{
@@ -197,7 +235,9 @@ export async function disableNativePush(authToken,{
   pushNotifications=PushNotifications,
   serverUnsubscribe=unregisterNativePushToken,
   ownerId=currentAuthOwnerId(),
-  logger=console
+  logger=console,
+  settlementTimeoutMs=DEFAULT_SETTLEMENT_TIMEOUT_MS,
+  revokeTimeoutMs=DEFAULT_REVOKE_TIMEOUT_MS
 }={}){
   if(!native)return {serverRevoked:false,localUnregistered:false,hadCredential:false,cleanupPending:false,cleanupComplete:true,native:false};
 
@@ -212,31 +252,42 @@ export async function disableNativePush(authToken,{
   const id=state.installationId;
   const callerOwner=text(ownerId)||currentAuthOwnerId();
   const pendingOwner=state.ownerId||(state.cleanupPending?"":callerOwner);
-  let pending={
+  const existingPending=readCleanupPending();
+  let pending=existingPending||{
     installationId:id,
     ownerId:pendingOwner,
-    serverRevoked:state.cleanupPending?state.serverRevoked:false,
-    localUnregistered:state.cleanupPending?state.localUnregistered:false
+    lifecycleEpoch:state.lifecycleEpoch||currentLifecycleEpoch()||1,
+    nextLifecycleEpoch:0,
+    fenceConfirmed:false,
+    serverRevoked:false,
+    localUnregistered:false
   };
+  pending={...pending,ownerId:pending.ownerId||pendingOwner};
   writeCleanupPending(pending);
   if(id&&!currentInstallationId())localStorage.setItem(INSTALLATION_KEY,id);
+  if(pending.lifecycleEpoch&&!currentLifecycleEpoch())localStorage.setItem(EPOCH_KEY,String(pending.lifecycleEpoch));
   if(pending.ownerId&&!currentOwnerId())localStorage.setItem(OWNER_KEY,pending.ownerId);
 
   const ownerMatches=!pending.ownerId||(callerOwner&&callerOwner===pending.ownerId);
   if(!pending.serverRevoked&&authToken&&id&&ownerMatches){
     try{
-      await serverUnsubscribe(id,authToken);
-      pending.serverRevoked=true;
+      const response=await callBounded(
+        ()=>serverUnsubscribe({installationId:id,lifecycleEpoch:pending.lifecycleEpoch},authToken),
+        revokeTimeoutMs
+      );
+      const nextLifecycleEpoch=confirmedNextEpoch(response,pending.lifecycleEpoch);
+      pending={...pending,serverRevoked:true,fenceConfirmed:true,nextLifecycleEpoch};
+      localStorage.setItem(EPOCH_KEY,String(nextLifecycleEpoch));
       writeCleanupPending(pending);
     }catch{}
   }
 
   const currentId=currentInstallationId();
   const mayUnregisterLocally=android&&(!currentId||currentId===id);
-  if(mayUnregisterLocally){
+  if(mayUnregisterLocally&&!pending.localUnregistered){
     try{
       await pushNotifications.unregister();
-      pending.localUnregistered=true;
+      pending={...pending,localUnregistered:true};
       localStorage.removeItem(REGISTERED_KEY);
       writeCleanupPending(pending);
     }catch{
@@ -244,16 +295,7 @@ export async function disableNativePush(authToken,{
     }
   }
 
-  if(registrationsToSettle.length)await Promise.allSettled(registrationsToSettle);
-  const settledPending=readCleanupPending();
-  if(settledPending&&settledPending.installationId===id){
-    pending={
-      ...pending,
-      ownerId:settledPending.ownerId||pending.ownerId,
-      serverRevoked:pending.serverRevoked||settledPending.serverRevoked,
-      localUnregistered:pending.localUnregistered||settledPending.localUnregistered
-    };
-  }
+  await settleBounded(registrationsToSettle,settlementTimeoutMs);
 
   const complete=cleanupComplete(pending,{android});
   if(complete)clearCleanupForInstallation(id);
@@ -261,10 +303,20 @@ export async function disableNativePush(authToken,{
   await clearListeners();
   return {
     serverRevoked:pending.serverRevoked,
+    fenceConfirmed:pending.fenceConfirmed,
     localUnregistered:pending.localUnregistered,
+    lifecycleEpoch:pending.lifecycleEpoch,
+    nextLifecycleEpoch:pending.nextLifecycleEpoch,
     hadCredential:true,
     cleanupPending:!complete,
     cleanupComplete:complete,
     native:true
   };
 }
+
+export const nativePushLifecycleInternals={
+  readCleanupPending,
+  validEpoch,
+  settleBounded,
+  callBounded
+};
