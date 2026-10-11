@@ -29,14 +29,15 @@ function money(value, currency = "JOD") {
   return `${Number(value || 0).toFixed(2)} ${safeText(currency, "JOD")}`;
 }
 
-export function ticketPdfPresentation(booking) {
-  const lifecycle = deriveTicketLifecycle(booking);
+export function ticketPdfPresentation(booking, options) {
+  const lifecycle = deriveTicketLifecycle(booking, options);
   const labels = {
     ready: "READY FOR CHECK-IN",
     checked_in: "USED",
     booking_cancelled: "BOOKING CANCELLED",
     refunded: "REFUNDED",
     departure_cancelled: "DEPARTURE CANCELLED",
+    departure_expired: "DEPARTURE EXPIRED",
     trip_completed: "TRIP COMPLETED",
     unavailable: "TICKET UNAVAILABLE"
   };

@@ -1,6 +1,5 @@
 import express from "express";
 import Booking from "../models/Booking.js";
-import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireProviderCapability } from "../services/providerAccess.js";
 import { auditProviderAction } from "../services/providerAudit.js";
@@ -19,6 +18,11 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function idsMatch(left, right) {
+  if (left === undefined || left === null || right === undefined || right === null) return false;
+  return String(left) === String(right?._id || right);
+}
+
 async function loadTicket(token) {
   const payload = verifyTicketToken(token);
   const booking = await Booking.findById(payload.bookingId)
@@ -27,7 +31,31 @@ async function loadTicket(token) {
     .populate({ path: "providerId", select: "businessName ownerUserId" })
     .populate({ path: "departureId", select: "startsAt status" });
   if (!booking) throw Object.assign(new Error("Ticket not found"), { statusCode: 404 });
+
+  // Compact v2 tokens bind only to bookingId. Legacy v1 payloads may also carry
+  // provider/departure identifiers; when present, require them to agree with the
+  // persisted booking instead of trusting stale or mismatched signed metadata.
+  if (payload.departureId !== undefined && !idsMatch(payload.departureId, booking.departureId)) {
+    throw Object.assign(new Error("Invalid ticket binding"), { statusCode: 400 });
+  }
+  if (payload.providerId !== undefined && !idsMatch(payload.providerId, booking.providerId)) {
+    throw Object.assign(new Error("Invalid ticket binding"), { statusCode: 400 });
+  }
+
   return { payload, booking };
+}
+
+function checkInRejection(lifecycle, checkedInAt = null) {
+  if (lifecycle.state === "checked_in") {
+    return { error: "Ticket already checked in", code: "already_checked_in", checkedInAt };
+  }
+  if (lifecycle.state === "departure_cancelled") {
+    return { error: "Departure is not open for check-in", code: "departure_cancelled" };
+  }
+  if (lifecycle.state === "departure_expired") {
+    return { error: "Departure is no longer open for check-in", code: "departure_expired" };
+  }
+  return { error: "Ticket is not valid for check-in", code: "ticket_not_boardable" };
 }
 
 router.get("/pdf", async (req, res, next) => {
@@ -60,6 +88,8 @@ router.get("/validate", async (req, res, next) => {
     const departure = booking.departureId || {};
     const lifecycle = deriveTicketLifecycle(booking);
     const response = {
+      signatureValid: true,
+      boardable: lifecycle.usable,
       valid: lifecycle.usable,
       status: booking.status,
       lifecycleState: lifecycle.state,
@@ -82,9 +112,11 @@ router.get("/validate", async (req, res, next) => {
         ? "Ticket already used"
         : lifecycle.state === "departure_cancelled"
           ? "Departure cancelled"
-          : lifecycle.state === "trip_completed"
-            ? "Trip completed"
-            : "Ticket not valid";
+          : lifecycle.state === "departure_expired"
+            ? "Departure expired"
+            : lifecycle.state === "trip_completed"
+              ? "Trip completed"
+              : "Ticket not valid";
     const stateClass = lifecycle.state === "ready" ? "ok" : lifecycle.state === "checked_in" ? "warn" : "bad";
     res.set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
     res.set("X-Content-Type-Options","nosniff");
@@ -128,6 +160,8 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
     const lifecycle = deriveTicketLifecycle(booking);
 
     res.json({
+      signatureValid: true,
+      boardable: lifecycle.usable,
       valid: lifecycle.usable,
       status: booking.status,
       lifecycleState: lifecycle.state,
@@ -154,40 +188,31 @@ router.post("/inspect", requireAuth, requireRole("provider","admin"), async (req
 router.post("/check-in", requireAuth, requireRole("provider","admin"), async (req, res, next) => {
   try {
     const { booking } = await loadTicket(req.body.token);
-    const lifecycle = deriveTicketLifecycle(booking);
+    let providerAccess = null;
 
-    if (booking.status !== "confirmed") {
-      return res.status(409).json({ error: "Ticket is not valid for check-in" });
-    }
-    if (lifecycle.state === "checked_in") {
-      return res.status(409).json({
-        error: "Ticket already checked in",
-        checkedInAt: booking.checkedInAt
-      });
-    }
-    if (!booking.departureId || booking.departureId.status !== "scheduled") {
-      return res.status(409).json({ error: "Departure is not open for check-in" });
-    }
-    if (!lifecycle.usable) {
-      return res.status(409).json({ error: "Ticket is not valid for check-in" });
-    }
-
+    // Authorize before returning lifecycle detail so a provider cannot probe the
+    // state of another provider's ticket merely by possessing its QR token.
     if (req.user.role === "provider") {
-      const access=await requireProviderCapability(req.user,"checkin");
-      const provider=access?.provider;
+      providerAccess=await requireProviderCapability(req.user,"checkin");
+      const provider=providerAccess?.provider;
       if (!provider || provider._id.toString() !== booking.providerId._id.toString()) {
         return res.status(403).json({ error: "This ticket belongs to another provider" });
       }
     }
 
-    const checkedAt=new Date();
+    const checkedAt = new Date();
+    const lifecycle = deriveTicketLifecycle(booking, { now: checkedAt });
+    if (!lifecycle.usable) {
+      return res.status(409).json(checkInRejection(lifecycle, booking.checkedInAt || null));
+    }
+
     const claimed=await Booking.findOneAndUpdate(
       {_id:booking._id,status:"confirmed",checkedInAt:null},
       {$set:{checkedInAt:checkedAt,checkedInBy:req.user._id},$inc:{checkInCount:1}},
       {new:true}
     );
-    if(!claimed)return res.status(409).json({error:"Ticket already checked in"});
-    if(req.user.role==="provider"){const access=await requireProviderCapability(req.user,"checkin");if(access)await auditProviderAction({access,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats}});}
+    if(!claimed)return res.status(409).json({error:"Ticket already checked in",code:"already_checked_in"});
+    if(providerAccess)await auditProviderAction({access:providerAccess,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats}});
     res.json({
       ok:true,
       bookingId:claimed._id,

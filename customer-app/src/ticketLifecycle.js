@@ -4,6 +4,7 @@ const PRESENTATION = Object.freeze({
   booking_cancelled: { label: "Booking cancelled", clientStatus: "cancelled", tone: "cancelled" },
   refunded: { label: "Refunded", clientStatus: "refunded", tone: "refunded" },
   departure_cancelled: { label: "Departure cancelled", clientStatus: "Departure_cancelled", tone: "cancelled" },
+  departure_expired: { label: "Trip ended", clientStatus: "Trip_completed", tone: "past" },
   trip_completed: { label: "Trip completed", clientStatus: "Trip_completed", tone: "past" },
   unavailable: { label: "Ticket unavailable", clientStatus: "Ticket_unavailable", tone: "unavailable" }
 });

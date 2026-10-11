@@ -5,6 +5,7 @@ import Payment from "../models/Payment.js";
 import User from "../models/User.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { normalizeJordanPhone, phoneCandidates } from "../services/phoneOtp.js";
+import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
 
 const router = express.Router();
 const DEFAULT_LIMIT = 20;
@@ -37,16 +38,15 @@ function ticketTruth(booking) {
   const signingConfigured = Boolean(process.env.TICKET_SIGNING_SECRET || process.env.JWT_SECRET);
   const eligible = ["confirmed", "cancelled", "refunded"].includes(booking.status);
   const available = eligible && signingConfigured;
-  const checkedIn = Boolean(booking.checkedInAt);
-  const departureStatus = booking.departureId?.status || null;
+  const lifecycle = deriveTicketLifecycle(booking);
 
   let status = "unavailable";
   if (available) {
-    if (booking.status === "cancelled") status = "cancelled";
-    else if (booking.status === "refunded") status = "refunded";
-    else if (checkedIn) status = "used";
-    else if (departureStatus !== "scheduled") status = "invalid";
-    else status = "valid";
+    if (lifecycle.state === "booking_cancelled") status = "cancelled";
+    else if (lifecycle.state === "refunded") status = "refunded";
+    else if (lifecycle.state === "checked_in") status = "used";
+    else if (lifecycle.state === "ready") status = "valid";
+    else status = "invalid";
   }
 
   return {
@@ -54,7 +54,7 @@ function ticketTruth(booking) {
     persistedRecord: false,
     available,
     status,
-    used: checkedIn,
+    used: lifecycle.used,
     checkedInAt: booking.checkedInAt || null,
     checkedInBy: booking.checkedInBy ? {
       id: booking.checkedInBy._id || booking.checkedInBy,
@@ -244,7 +244,7 @@ router.get("/:bookingId", async (req, res, next) => {
       .select("customerId customerSnapshot providerId tripId departureId seats adults children mealPlan status pricing checkedInAt checkedInBy checkInCount cancellation createdAt updatedAt")
       .populate({ path: "customerId", select: "name email phone phoneNormalized" })
       .populate({ path: "providerId", select: "businessName status settings.departureLocation" })
-      .populate({ path: "tripId", select: "titleAr titleEn vesselName active platformStatus departureLocation providerId" })
+      .populate({ path: "tripId", select: "titleAr titleEn vesselName durationMinutes active platformStatus departureLocation providerId" })
       .populate({ path: "departureId", select: "startsAt capacity reservedSeats salesClosed status" })
       .populate({ path: "checkedInBy", select: "name role" });
 

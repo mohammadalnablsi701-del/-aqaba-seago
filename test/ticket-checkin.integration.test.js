@@ -36,10 +36,17 @@ test('ticket provider isolation and exactly-once check-in',{skip:!uri},async t=>
     pricing:{currency:'JOD',pricePerPerson:20,adultPrice:20,commissionType:'fixed_per_person',commissionValue:4}
   });
   const dep=await Departure.create({tripId:trip._id,startsAt:new Date(Date.now()+86400000),capacity:10,reservedSeats:2,status:'scheduled'});
+  const expiredDep=await Departure.create({tripId:trip._id,startsAt:new Date(Date.now()-2*3600000),capacity:10,reservedSeats:1,status:'scheduled'});
   const booking=await Booking.create({
     customerId:customer._id,providerId:provider1._id,tripId:trip._id,departureId:dep._id,
     seats:2,adults:2,children:0,mealPlan:'without_buffet',status:'confirmed',
     holdExpiresAt:new Date(Date.now()+300000),pricing:{currency:'JOD',grossAmount:40,commissionAmount:8,providerNetAmount:32},
+    idempotencyKey:crypto.randomUUID()
+  });
+  const expiredBooking=await Booking.create({
+    customerId:customer._id,providerId:provider1._id,tripId:trip._id,departureId:expiredDep._id,
+    seats:1,adults:1,children:0,mealPlan:'without_buffet',status:'confirmed',
+    holdExpiresAt:new Date(Date.now()+300000),pricing:{currency:'JOD',grossAmount:20,commissionAmount:4,providerNetAmount:16},
     idempotencyKey:crypto.randomUUID()
   });
   const ticket=signTicketToken(booking);
@@ -62,6 +69,18 @@ test('ticket provider isolation and exactly-once check-in',{skip:!uri},async t=>
     assert.equal(fresh.checkInCount,0);
   });
 
+  await t.test('manual provider check-in rejects a stale scheduled departure',async()=>{
+    const r=await fetch(`http://127.0.0.1:${port}/api/providers/me/bookings/${expiredBooking._id}/check-in`,{
+      method:'POST',headers:{authorization:`Bearer ${token1}`,'content-type':'application/json'},body:'{}'
+    });
+    assert.equal(r.status,409);
+    const body=await r.json();
+    assert.equal(body.code,'departure_expired');
+    const fresh=await Booking.findById(expiredBooking._id);
+    assert.equal(fresh.checkedInAt??null,null);
+    assert.equal(fresh.checkInCount,0);
+  });
+
   await t.test('two simultaneous scans allow exactly one successful check-in',async()=>{
     const [a,b]=await Promise.all([call(token1),call(token1)]);
     const statuses=[a.status,b.status].sort((x,y)=>x-y);
@@ -76,6 +95,8 @@ test('ticket provider isolation and exactly-once check-in',{skip:!uri},async t=>
     const before=await Booking.findById(booking._id);
     const r=await call(token1);
     assert.equal(r.status,409);
+    const body=await r.json();
+    assert.equal(body.code,'already_checked_in');
     const after=await Booking.findById(booking._id);
     assert.equal(after.checkInCount,1);
     assert.equal(after.checkedInAt.getTime(),before.checkedInAt.getTime());

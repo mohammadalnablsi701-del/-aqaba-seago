@@ -54,7 +54,8 @@ function toCustomerBookingDto(row, reqUser, baseUrl) {
   const lifecycle = deriveTicketLifecycle({
     status: source.status,
     checkedInAt: source.checkedInAt,
-    departureId
+    departureId,
+    tripId: source.tripId
   });
   const ticketToken = signTicketToken(row);
 

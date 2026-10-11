@@ -5,6 +5,7 @@ import { rateLimit } from "express-rate-limit";
 import { rejectUnsafeRequestKeys } from "./middleware/requestSecurity.js";
 import { logRequestError, publicErrorResponse } from "./utils/errorLogging.js";
 import authRoutes from "./routes/auth.js";
+import providerCheckinRoutes from "./routes/providerCheckin.js";
 import providerRoutes from "./routes/providers.js";
 import adminRoutes from "./routes/admin.js";
 import adminAuditRoutes from "./routes/adminAudit.js";
@@ -59,6 +60,7 @@ export function createApp() {
   app.use("/api/auth",authLimiter);
   app.get("/health", (_req, res) => res.json({ok:true,service:"aqaba-seago-api",version:"0.3.1",commit:process.env.RAILWAY_GIT_COMMIT_SHA||process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||null}));
   app.use("/api/auth", authRoutes);
+  app.use("/api/providers", providerCheckinRoutes);
   app.use("/api/providers", providerRoutes);
   app.use("/api/admin/operations", adminDeparturesRoutes);
   app.use("/api/admin/operations", operationsRoutes);
