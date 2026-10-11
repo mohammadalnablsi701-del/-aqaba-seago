@@ -7,6 +7,7 @@ import { expireAuthenticatedSession, reconcileAuthPush } from "../src/api.js";
 import { revokeCurrentNotificationCredentials } from "../src/notificationCredentialLifecycle.js";
 
 const INSTALLATION_KEY="seago_native_installation_id";
+const EPOCH_KEY="seago_native_push_lifecycle_epoch";
 const REGISTERED_KEY="seago_native_push_registered";
 const OWNER_KEY="seago_native_push_owner_id";
 const CLEANUP_PENDING_KEY="seago_native_push_cleanup_pending";
@@ -33,14 +34,22 @@ function deferred(){
   const promise=new Promise((res,rej)=>{resolve=res;reject=rej;});
   return {promise,resolve,reject};
 }
+function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+async function settlesWithin(promise,ms=250){
+  return Promise.race([
+    promise,
+    delay(ms).then(()=>{throw new Error("operation did not settle before guard timeout");})
+  ]);
+}
 
 function seedAuth(owner="A",token=`auth-${owner}`){
   localStorage.setItem(AUTH_KEY,JSON.stringify({token,user:{id:owner}}));
 }
 
-function seedNativeState({authToken="auth-A",ownerId="A",registered=true}={}){
+function seedNativeState({authToken="auth-A",ownerId="A",registered=true,lifecycleEpoch=1}={}){
   localStorage.clear();
   localStorage.setItem(INSTALLATION_KEY,INSTALLATION);
+  localStorage.setItem(EPOCH_KEY,String(lifecycleEpoch));
   if(registered)localStorage.setItem(REGISTERED_KEY,"1");
   if(ownerId)localStorage.setItem(OWNER_KEY,ownerId);
   if(authToken)localStorage.setItem(AUTH_KEY,JSON.stringify({token:authToken,user:{id:ownerId||"A"}}));
@@ -52,109 +61,126 @@ function pendingState(){
   return raw?JSON.parse(raw):null;
 }
 
-function nativeCleanupOptions({serverUnsubscribe,unregister,logger,ownerId="A"}={}){
+function successfulRevoke({expectedEpoch}={}){
+  return async ({installationId,lifecycleEpoch},auth)=>{
+    assert.equal(installationId,INSTALLATION);
+    if(expectedEpoch!==undefined)assert.equal(lifecycleEpoch,expectedEpoch);
+    assert.ok(auth);
+    return {ok:true,revoked:true,lifecycleEpoch:lifecycleEpoch+1};
+  };
+}
+
+function nativeCleanupOptions({serverUnsubscribe,unregister,logger,ownerId="A",settlementTimeoutMs=20,revokeTimeoutMs=100}={}){
   return {
     native:true,
     android:true,
     ownerId,
-    serverUnsubscribe:serverUnsubscribe||(async()=>{}),
+    settlementTimeoutMs,
+    revokeTimeoutMs,
+    serverUnsubscribe:serverUnsubscribe||successfulRevoke(),
     pushNotifications:{unregister:unregister||(async()=>{})},
     logger:logger||{warn(){}}
   };
 }
 
-// Existing logout path still revokes server first, then local registration.
+function fakePushHarness(){
+  const listeners=new Map();
+  return {
+    listeners,
+    push:{
+      checkPermissions:async()=>({receive:"granted"}),
+      requestPermissions:async()=>({receive:"granted"}),
+      addListener:async(name,callback)=>{
+        listeners.set(name,callback);
+        return {remove:async()=>{listeners.delete(name);}};
+      },
+      register:async()=>{},
+      unregister:async()=>{}
+    }
+  };
+}
+
+// Existing logout path still fences the server before local unregister and records the returned next epoch.
 seedNativeState();
 {
   const order=[];
   const settled=await revokeCurrentNotificationCredentials("auth-A",{
     androidNative:true,
     disableNotifications:token=>disableNativePush(token,nativeCleanupOptions({
-      serverUnsubscribe:async(id,auth)=>{assert.equal(id,INSTALLATION);assert.equal(auth,"auth-A");order.push("server");},
+      serverUnsubscribe:async ({installationId,lifecycleEpoch},auth)=>{
+        assert.equal(installationId,INSTALLATION);
+        assert.equal(lifecycleEpoch,1);
+        assert.equal(auth,"auth-A");
+        order.push("server");
+        return {lifecycleEpoch:2};
+      },
       unregister:async()=>{order.push("unregister");}
     }))
   });
   assert.equal(settled[0].status,"fulfilled");
   assert.equal(settled[0].value.cleanupComplete,true);
+  assert.equal(settled[0].value.fenceConfirmed,true);
   assert.deepEqual(order,["server","unregister"]);
   assert.equal(localStorage.getItem(INSTALLATION_KEY),null);
   assert.equal(localStorage.getItem(CLEANUP_PENDING_KEY),null);
 }
 
-// P1-A: subscribe is in flight, logout cleanup finishes first, then old subscribe completes.
+// P1-A/P1-B: a delayed old subscribe is rejected by the server epoch; no compensating revoke is security-critical.
 localStorage.clear();
 seedAuth("A","auth-A");
 {
+  const {push,listeners}=fakePushHarness();
   const subscribeStarted=deferred();
   const releaseSubscribe=deferred();
-  const cleanupServerPass=deferred();
-  const compensated=deferred();
-  const bindings=new Map();
-  const unsubscribeCalls=[];
-  const listeners=new Map();
-  const fakePush={
-    checkPermissions:async()=>({receive:"granted"}),
-    requestPermissions:async()=>({receive:"granted"}),
-    addListener:async(name,callback)=>{
-      listeners.set(name,callback);
-      return {remove:async()=>{listeners.delete(name);}};
-    },
-    register:async()=>{},
-    unregister:async()=>{}
-  };
-  const serverSubscribe=async({installationId},auth)=>{
-    assert.equal(auth,"auth-A");
-    subscribeStarted.resolve(installationId);
+  let serverEpoch=1;
+  let serverActive=false;
+  let unsubscribeCalls=0;
+  const serverSubscribe=async ({lifecycleEpoch})=>{
+    subscribeStarted.resolve();
     await releaseSubscribe.promise;
-    bindings.set(installationId,"A");
+    if(lifecycleEpoch!==serverEpoch){
+      const error=new Error("stale lifecycle");
+      error.status=410;
+      throw error;
+    }
+    serverActive=true;
+    return {lifecycleEpoch};
   };
-  const serverUnsubscribe=async(id,auth)=>{
-    unsubscribeCalls.push({id,auth});
-    bindings.delete(id);
-    if(unsubscribeCalls.length===1)cleanupServerPass.resolve();
-    if(unsubscribeCalls.length===2)compensated.resolve();
+  const serverUnsubscribe=async ({lifecycleEpoch})=>{
+    unsubscribeCalls++;
+    if(lifecycleEpoch===serverEpoch){
+      serverEpoch++;
+      serverActive=false;
+      return {lifecycleEpoch:serverEpoch};
+    }
+    if(lifecycleEpoch+1===serverEpoch&&!serverActive)return {lifecycleEpoch:serverEpoch};
+    throw new Error("unexpected epoch");
   };
 
   await enableNativePush("auth-A",{
-    enabled:true,pushNotifications:fakePush,serverSubscribe,serverUnsubscribe,platform:"android",ownerId:"A",logger:{warn(){}}
+    enabled:true,pushNotifications:push,serverSubscribe,platform:"android",ownerId:"A",logger:{warn(){}}
   });
-  const registrationHandler=listeners.get("registration");
-  assert.equal(typeof registrationHandler,"function");
-  registrationHandler({value:"raw-fcm-token-for-race-test-1234567890"});
-  const oldInstallation=await subscribeStarted.promise;
+  listeners.get("registration")({value:"raw-fcm-token-for-race-test-1234567890"});
+  await subscribeStarted.promise;
 
-  const cleanupPromise=disableNativePush("auth-A",nativeCleanupOptions({serverUnsubscribe,unregister:async()=>{}}));
-  await cleanupServerPass.promise;
-  assert.equal(bindings.has(oldInstallation),false);
-  assert.equal(nativePushCleanupState().cleanupPending,true);
-
-  // The old subscribe now finishes after the first unsubscribe. Cleanup stays pending
-  // until the stale callback performs its compensating revoke.
-  releaseSubscribe.resolve();
-  await compensated.promise;
-  const cleanup=await cleanupPromise;
+  const cleanup=await settlesWithin(disableNativePush("auth-A",nativeCleanupOptions({
+    serverUnsubscribe,unregister:async()=>{},settlementTimeoutMs:10
+  })));
   assert.equal(cleanup.cleanupComplete,true);
-  assert.equal(bindings.has(oldInstallation),false);
+  assert.equal(cleanup.serverRevoked,true);
+  assert.equal(serverEpoch,2);
+  assert.equal(serverActive,false);
+  assert.equal(unsubscribeCalls,1);
+
+  releaseSubscribe.resolve();
+  await delay(0);
+  await delay(0);
+  assert.equal(serverActive,false);
+  assert.equal(unsubscribeCalls,1);
   assert.equal(localStorage.getItem(REGISTERED_KEY),null);
-
-  // A later B lifecycle starts only after A's in-flight registration is settled.
-  localStorage.setItem(INSTALLATION_KEY,INSTALLATION_B);
-  localStorage.setItem(REGISTERED_KEY,"1");
-  localStorage.setItem(OWNER_KEY,"B");
-  bindings.set(INSTALLATION_B,"B");
-  await Promise.resolve();
-
-  assert.equal(bindings.get(INSTALLATION_B),"B");
-  assert.deepEqual(unsubscribeCalls,[
-    {id:oldInstallation,auth:"auth-A"},
-    {id:oldInstallation,auth:"auth-A"}
-  ]);
-  assert.equal(localStorage.getItem(INSTALLATION_KEY),INSTALLATION_B);
-  assert.equal(localStorage.getItem(OWNER_KEY),"B");
-  assert.equal(localStorage.getItem(REGISTERED_KEY),"1");
 }
 
-// P1-B1: server revoke fails, local unregister succeeds => retry metadata is preserved.
+// Server revoke failure cannot be converted into cleanupComplete by stale local state.
 seedNativeState();
 {
   const result=await disableNativePush("auth-A",nativeCleanupOptions({
@@ -162,32 +188,53 @@ seedNativeState();
     unregister:async()=>{}
   }));
   assert.equal(result.serverRevoked,false);
+  assert.equal(result.fenceConfirmed,false);
   assert.equal(result.localUnregistered,true);
   assert.equal(result.cleanupPending,true);
   assert.equal(result.cleanupComplete,false);
-  assert.equal(localStorage.getItem(INSTALLATION_KEY),INSTALLATION);
-  assert.equal(localStorage.getItem(OWNER_KEY),"A");
-  assert.equal(localStorage.getItem(REGISTERED_KEY),null);
-  assert.deepEqual(pendingState(),{installationId:INSTALLATION,ownerId:"A",serverRevoked:false,localUnregistered:true});
+  const pending=pendingState();
+  assert.equal(pending.lifecycleEpoch,1);
+  assert.equal(pending.fenceConfirmed,false);
+  assert.equal(pending.serverRevoked,false);
 }
 
-// P1-B2: server revoke succeeds, local unregister fails => not falsely fully cleaned.
+// A legacy/stale serverRevoked=true boolean without the new fence confirmation is never trusted.
+seedNativeState();
+localStorage.setItem(CLEANUP_PENDING_KEY,JSON.stringify({
+  installationId:INSTALLATION,ownerId:"A",serverRevoked:true,localUnregistered:true
+}));
+{
+  let revokeCalls=0;
+  const result=await disableNativePush("auth-A",nativeCleanupOptions({
+    serverUnsubscribe:async ({lifecycleEpoch})=>{revokeCalls++;return {lifecycleEpoch:lifecycleEpoch+1};},
+    unregister:async()=>{throw new Error("must not run because local state was already unregistered");}
+  }));
+  assert.equal(revokeCalls,1);
+  assert.equal(result.cleanupComplete,true);
+  assert.equal(result.fenceConfirmed,true);
+}
+
+// Server fence succeeds while local unregister fails: cleanup remains pending, but fence truth is durable.
 seedNativeState();
 {
   const result=await disableNativePush("auth-A",nativeCleanupOptions({
-    serverUnsubscribe:async()=>{},
+    serverUnsubscribe:successfulRevoke({expectedEpoch:1}),
     unregister:async()=>{throw new Error("native failure");}
   }));
   assert.equal(result.serverRevoked,true);
+  assert.equal(result.fenceConfirmed,true);
   assert.equal(result.localUnregistered,false);
   assert.equal(result.cleanupPending,true);
   assert.equal(result.cleanupComplete,false);
-  assert.equal(localStorage.getItem(INSTALLATION_KEY),INSTALLATION);
-  assert.equal(localStorage.getItem(REGISTERED_KEY),"1");
-  assert.deepEqual(pendingState(),{installationId:INSTALLATION,ownerId:"A",serverRevoked:true,localUnregistered:false});
+  const pending=pendingState();
+  assert.equal(pending.lifecycleEpoch,1);
+  assert.equal(pending.nextLifecycleEpoch,2);
+  assert.equal(pending.fenceConfirmed,true);
+  assert.equal(pending.serverRevoked,true);
+  assert.equal(localStorage.getItem(EPOCH_KEY),"2");
 }
 
-// P1-B3/B4/B5: dual failure retains metadata; later retry succeeds; repeated retry is idempotent.
+// Dual failure retains metadata; a same-owner retry can establish the fence and complete cleanup.
 seedNativeState();
 {
   let serverCalls=0;
@@ -197,27 +244,120 @@ seedNativeState();
     unregister:async()=>{unregisterCalls++;throw new Error("local down");}
   }));
   assert.equal(failed.cleanupPending,true);
-  assert.equal(localStorage.getItem(INSTALLATION_KEY),INSTALLATION);
-  assert.equal(localStorage.getItem(REGISTERED_KEY),"1");
-  assert.deepEqual(pendingState(),{installationId:INSTALLATION,ownerId:"A",serverRevoked:false,localUnregistered:false});
+  assert.equal(failed.fenceConfirmed,false);
 
   const recovered=await disableNativePush("auth-A",nativeCleanupOptions({
-    serverUnsubscribe:async()=>{serverCalls++;},
+    serverUnsubscribe:async ({lifecycleEpoch})=>{serverCalls++;return {lifecycleEpoch:lifecycleEpoch+1};},
     unregister:async()=>{unregisterCalls++;}
   }));
   assert.equal(recovered.cleanupComplete,true);
   assert.equal(localStorage.getItem(CLEANUP_PENDING_KEY),null);
   assert.equal(localStorage.getItem(INSTALLATION_KEY),null);
-  assert.equal(localStorage.getItem(REGISTERED_KEY),null);
+  assert.equal(serverCalls,2);
+  assert.equal(unregisterCalls,2);
 
   const repeated=await disableNativePush("auth-A",nativeCleanupOptions({
-    serverUnsubscribe:async()=>{serverCalls++;},
-    unregister:async()=>{unregisterCalls++;}
+    serverUnsubscribe:async()=>{serverCalls++;throw new Error("must not run");},
+    unregister:async()=>{unregisterCalls++;throw new Error("must not run");}
   }));
   assert.equal(repeated.hadCredential,false);
   assert.equal(repeated.cleanupComplete,true);
   assert.equal(serverCalls,2);
   assert.equal(unregisterCalls,2);
+}
+
+// P1-C: native subscribe 401 schedules expiry after the registration task leaves the in-flight set.
+localStorage.clear();
+seedAuth("A","auth-A");
+{
+  const {push,listeners}=fakePushHarness();
+  const expiryDone=deferred();
+  let expiryCalls=0;
+  const unauthorized=new Error("expired");
+  unauthorized.status=401;
+  await enableNativePush("auth-A",{
+    enabled:true,
+    pushNotifications:push,
+    serverSubscribe:async()=>{throw unauthorized;},
+    platform:"android",
+    ownerId:"A",
+    sessionExpiry:async()=>{
+      expiryCalls++;
+      const result=await disableNativePush("",nativeCleanupOptions({
+        ownerId:"A",
+        serverUnsubscribe:async()=>{throw new Error("must not use expired auth");},
+        unregister:async()=>{},
+        settlementTimeoutMs:1000
+      }));
+      expiryDone.resolve(result);
+      return result;
+    },
+    logger:{warn(){}}
+  });
+  listeners.get("registration")({value:"raw-fcm-token-401-test-1234567890"});
+  const result=await settlesWithin(expiryDone.promise,250);
+  assert.equal(expiryCalls,1);
+  assert.equal(result.cleanupPending,true);
+  assert.equal(result.localUnregistered,true);
+}
+
+// A hung subscribe cannot block logout forever; successful server fence is the security boundary.
+localStorage.clear();
+seedAuth("A","auth-A");
+{
+  const {push,listeners}=fakePushHarness();
+  const started=deferred();
+  const never=new Promise(()=>{});
+  await enableNativePush("auth-A",{
+    enabled:true,
+    pushNotifications:push,
+    serverSubscribe:async()=>{started.resolve();return never;},
+    platform:"android",
+    ownerId:"A",
+    logger:{warn(){}}
+  });
+  listeners.get("registration")({value:"raw-fcm-token-hung-test-1234567890"});
+  await started.promise;
+  const result=await settlesWithin(disableNativePush("auth-A",nativeCleanupOptions({
+    serverUnsubscribe:successfulRevoke({expectedEpoch:1}),
+    unregister:async()=>{},
+    settlementTimeoutMs:15
+  })),250);
+  assert.equal(result.cleanupComplete,true);
+  assert.equal(result.fenceConfirmed,true);
+  assert.equal(localStorage.getItem(INSTALLATION_KEY),null);
+}
+
+// Restart durability: lost revoke response leaves pending epoch N; a fresh module retries N and accepts idempotent N+1.
+seedNativeState();
+{
+  let serverEpoch=2;
+  const first=await disableNativePush("auth-A",nativeCleanupOptions({
+    serverUnsubscribe:async ({lifecycleEpoch})=>{
+      assert.equal(lifecycleEpoch,1);
+      throw new Error("response lost after server committed the fence");
+    },
+    unregister:async()=>{}
+  }));
+  assert.equal(first.cleanupComplete,false);
+  assert.equal(first.serverRevoked,false);
+  assert.equal(pendingState().lifecycleEpoch,1);
+
+  const restarted=await import(`${pathToFileURL(fileURLToPath(new URL("../src/nativePush.js",import.meta.url))).href}?restart=${Date.now()}`);
+  const recoveredState=restarted.nativePushCleanupState();
+  assert.equal(recoveredState.cleanupPending,true);
+  assert.equal(recoveredState.lifecycleEpoch,1);
+  const retry=await restarted.disableNativePush("auth-A",nativeCleanupOptions({
+    serverUnsubscribe:async ({lifecycleEpoch})=>{
+      assert.equal(lifecycleEpoch,1);
+      assert.equal(serverEpoch,2);
+      return {lifecycleEpoch:serverEpoch};
+    },
+    unregister:async()=>{throw new Error("local unregister was already persisted");}
+  }));
+  assert.equal(retry.cleanupComplete,true);
+  assert.equal(retry.nextLifecycleEpoch,2);
+  assert.equal(localStorage.getItem(CLEANUP_PENDING_KEY),null);
 }
 
 // Session expiry records owner metadata even though the expired token is not reused.
@@ -241,7 +381,7 @@ seedNativeState();
   assert.deepEqual(sessionEvents,["seago:session-expired"]);
 }
 
-// P1-C1/C2/C4/C6: Android + push disabled/configless + no credential => auth succeeds and unregister is never called.
+// Prior P1-C regression: Android push disabled/configless + no prior credential does not block authentication.
 localStorage.clear();
 {
   let cleanupCalls=0;
@@ -264,7 +404,7 @@ localStorage.clear();
   assert.equal(unregisterCalls,0);
 }
 
-// P1-C3: a real prior credential still forces cleanup using the old account token.
+// A real prior credential still forces cleanup using the old account token.
 seedNativeState();
 {
   let cleanupCalls=0;
@@ -275,7 +415,7 @@ seedNativeState();
       cleanupCalls++;
       assert.equal(token,"auth-A");
       assert.equal(options?.ownerId,"A");
-      return disableNativePush(token,nativeCleanupOptions({serverUnsubscribe:async()=>{},unregister:async()=>{},ownerId:"A"}));
+      return disableNativePush(token,nativeCleanupOptions({serverUnsubscribe:successfulRevoke({expectedEpoch:1}),unregister:async()=>{},ownerId:"A"}));
     }
   });
   assert.equal(result.token,"auth-B");
@@ -283,7 +423,7 @@ seedNativeState();
   assert.equal(nativePushCleanupState().hadCredential,false);
 }
 
-// P1-C5: pending cleanup is retried with a new token only when it is the same owner.
+// Pending cleanup is retried with a new token only when it belongs to the same owner.
 seedNativeState();
 await disableNativePush("auth-A",nativeCleanupOptions({
   serverUnsubscribe:async()=>{throw new Error("temporary server failure");},
@@ -297,7 +437,7 @@ localStorage.removeItem(AUTH_KEY);
     nativeState:()=>nativePushCleanupState(),
     nativeCleanup:(token,options)=>{
       retryAuth=token;
-      return disableNativePush(token,nativeCleanupOptions({serverUnsubscribe:async()=>{},unregister:async()=>{},ownerId:options?.ownerId}));
+      return disableNativePush(token,nativeCleanupOptions({serverUnsubscribe:successfulRevoke({expectedEpoch:1}),unregister:async()=>{},ownerId:options?.ownerId}));
     }
   });
   assert.equal(retryAuth,"auth-A2");
@@ -320,7 +460,7 @@ localStorage.removeItem(AUTH_KEY);
       nativeState:()=>nativePushCleanupState(),
       nativeCleanup:(token,options)=>disableNativePush(token,nativeCleanupOptions({
         ownerId:options?.ownerId,
-        serverUnsubscribe:async(_id,auth)=>{serverAuth=auth;},
+        serverUnsubscribe:async(_payload,auth)=>{serverAuth=auth;return {lifecycleEpoch:2};},
         unregister:async()=>{}
       }))
     }),
@@ -328,6 +468,7 @@ localStorage.removeItem(AUTH_KEY);
   );
   assert.equal(serverAuth,"not-called");
   assert.equal(pendingState().serverRevoked,false);
+  assert.equal(pendingState().fenceConfirmed,false);
 }
 
 // No raw token or provider error content is emitted to logs.
@@ -346,7 +487,6 @@ seedNativeState();
 }
 
 // Behavioral smoke for register/login/Google auth paths with native push disabled and no prior credential.
-// A temporary module copy injects only a test API base; production logic is otherwise executed unchanged.
 localStorage.clear();
 {
   const sourceUrl=new URL("../src/api.js",import.meta.url);
