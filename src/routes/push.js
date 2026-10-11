@@ -63,7 +63,7 @@ router.post("/native-subscribe",requireAuth,requireRole("customer"),async(req,re
     if(platform==="android")set.firebaseProjectId=FIREBASE_PROJECT_ID;
     else update.$unset={firebaseProjectId:1};
 
-    const ownershipFilter={appId:APP_ID,installationId,$or:[{userId:req.user._id},{token}]};
+    const ownershipFilter={appId:APP_ID,installationId,userId:req.user._id};
     try{
       await NativePushToken.findOneAndUpdate(
         ownershipFilter,

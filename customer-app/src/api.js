@@ -1,7 +1,7 @@
 import { applyCustomerTicketState } from "./ticketLifecycle.js";
 import { nativePushFeatureEnabled, resolvePushChannel } from "./nativePushConfig.js";
 
-const API_BASE = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = String(import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 async function runtimePushContext(){
   try{
@@ -15,23 +15,48 @@ async function runtimePushContext(){
   }
 }
 
+function currentStoredAuthToken(){
+  try{return String(JSON.parse(localStorage.getItem("seago_auth")||"null")?.token||"");}
+  catch{return "";}
+}
+
+async function cleanupAndroidNativePush(authToken,{runtimeContext=runtimePushContext,nativeCleanup}={}){
+  const runtime=await runtimeContext();
+  if(!(runtime.isNative&&runtime.platform==="android"))return {cleaned:false};
+  const cleanup=nativeCleanup||(await import("./nativePush.js")).disableNativePush;
+  return {cleaned:true,...await cleanup(String(authToken||""))};
+}
+
+export async function expireAuthenticatedSession({runtimeContext=runtimePushContext,nativeCleanup,logger=console}={}){
+  localStorage.removeItem("seago_auth");
+  let cleanupResult={cleaned:false};
+  try{
+    cleanupResult=await cleanupAndroidNativePush("",{runtimeContext,nativeCleanup});
+  }catch{
+    try{logger?.warn?.("Native push session cleanup failed");}catch{}
+    cleanupResult={cleaned:true,serverRevoked:false,localUnregistered:false};
+  }
+  window.dispatchEvent(new CustomEvent("seago:session-expired"));
+  return cleanupResult;
+}
+
 async function request(path, options = {}) {
   if (!API_BASE) throw new Error("API_NOT_CONFIGURED");
+  const {token,skipNativeSessionCleanup=false,...fetchOptions}=options;
 
   const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
   });
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if(response.status===401&&options.token){
-      localStorage.removeItem("seago_auth");
-      window.dispatchEvent(new CustomEvent("seago:session-expired"));
+    if(response.status===401&&token&&!skipNativeSessionCleanup){
+      await expireAuthenticatedSession();
     }
     const error = new Error(payload.error || `Request failed: ${response.status}`);
     error.status = response.status;
@@ -62,8 +87,20 @@ export async function getQuote(departureId, adults, children = 0, mealPlan = "wi
   return request(`/api/departures/${departureId}/quote?${qs}`, options);
 }
 
-function reconcileAuthPush(result){
-  if(result?.token)void reconcileExistingPushSubscription(result.token).catch(()=>{});
+export async function reconcileAuthPush(result,{runtimeContext=runtimePushContext,nativeCleanup}={}){
+  if(!result?.token)return result;
+  const runtime=await runtimeContext();
+  if(runtime.isNative){
+    if(runtime.platform==="android"){
+      const cleanup=nativeCleanup||(await import("./nativePush.js")).disableNativePush;
+      const cleanupResult=await cleanup(currentStoredAuthToken());
+      if(cleanupResult?.localUnregistered===false&&cleanupResult?.serverRevoked===false){
+        throw new Error("Native notification credential cleanup failed");
+      }
+    }
+    return result;
+  }
+  void reconcileExistingPushSubscription(result.token).catch(()=>{});
   return result;
 }
 
@@ -239,4 +276,4 @@ export async function googleSignIn(credential,role="customer"){
 
 export const deleteAccount=token=>request("/api/auth/account",{method:"DELETE",token});
 export const registerNativePushToken=({token:deviceToken,platform,installationId},token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken,platform,installationId})});
-export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId})});
+export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,skipNativeSessionCleanup:true,body:JSON.stringify({installationId})});

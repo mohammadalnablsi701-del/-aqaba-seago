@@ -63,7 +63,7 @@ test("native endpoints are customer-only and Android registration stores explici
     assert.equal((await post(baseUrl,"/api/push/native-subscribe",provider,payload)).status,403);
     assert.equal((await post(baseUrl,"/api/push/native-subscribe",admin,payload)).status,403);
     assert.equal(writes.length,1);
-    assert.deepEqual(writes[0].filter.$or,[{userId:CUSTOMER},{token:TOKEN}]);
+    assert.deepEqual(writes[0].filter,{appId:NATIVE_PUSH_APP_ID,installationId:INSTALLATION,userId:CUSTOMER});
     assert.equal(writes[0].update.$set.provider,"fcm");
     assert.equal(writes[0].update.$set.firebaseProjectId,NATIVE_PUSH_FIREBASE_PROJECT_ID);
     assert.equal(writes[0].update.$set.appId,NATIVE_PUSH_APP_ID);
