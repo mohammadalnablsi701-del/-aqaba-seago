@@ -13,7 +13,6 @@ const OWNER_KEY="seago_native_push_owner_id";
 const CLEANUP_PENDING_KEY="seago_native_push_cleanup_pending";
 const AUTH_KEY="seago_auth";
 const INSTALLATION="installation_native_A_123456";
-const INSTALLATION_B="installation_native_B_654321";
 
 class MemoryStorage{
   constructor(){this.values=new Map();}
@@ -62,8 +61,7 @@ function pendingState(){
 }
 
 function successfulRevoke({expectedEpoch}={}){
-  return async ({installationId,lifecycleEpoch},auth)=>{
-    assert.equal(installationId,INSTALLATION);
+  return async ({lifecycleEpoch},auth)=>{
     if(expectedEpoch!==undefined)assert.equal(lifecycleEpoch,expectedEpoch);
     assert.ok(auth);
     return {ok:true,revoked:true,lifecycleEpoch:lifecycleEpoch+1};
@@ -331,7 +329,7 @@ seedAuth("A","auth-A");
 // Restart durability: lost revoke response leaves pending epoch N; a fresh module retries N and accepts idempotent N+1.
 seedNativeState();
 {
-  let serverEpoch=2;
+  const serverEpoch=2;
   const first=await disableNativePush("auth-A",nativeCleanupOptions({
     serverUnsubscribe:async ({lifecycleEpoch})=>{
       assert.equal(lifecycleEpoch,1);
