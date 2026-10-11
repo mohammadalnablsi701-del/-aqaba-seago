@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import {reserveCheckout} from '../src/services/checkout.js';
-import {releaseExpiredCheckoutHolds} from '../src/services/payments.js';
+import {createCheckoutForHold,releaseExpiredCheckoutHolds} from '../src/services/payments.js';
+import {settlementLedger} from '../src/services/settlements.js';
 import User from '../src/models/User.js';
 import Provider from '../src/models/Provider.js';
 import Trip from '../src/models/Trip.js';
 import Departure from '../src/models/Departure.js';
 import Hold from '../src/models/CheckoutHold.js';
 import Payment from '../src/models/Payment.js';
+import Booking from '../src/models/Booking.js';
 
 const uri=process.env.SEAGO_TEST_MONGODB_URI;
 
@@ -17,7 +19,7 @@ test('checkout capacity and idempotency on isolated MongoDB replica set',{skip:!
   assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
   await mongoose.connect(uri,{dbName:'seago_checkout_test_'+crypto.randomUUID().replaceAll('-','')});
   t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();});
-  await Promise.all([User,Provider,Trip,Departure,Hold,Payment].map(m=>m.init()));
+  await Promise.all([User,Provider,Trip,Departure,Hold,Payment,Booking].map(m=>m.init()));
 
   async function fixture(capacity=1){
     const owner=await User.create({name:'Provider owner',phone:'+962790000001',role:'provider'});
@@ -78,5 +80,62 @@ test('checkout capacity and idempotency on isolated MongoDB replica set',{skip:!
     assert.equal((await Departure.findById(dep._id)).reservedSeats,0);
     assert.equal((await Hold.findById(hold._id)).status,'expired');
     assert.equal((await Payment.findOne({holdId:hold._id})).status,'expired');
+  });
+
+  await t.test('historical checkout pricing remains authoritative after commission configuration changes',async()=>{
+    const {provider,trip,dep}=await fixture(2);
+    const c=await customer('Historical truth');
+    const hold=await reserve(c._id,dep._id);
+    assert.equal(hold.pricing.commissionAmount,4);
+    assert.equal(hold.pricing.providerNetAmount,16);
+
+    const booking=await Booking.create({
+      customerId:c._id,providerId:provider._id,tripId:trip._id,departureId:dep._id,
+      adults:1,children:0,seats:1,status:'confirmed',pricing:hold.pricing,
+      holdExpiresAt:hold.expiresAt,idempotencyKey:crypto.randomUUID()
+    });
+    await Payment.updateOne({holdId:hold._id},{$set:{status:'paid',bookingId:booking._id,paidAt:new Date()}});
+    await Trip.updateOne({_id:trip._id},{$set:{'pricing.commissionValue':9}});
+
+    const persisted=await Booking.findById(booking._id).lean();
+    assert.equal(persisted.pricing.commissionAmount,4);
+    assert.equal(persisted.pricing.providerNetAmount,16);
+    const ledger=await settlementLedger({providerId:String(provider._id)});
+    const row=ledger.breakdown.find(item=>String(item.providerId)===String(provider._id));
+    assert.equal(row.seaGoCommission,4);
+    assert.equal(row.providerNet,16);
+  });
+
+  await t.test('malformed commission fails before hold, payment, booking or provider checkout phase',async()=>{
+    const {trip,dep}=await fixture(2);
+    const c=await customer('Malformed commission');
+    await Trip.collection.updateOne({_id:trip._id},{$unset:{'pricing.commissionValue':''}});
+
+    const before={
+      holds:await Hold.countDocuments(),
+      payments:await Payment.countDocuments(),
+      bookings:await Booking.countDocuments()
+    };
+    let providerCheckoutPhaseReached=false;
+    const originalProvider=process.env.PAYMENT_PROVIDER;
+    process.env.PAYMENT_PROVIDER='task7_gateway_must_not_be_reached';
+    try{
+      await assert.rejects((async()=>{
+        const hold=await reserve(c._id,dep._id);
+        providerCheckoutPhaseReached=true;
+        return createCheckoutForHold({hold,customerId:c._id,baseUrl:'https://example.test'});
+      })(),error=>error?.code==='financial_config_invalid');
+    }finally{
+      if(originalProvider===undefined)delete process.env.PAYMENT_PROVIDER;
+      else process.env.PAYMENT_PROVIDER=originalProvider;
+    }
+
+    assert.equal(providerCheckoutPhaseReached,false);
+    assert.deepEqual({
+      holds:await Hold.countDocuments(),
+      payments:await Payment.countDocuments(),
+      bookings:await Booking.countDocuments()
+    },before);
+    assert.equal((await Departure.findById(dep._id)).reservedSeats,0);
   });
 });

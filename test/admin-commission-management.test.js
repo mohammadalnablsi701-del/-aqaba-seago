@@ -61,6 +61,21 @@ test("G/H/I/J: every type change is explicit and stale fields are cleared",()=>{
   assert.throws(()=>buildCommissionUpdate({commissionType:"percentage",commissionValue:20},{commissionType:"fixed_per_person",confirmTypeChange:true}),/fallback commission/i);
 });
 
+test("partial updates validate the final merged commission configuration",()=>{
+  assert.deepEqual(
+    buildCommissionUpdate({commissionType:"percentage",commissionValue:12.5},{commissionType:"percentage"}),
+    {commissionType:"percentage",commissionValue:12.5,adultCommission:undefined,childCommission:undefined,buffetAdultCommission:undefined,buffetChildCommission:undefined}
+  );
+  assert.deepEqual(
+    buildCommissionUpdate({commissionType:"fixed_per_booking",commissionValue:5},{commissionType:"fixed_per_booking"}),
+    {commissionType:"fixed_per_booking",commissionValue:5,adultCommission:undefined,childCommission:undefined,buffetAdultCommission:undefined,buffetChildCommission:undefined}
+  );
+  assert.throws(
+    ()=>buildCommissionUpdate({commissionType:"percentage",commissionValue:20},{commissionType:"fixed_per_booking",confirmTypeChange:true}),
+    /Fixed booking commission is invalid/i
+  );
+});
+
 test("editor type switching clears values instead of reusing another financial model",()=>{
   const draft=commissionDraftFromPricing({commissionType:"percentage",commissionValue:20});
   const fixed=changeCommissionType(draft,"fixed_per_booking");
