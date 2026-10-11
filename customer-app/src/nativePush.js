@@ -29,31 +29,50 @@ function currentAuthOwnerId(){
     return text(auth?.user?.id||auth?.user?._id);
   }catch{return "";}
 }
-function fenceAuthorityKey(state){
+function fenceAuthorityKey(state,nextLifecycleEpoch=state?.nextLifecycleEpoch){
   const installationId=text(state?.installationId);
   const ownerId=text(state?.ownerId);
-  const lifecycleEpoch=validEpoch(state?.lifecycleEpoch);
-  return installationId&&lifecycleEpoch?`${installationId}\u0000${ownerId}\u0000${lifecycleEpoch}`:"";
+  const previousEpoch=validEpoch(state?.lifecycleEpoch);
+  const confirmedNextEpoch=validEpoch(nextLifecycleEpoch);
+  if(!installationId||!ownerId||!previousEpoch||confirmedNextEpoch!==previousEpoch+1)return "";
+  return `${installationId}\u0000${ownerId}\u0000${previousEpoch}\u0000${confirmedNextEpoch}`;
 }
 function rememberFenceConfirmation(state,nextLifecycleEpoch){
-  const key=fenceAuthorityKey(state);
-  const next=validEpoch(nextLifecycleEpoch);
-  if(key&&next)inMemoryFenceConfirmations.set(key,{nextLifecycleEpoch:next});
+  const key=fenceAuthorityKey(state,nextLifecycleEpoch);
+  if(!key)return false;
+  inMemoryFenceConfirmations.set(key,{
+    installationId:text(state?.installationId),
+    ownerId:text(state?.ownerId),
+    previousEpoch:validEpoch(state?.lifecycleEpoch),
+    confirmedNextEpoch:validEpoch(nextLifecycleEpoch)
+  });
+  return true;
 }
-function applyInMemoryFenceAuthority(state){
+function applyInMemoryFenceAuthority(state,{ownerId=currentAuthOwnerId()}={}){
   if(!state)return state;
   if(state.serverFenceWasConfirmedPreviously!==true){
     return {...state,fenceConfirmed:false,serverRevoked:false};
   }
-  const key=fenceAuthorityKey(state);
+  const expectedOwner=text(ownerId);
+  const stateOwner=text(state?.ownerId);
+  if(!expectedOwner||!stateOwner||expectedOwner!==stateOwner){
+    return {...state,fenceConfirmed:false,serverRevoked:false};
+  }
+  const key=fenceAuthorityKey(state,state?.nextLifecycleEpoch);
   const authority=key?inMemoryFenceConfirmations.get(key):null;
-  if(!authority)return {...state,fenceConfirmed:false,serverRevoked:false};
+  if(!authority||
+    authority.installationId!==text(state?.installationId)||
+    authority.ownerId!==stateOwner||
+    authority.previousEpoch!==validEpoch(state?.lifecycleEpoch)||
+    authority.confirmedNextEpoch!==validEpoch(state?.nextLifecycleEpoch)){
+    return {...state,fenceConfirmed:false,serverRevoked:false};
+  }
   return {
     ...state,
     fenceConfirmed:true,
     serverRevoked:true,
     serverFenceWasConfirmedPreviously:true,
-    nextLifecycleEpoch:authority.nextLifecycleEpoch
+    nextLifecycleEpoch:authority.confirmedNextEpoch
   };
 }
 function forgetFenceConfirmations(installationId){
@@ -118,22 +137,22 @@ function clearCleanupForInstallation(id){
   }
 }
 function cleanupComplete(state,{android=true}={}){
-  return Boolean(state?.serverRevoked&&state?.fenceConfirmed&&(android?state?.localUnregistered:true));
+  return Boolean(text(state?.ownerId)&&state?.serverRevoked&&state?.fenceConfirmed&&(android?state?.localUnregistered:true));
 }
 
-export function nativePushCleanupState(){
+export function nativePushCleanupState({ownerId=currentAuthOwnerId()}={}){
   const rawPending=localStorage.getItem(CLEANUP_PENDING_KEY);
   const persisted=readCleanupPending();
-  const pending=applyInMemoryFenceAuthority(persisted);
+  const pending=applyInMemoryFenceAuthority(persisted,{ownerId});
   const installationId=pending?.installationId||currentInstallationId();
-  const ownerId=pending?.ownerId||currentOwnerId();
+  const resolvedOwnerId=pending?.ownerId||currentOwnerId();
   const lifecycleEpoch=pending?.lifecycleEpoch||currentLifecycleEpoch();
   const registered=localStorage.getItem(REGISTERED_KEY)==="1";
   return {
     hadCredential:Boolean(rawPending||installationId||registered),
     cleanupPending:Boolean(rawPending),
     installationId,
-    ownerId,
+    ownerId:resolvedOwnerId,
     lifecycleEpoch,
     nextLifecycleEpoch:pending?.nextLifecycleEpoch||0,
     serverFenceWasConfirmedPreviously:pending?.serverFenceWasConfirmedPreviously===true,
@@ -307,16 +326,16 @@ export async function disableNativePush(authToken,{
 
   ++lifecycleGeneration;
   const registrationsToSettle=[...inFlightRegistrations];
-  const state=nativePushCleanupState();
+  const callerOwner=text(ownerId)||currentAuthOwnerId();
+  const state=nativePushCleanupState({ownerId:callerOwner});
   if(!state.hadCredential){
     await clearListeners({timeoutMs:listenerCleanupTimeoutMs,logger});
     return {serverRevoked:false,localUnregistered:false,hadCredential:false,cleanupPending:false,cleanupComplete:true,native:true};
   }
 
   const id=state.installationId;
-  const callerOwner=text(ownerId)||currentAuthOwnerId();
-  const pendingOwner=state.ownerId||(state.cleanupPending?"":callerOwner);
-  const existingPending=applyInMemoryFenceAuthority(readCleanupPending());
+  const pendingOwner=state.ownerId;
+  const existingPending=applyInMemoryFenceAuthority(readCleanupPending(),{ownerId:callerOwner});
   let pending=existingPending||{
     installationId:id,
     ownerId:pendingOwner,
@@ -333,7 +352,7 @@ export async function disableNativePush(authToken,{
   if(pending.lifecycleEpoch&&!currentLifecycleEpoch())localStorage.setItem(EPOCH_KEY,String(pending.lifecycleEpoch));
   if(pending.ownerId&&!currentOwnerId())localStorage.setItem(OWNER_KEY,pending.ownerId);
 
-  const ownerMatches=!pending.ownerId||(callerOwner&&callerOwner===pending.ownerId);
+  const ownerMatches=Boolean(pending.ownerId&&callerOwner&&callerOwner===pending.ownerId);
   if(!pending.fenceConfirmed&&authToken&&id&&ownerMatches){
     try{
       const response=await callBounded(
@@ -341,7 +360,7 @@ export async function disableNativePush(authToken,{
         revokeTimeoutMs
       );
       const nextLifecycleEpoch=confirmedNextEpoch(response,pending.lifecycleEpoch);
-      rememberFenceConfirmation(pending,nextLifecycleEpoch);
+      if(!rememberFenceConfirmation(pending,nextLifecycleEpoch))throw new Error("Invalid native push fence authority");
       pending={
         ...pending,
         serverFenceWasConfirmedPreviously:true,
@@ -402,6 +421,7 @@ export async function disableNativePush(authToken,{
 export const nativePushLifecycleInternals={
   readCleanupPending,
   validEpoch,
+  fenceAuthorityKey,
   settleBounded,
   callBounded,
   clearListeners,
