@@ -117,6 +117,8 @@ export async function settlementLedger({from,to,providerId,session}={}){
     paid:r.reconciliationRequired?null:settlementMoney(r.paid)
   })).sort((a,b)=>Number(b.outstanding||0)-Number(a.outstanding||0)||a.providerName.localeCompare(b.providerName));
 
+  // Preserve the pre-Task-3 aggregate API shape. payableNow/reversedOutstanding are
+  // row-level safety semantics and intentionally do not widen the historical totals contract.
   const totals=breakdown.reduce((a,r)=>{
     a.grossSales+=Number(r.grossSales||0);
     a.refunds+=Number(r.refunds||0);
@@ -124,17 +126,15 @@ export async function settlementLedger({from,to,providerId,session}={}){
     a.providerNet+=Number(r.providerNet||0);
     a.paid+=Number(r.paid||0);
     a.outstanding+=Number(r.outstanding||0);
-    a.payableNow+=Number(r.payableNow||0);
-    a.reversedOutstanding+=Number(r.reversedOutstanding||0);
     return a;
-  },{grossSales:0,refunds:0,seaGoCommission:0,providerNet:0,paid:0,outstanding:0,payableNow:0,reversedOutstanding:0});
+  },{grossSales:0,refunds:0,seaGoCommission:0,providerNet:0,paid:0,outstanding:0});
   totals.recoveryDue=breakdown.reduce((sum,r)=>sum+Number(r.recoveryDue||0),0);
   const reconciliationRequired=breakdown.some(r=>r.reconciliationRequired);
   return{
     providersList,breakdown,reconciliationRequired,
     totals:{
       ...Object.fromEntries(Object.entries(totals).map(([k,v])=>[k,settlementMoney(v)])),
-      ...(reconciliationRequired?{paid:null,outstanding:null,payableNow:null,reversedOutstanding:null}:{})
+      ...(reconciliationRequired?{paid:null,outstanding:null}:{})
     }
   };
 }
