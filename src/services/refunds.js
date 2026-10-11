@@ -71,12 +71,21 @@ async function reviewInSession({ refund, payment, reason, session }) {
   refund.reviewReason = String(reason || "inconsistent_refund_state").slice(0, 80);
   refund.lastReconciledAt = new Date();
   await refund.save({ session });
-  if (payment && payment.status !== "refunded") {
+  if (payment) {
     payment.status = "needs_review";
     await payment.save({ session });
   }
   await syncBookingRefundStatus(refund, session);
   return refund;
+}
+
+async function paymentHasOtherRefundReview(paymentId, refundId, session) {
+  const row = await Refund.findOne({
+    paymentId,
+    _id: { $ne: refundId },
+    state: "needs_review"
+  }).session(session).select("_id");
+  return Boolean(row);
 }
 
 function intentMatches(refund, { payment, bookingId, provider, amount, currency, intentType, intentId, reference, idempotencyKey }) {
@@ -248,9 +257,12 @@ async function applyResultInSession({ refund, providerName, result, session }) {
     return reviewInSession({ refund, payment, reason: "reservation_mismatch", session });
   }
 
+  const preserveReview = payment.status === "needs_review" ||
+    await paymentHasOtherRefundReview(payment._id, refund._id, session);
+
   if (result.status === "failed") {
     payment.refundReservedAmount = refundMoney(Math.max(0, reserved - refund.amount));
-    if (payment.status !== "needs_review") {
+    if (!preserveReview) {
       payment.status = paymentStatusForRefundedAmount(payment.amount, payment.refundedAmount);
     }
     await payment.save({ session });
@@ -269,7 +281,9 @@ async function applyResultInSession({ refund, providerName, result, session }) {
   payment.refundedAmount = Math.min(refundMoney(payment.amount), nextRefunded);
   payment.refundReservedAmount = refundMoney(Math.max(0, reserved - refund.amount));
   payment.refundedAt = new Date();
-  payment.status = paymentStatusForRefundedAmount(payment.amount, payment.refundedAmount);
+  if (!preserveReview) {
+    payment.status = paymentStatusForRefundedAmount(payment.amount, payment.refundedAmount);
+  }
   await payment.save({ session });
 
   refund.state = "succeeded";
