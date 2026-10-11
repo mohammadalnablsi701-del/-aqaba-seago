@@ -49,18 +49,25 @@ export async function getQuote(departureId, adults, children = 0, mealPlan = "wi
   return request(`/api/departures/${departureId}/quote?${qs}`, options);
 }
 
+function reconcileAuthPush(result){
+  if(result?.token)void reconcileExistingPushSubscription(result.token).catch(()=>{});
+  return result;
+}
+
 export async function registerCustomer({ name, email, phone, password }) {
-  return request("/api/auth/register", {
+  const result=await request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({ name, email, phone, password, role: "customer" })
   });
+  return reconcileAuthPush(result);
 }
 
 export async function loginCustomer({ email, password }) {
-  return request("/api/auth/login", {
+  const result=await request("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password })
   });
+  return reconcileAuthPush(result);
 }
 
 export async function requestPasswordReset(email) {
@@ -130,6 +137,14 @@ function urlBase64ToUint8Array(base64String){
   const raw=atob(base64);
   return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)));
 }
+
+async function currentWebPushSubscription(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return null;
+  const registration=await navigator.serviceWorker.getRegistration();
+  if(!registration)return null;
+  return registration.pushManager.getSubscription();
+}
+
 export async function enablePushNotifications(token){
   if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))throw new Error("Push notifications are not supported on this device/browser");
   const permission=await Notification.requestPermission();
@@ -143,6 +158,38 @@ export async function enablePushNotifications(token){
   await request("/api/push/subscribe",{method:"POST",token,body:JSON.stringify({subscription:subscription.toJSON()})});
   return {permission,subscribed:true};
 }
+
+export async function reconcileExistingPushSubscription(token){
+  if(!token||typeof Notification==="undefined"||Notification.permission!=="granted")return {reconciled:false};
+  const subscription=await currentWebPushSubscription();
+  if(!subscription)return {reconciled:false};
+  await request("/api/push/subscribe",{method:"POST",token,body:JSON.stringify({subscription:subscription.toJSON()})});
+  return {reconciled:true};
+}
+
+export async function disablePushNotifications(token,{timeoutMs=1500}={}){
+  const subscription=await currentWebPushSubscription().catch(()=>null);
+  if(!subscription)return {serverRevoked:false,browserUnsubscribed:false,hadSubscription:false};
+
+  let serverRevoked=false;
+  if(token){
+    const controller=typeof AbortController!=="undefined"?new AbortController():null;
+    const timeout=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
+    try{
+      await request("/api/push/unsubscribe",{
+        method:"POST",token,signal:controller?.signal,
+        body:JSON.stringify({endpoint:subscription.endpoint})
+      });
+      serverRevoked=true;
+    }catch{}
+    finally{if(timeout)clearTimeout(timeout);}
+  }
+
+  let browserUnsubscribed=false;
+  try{browserUnsubscribed=Boolean(await subscription.unsubscribe());}catch{}
+  return {serverRevoked,browserUnsubscribed,hadSubscription:true};
+}
+
 export async function pushNotificationStatus(){
   if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return {supported:false,permission:"unsupported",subscribed:false};
   const registration=await navigator.serviceWorker.ready;
@@ -159,8 +206,11 @@ export const createSupportRequest=(data,token)=>request("/api/support",{method:"
 export const listMySupportRequests=token=>request("/api/support/mine",{token});
 
 export const googleAuthConfig=()=>request("/api/auth/google/config");
-export const googleSignIn=(credential,role="customer")=>request("/api/auth/google",{method:"POST",body:JSON.stringify({credential,role})});
+export async function googleSignIn(credential,role="customer"){
+  const result=await request("/api/auth/google",{method:"POST",body:JSON.stringify({credential,role})});
+  return reconcileAuthPush(result);
+}
 
 export const deleteAccount=token=>request("/api/auth/account",{method:"DELETE",token});
-export const registerNativePushToken=({token:deviceToken,platform},token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken,platform})});
-export const unregisterNativePushToken=(deviceToken,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken})});
+export const registerNativePushToken=({token:deviceToken,platform,installationId},token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify({token:deviceToken,platform,installationId})});
+export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId})});
