@@ -1,0 +1,159 @@
+name: Task 5 Supply Chain Bootstrap
+
+on:
+  push:
+    branches:
+      - feature/final-hardening-task5-reproducible-backend-supply-chain
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/final-hardening-task5-reproducible-backend-supply-chain
+          fetch-depth: 0
+
+      - name: Setup exact Backend Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+
+      - name: Pin Backend runtime and generate root lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Node: $(node --version)"
+          echo "npm:  $(npm --version)"
+          node <<'JS'
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          p.engines = { ...(p.engines || {}), node: '20.20.2' };
+          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          JS
+          test ! -f package-lock.json
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          node -e 'const p=require("./package-lock.json"); if(p.lockfileVersion!==3) throw new Error(`Unexpected lockfileVersion ${p.lockfileVersion}`); console.log(`lockfileVersion=${p.lockfileVersion}`)'
+
+      - name: Convert authoritative Backend CI installs to npm ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          backend_workflows = [
+              '.github/workflows/ci.yml',
+              '.github/workflows/admin-audit-qa.yml',
+              '.github/workflows/customer-payment-dto-safety.yml',
+              '.github/workflows/customer-platform-pause-safety.yml',
+              '.github/workflows/customer-pricing-truth.yml',
+              '.github/workflows/customer-ticket-lifecycle-truth.yml',
+              '.github/workflows/payment-correlation-hardening.yml',
+              '.github/workflows/refund-contract-hardening.yml',
+              '.github/workflows/settlement-payment-safety.yml',
+          ]
+
+          for name in backend_workflows:
+              path = Path(name)
+              text = path.read_text()
+              text = text.replace('node-version: 20\n', 'node-version: 20.20.2\n')
+              text = text.replace('run: npm install --no-fund && npm audit --audit-level=high',
+                                  'run: npm ci --no-fund && npm audit --audit-level=high')
+              text = text.replace('run: npm install --no-fund\n', 'run: npm ci --no-fund\n')
+              text = text.replace('run: npm install\n', 'run: npm ci\n')
+              text = text.replace('- name: Install backend dependencies\n',
+                                  '- name: Install backend dependencies from lockfile\n')
+              path.write_text(text)
+
+          ci = Path('.github/workflows/ci.yml')
+          text = ci.read_text()
+          old = '''      - name: Install backend dependencies from lockfile
+        run: npm ci
+      - name: Run backend tests
+        run: npm test
+'''
+          new = '''      - name: First clean Backend install and dependency fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules
+          npm ci --no-fund
+          sha256sum package-lock.json > "$RUNNER_TEMP/backend-lock-1.sha256"
+          npm ls --depth=0 --json | node -e 'const fs=require("node:fs");const crypto=require("node:crypto");const x=JSON.parse(fs.readFileSync(0,"utf8"));const tree=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\\n");process.stdout.write(tree+"\\n");console.error("dependency-tree-sha256="+crypto.createHash("sha256").update(tree).digest("hex"));' > "$RUNNER_TEMP/backend-tree-1.txt"
+          cat "$RUNNER_TEMP/backend-lock-1.sha256"
+          cat "$RUNNER_TEMP/backend-tree-1.txt"
+      - name: Run backend tests after first clean install
+        run: npm test
+      - name: Second clean Backend install and stability proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules
+          npm ci --no-fund
+          sha256sum package-lock.json > "$RUNNER_TEMP/backend-lock-2.sha256"
+          npm ls --depth=0 --json | node -e 'const fs=require("node:fs");const crypto=require("node:crypto");const x=JSON.parse(fs.readFileSync(0,"utf8"));const tree=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\\n");process.stdout.write(tree+"\\n");console.error("dependency-tree-sha256="+crypto.createHash("sha256").update(tree).digest("hex"));' > "$RUNNER_TEMP/backend-tree-2.txt"
+          diff -u "$RUNNER_TEMP/backend-lock-1.sha256" "$RUNNER_TEMP/backend-lock-2.sha256"
+          diff -u "$RUNNER_TEMP/backend-tree-1.txt" "$RUNNER_TEMP/backend-tree-2.txt"
+          git diff --exit-code -- package.json package-lock.json
+          test -z "$(git status --porcelain --untracked-files=all -- package.json package-lock.json)"
+      - name: Run backend tests after second clean install
+        run: npm test
+'''
+          if old not in text:
+              raise SystemExit('Expected backend-test install/test block not found in ci.yml')
+          ci.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Validate lockfile and two clean installs before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock_before="$(sha256sum package-lock.json)"
+          rm -rf node_modules
+          npm ci --no-fund
+          npm test
+          npm ls --depth=0 --json | node -e 'const fs=require("node:fs");const crypto=require("node:crypto");const x=JSON.parse(fs.readFileSync(0,"utf8"));const tree=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n");console.log("first-tree-sha256="+crypto.createHash("sha256").update(tree).digest("hex"));'
+          test "$lock_before" = "$(sha256sum package-lock.json)"
+          rm -rf node_modules
+          npm ci --no-fund
+          npm test
+          npm ls --depth=0 --json | node -e 'const fs=require("node:fs");const crypto=require("node:crypto");const x=JSON.parse(fs.readFileSync(0,"utf8"));const tree=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n");console.log("second-tree-sha256="+crypto.createHash("sha256").update(tree).digest("hex"));'
+          test "$lock_before" = "$(sha256sum package-lock.json)"
+          npm audit --audit-level=high
+
+      - name: Remove bootstrap and enforce install-command contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/task5-bootstrap.yml
+          echo "Remaining npm install/npm i occurrences in workflows:"
+          grep -RInE 'npm +(install|i)([[:space:]]|$)' .github/workflows || true
+          bad="$(grep -RInE 'run:[[:space:]]+npm +(install|i)([[:space:]]|$)' .github/workflows | grep -v -- '--prefix .*RUNNER_TEMP/seago-mongo' || true)"
+          if [ -n "$bad" ]; then
+            echo "Non-deterministic authoritative workflow install remains:"
+            printf '%s\n' "$bad"
+            exit 1
+          fi
+          git diff --check
+
+      - name: Commit hardened supply chain to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          changed="$(git diff --cached --name-only)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Ev '^(package\.json|package-lock\.json|\.github/workflows/[^/]+\.yml)$' | grep -q .; then
+            echo "Unexpected out-of-scope file change"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Harden reproducible backend supply chain"
+          git push origin HEAD:feature/final-hardening-task5-reproducible-backend-supply-chain
