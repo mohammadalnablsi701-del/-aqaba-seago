@@ -12,7 +12,6 @@ import ProviderAuditLog from "../models/ProviderAuditLog.js";
 import { auditProviderAction } from "../services/providerAudit.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tripForAudience } from "../services/pricingVisibility.js";
-import { deriveTicketLifecycle } from "../services/ticketLifecycle.js";
 
 const router=express.Router();
 
@@ -32,13 +31,6 @@ function bookingForAccess(booking, access, { payment = undefined } = {}){
   }
   if(payment!==undefined&&canViewFinance)obj.payment=payment;
   return obj;
-}
-
-function manualCheckInRejection(lifecycle,checkedInAt=null){
-  if(lifecycle.state==="checked_in")return{error:"Booking already checked in",code:"already_checked_in",checkedInAt};
-  if(lifecycle.state==="departure_cancelled")return{error:"Departure is not open for check-in",code:"departure_cancelled"};
-  if(lifecycle.state==="departure_expired")return{error:"Departure is no longer open for check-in",code:"departure_expired"};
-  return{error:"Booking is not valid for check-in",code:"ticket_not_boardable"};
 }
 
 router.post("/",requireAuth,requireRole("provider"),async(req,res,next)=>{
@@ -242,19 +234,17 @@ router.post("/me/bookings/:bookingId/check-in",requireAuth,requireRole("provider
   try{
     const access=await requireProviderCapability(req.user,"checkin");const provider=access?.provider;
     if(!provider)return res.status(403).json({error:"Approved provider access required"});
-    const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id})
-      .populate("tripId","durationMinutes")
-      .populate("departureId","status startsAt");
+    const booking=await Booking.findOne({_id:req.params.bookingId,providerId:provider._id}).populate("departureId","status startsAt");
     if(!booking)return res.status(404).json({error:"Booking not found"});
+    if(booking.status!=="confirmed")return res.status(409).json({error:"Booking is not valid for check-in"});
+    if(!booking.departureId||booking.departureId.status!=="scheduled")return res.status(409).json({error:"Departure is not open for check-in"});
     const checkedAt=new Date();
-    const lifecycle=deriveTicketLifecycle(booking,{now:checkedAt});
-    if(!lifecycle.usable)return res.status(409).json(manualCheckInRejection(lifecycle,booking.checkedInAt||null));
     const claimed=await Booking.findOneAndUpdate(
       {_id:booking._id,providerId:provider._id,status:"confirmed",checkedInAt:null},
       {$set:{checkedInAt:checkedAt,checkedInBy:req.user._id},$inc:{checkInCount:1}},
       {new:true}
     );
-    if(!claimed)return res.status(409).json({error:"Booking already checked in",code:"already_checked_in"});
+    if(!claimed)return res.status(409).json({error:"Booking already checked in"});
     await auditProviderAction({access,user:req.user,action:"booking.checkin",targetType:"booking",targetId:claimed._id,summary:"Checked in booking SG-"+String(claimed._id).slice(-8).toUpperCase(),metadata:{guests:claimed.seats,method:"manual"}});
     res.json({ok:true,bookingId:claimed._id,checkedInAt:claimed.checkedInAt,guests:claimed.seats});
   }catch(e){next(e);}
@@ -329,7 +319,7 @@ router.get("/me/audit-log",requireAuth,requireRole("provider"),async(req,res,nex
     const access=await requireProviderCapability(req.user,"manage_team",{approved:false});
     if(!access)return res.status(403).json({error:"Owner permission required"});
     const rows=await ProviderAuditLog.find({providerId:access.provider._id}).populate("actorUserId","name email").sort({createdAt:-1}).limit(200);
-    res.json(rows.map(x=>({id:x._id,action:x.action,targetType:x.targetType,targetId:x.targetId,summary:x.summary,metadata:x.metadata,createdAt:x.createdAt,actor:{id:x.actorUserId?._id,name:x.actorUserId?.name,email:x.actorUserId?.email,role:x.actorRole}}))});
+    res.json(rows.map(x=>({id:x._id,action:x.action,targetType:x.targetType,targetId:x.targetId,summary:x.summary,metadata:x.metadata,createdAt:x.createdAt,actor:{id:x.actorUserId?._id,name:x.actorUserId?.name,email:x.actorUserId?.email,role:x.actorRole}})));
   }catch(e){next(e);}
 });
 
