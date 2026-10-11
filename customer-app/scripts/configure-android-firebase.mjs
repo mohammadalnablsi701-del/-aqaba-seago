@@ -5,6 +5,8 @@ import { NATIVE_PUSH_CONTEXT as context } from "../../shared/nativePushContext.j
 
 const scriptDir=path.dirname(fileURLToPath(import.meta.url));
 const bridgeTemplate=path.resolve(scriptDir,"../native/android/SeaGoFirebasePlugin.java");
+const bridgeTaskTestTemplate=path.resolve(scriptDir,"../native/android/SeaGoFirebasePluginTaskTest.java");
+const firebaseMessagingDependency='implementation "com.google.firebase:firebase-messaging:25.0.1"';
 
 export function decodeAndroidConfig(encoded) {
   if (!encoded || encoded.length > 131072 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) throw new Error("Invalid Firebase Android configuration encoding");
@@ -20,12 +22,27 @@ export function decodeAndroidConfig(encoded) {
   return config;
 }
 
+function ensureFirebaseMessagingCompileDependency(app) {
+  const buildGradle=path.join(app,"build.gradle");
+  let gradle=fs.readFileSync(buildGradle,"utf8");
+  if(!gradle.includes("com.google.firebase:firebase-messaging")){
+    if(!/dependencies\s*\{/.test(gradle))throw new Error("Generated Android dependencies block is missing");
+    gradle=gradle.replace(/dependencies\s*\{/,match=>`${match}\n    ${firebaseMessagingDependency}`);
+    fs.writeFileSync(buildGradle,gradle);
+  }
+}
+
 export function installSeaGoFirebaseBridge(root) {
-  const packageDir=path.join(root,"android/app/src/main/java/com/aqabaseago/app");
+  const app=path.join(root,"android/app");
+  const packageDir=path.join(app,"src/main/java/com/aqabaseago/app");
+  const testPackageDir=path.join(app,"src/test/java/com/aqabaseago/app");
   const mainActivity=path.join(packageDir,"MainActivity.java");
   if(!fs.existsSync(mainActivity))throw new Error("Generated Android MainActivity is missing");
-  if(!fs.existsSync(bridgeTemplate))throw new Error("SeaGo Firebase bridge template is missing");
+  if(!fs.existsSync(bridgeTemplate)||!fs.existsSync(bridgeTaskTestTemplate))throw new Error("SeaGo Firebase bridge templates are missing");
   fs.copyFileSync(bridgeTemplate,path.join(packageDir,"SeaGoFirebasePlugin.java"));
+  fs.mkdirSync(testPackageDir,{recursive:true});
+  fs.copyFileSync(bridgeTaskTestTemplate,path.join(testPackageDir,"SeaGoFirebasePluginTaskTest.java"));
+  ensureFirebaseMessagingCompileDependency(app);
 
   let main=fs.readFileSync(mainActivity,"utf8");
   if(!main.includes("registerPlugin(SeaGoFirebasePlugin.class)")){
