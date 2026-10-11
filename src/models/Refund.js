@@ -25,7 +25,13 @@ const refundSchema = new mongoose.Schema({
   lastReconciledAt: Date
 }, { timestamps: true });
 
-refundSchema.index({ provider: 1, providerRefundId: 1 }, { unique: true, sparse: true });
+refundSchema.index(
+  { provider: 1, providerRefundId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { providerRefundId: { $type: "string" } }
+  }
+);
 refundSchema.index({ paymentId: 1, createdAt: -1 });
 
 export default mongoose.model("Refund", refundSchema);
