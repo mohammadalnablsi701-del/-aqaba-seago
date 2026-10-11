@@ -24,7 +24,7 @@ test("production lifecycle index readiness path creates and verifies the unique 
     await initializeNativePushLifecycleIndexes();
     const critical=await verifyNativePushLifecycleIndexes();
     assert.equal(critical.unique,true);
-    assert.deepEqual(critical.key,{appId:1,installationId:1});
+    assert.deepEqual(Object.entries(critical.key),[["appId",1],["installationId",1]]);
 
     const userId=new mongoose.Types.ObjectId();
     const document={
