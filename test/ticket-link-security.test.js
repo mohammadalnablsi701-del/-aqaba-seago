@@ -105,8 +105,10 @@ test("public issuance fails closed without valid lifecycle clock data", t => {
     if (oldTicketSecret === undefined) delete process.env.TICKET_SIGNING_SECRET; else process.env.TICKET_SIGNING_SECRET = oldTicketSecret;
   });
 
-  const missingStart = booking({ startsAt: undefined });
-  const missingDuration = booking({ durationMinutes: undefined });
+  const missingStart = booking();
+  missingStart.departureId = { status: "scheduled" };
+  const missingDuration = booking();
+  missingDuration.tripId = {};
   const invalidDuration = booking({ durationMinutes: "not-a-number" });
 
   for (const source of [missingStart, missingDuration, invalidDuration]) {
