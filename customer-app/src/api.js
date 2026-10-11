@@ -15,26 +15,33 @@ async function runtimePushContext(){
   }
 }
 
-function currentStoredAuthToken(){
-  try{return String(JSON.parse(localStorage.getItem("seago_auth")||"null")?.token||"");}
-  catch{return "";}
+function authOwnerId(value){
+  return String(value?.user?.id||value?.user?._id||"").trim();
 }
 
-async function cleanupAndroidNativePush(authToken,{runtimeContext=runtimePushContext,nativeCleanup}={}){
+function currentStoredAuthSession(){
+  try{
+    const value=JSON.parse(localStorage.getItem("seago_auth")||"null");
+    return {token:String(value?.token||""),ownerId:authOwnerId(value)};
+  }catch{return {token:"",ownerId:""};}
+}
+
+async function cleanupAndroidNativePush(authToken,{runtimeContext=runtimePushContext,nativeCleanup,ownerId=""}={}){
   const runtime=await runtimeContext();
   if(!(runtime.isNative&&runtime.platform==="android"))return {cleaned:false};
   const cleanup=nativeCleanup||(await import("./nativePush.js")).disableNativePush;
-  return {cleaned:true,...await cleanup(String(authToken||""))};
+  return {cleaned:true,...await cleanup(String(authToken||""),{ownerId:String(ownerId||"")})};
 }
 
 export async function expireAuthenticatedSession({runtimeContext=runtimePushContext,nativeCleanup,logger=console}={}){
+  const previousSession=currentStoredAuthSession();
   localStorage.removeItem("seago_auth");
   let cleanupResult={cleaned:false};
   try{
-    cleanupResult=await cleanupAndroidNativePush("",{runtimeContext,nativeCleanup});
+    cleanupResult=await cleanupAndroidNativePush("",{runtimeContext,nativeCleanup,ownerId:previousSession.ownerId});
   }catch{
     try{logger?.warn?.("Native push session cleanup failed");}catch{}
-    cleanupResult={cleaned:true,serverRevoked:false,localUnregistered:false};
+    cleanupResult={cleaned:true,serverRevoked:false,localUnregistered:false,cleanupPending:true,cleanupComplete:false};
   }
   window.dispatchEvent(new CustomEvent("seago:session-expired"));
   return cleanupResult;
@@ -87,16 +94,39 @@ export async function getQuote(departureId, adults, children = 0, mealPlan = "wi
   return request(`/api/departures/${departureId}/quote?${qs}`, options);
 }
 
-export async function reconcileAuthPush(result,{runtimeContext=runtimePushContext,nativeCleanup}={}){
+export async function reconcileAuthPush(result,{runtimeContext=runtimePushContext,nativeCleanup,nativeState}={}){
   if(!result?.token)return result;
   const runtime=await runtimeContext();
   if(runtime.isNative){
     if(runtime.platform==="android"){
-      const cleanup=nativeCleanup||(await import("./nativePush.js")).disableNativePush;
-      const cleanupResult=await cleanup(currentStoredAuthToken());
-      if(cleanupResult?.localUnregistered===false&&cleanupResult?.serverRevoked===false){
-        throw new Error("Native notification credential cleanup failed");
+      const nativeModule=(!nativeCleanup||!nativeState)?await import("./nativePush.js"):null;
+      const inspect=nativeState||nativeModule.nativePushCleanupState;
+      const state=inspect();
+      if(!state?.hadCredential)return result;
+
+      const cleanup=nativeCleanup||nativeModule.disableNativePush;
+      const stored=currentStoredAuthSession();
+      const incomingOwner=authOwnerId(result);
+      let cleanupToken="";
+      let cleanupOwner="";
+      const storedMatches=Boolean(stored.token)&&(
+        state.ownerId
+          ? Boolean(stored.ownerId)&&stored.ownerId===state.ownerId
+          : !state.cleanupPending
+      );
+      if(storedMatches){
+        cleanupToken=stored.token;
+        cleanupOwner=stored.ownerId;
+      }else if(!stored.token&&state.ownerId&&incomingOwner&&state.ownerId===incomingOwner){
+        cleanupToken=String(result.token);
+        cleanupOwner=incomingOwner;
       }
+
+      const cleanupResult=await cleanup(cleanupToken,{ownerId:cleanupOwner});
+      const complete=cleanupResult?.cleanupComplete===true||(
+        cleanupResult?.serverRevoked===true&&cleanupResult?.localUnregistered===true
+      );
+      if(!complete)throw new Error("Native notification credential cleanup failed");
     }
     return result;
   }
