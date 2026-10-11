@@ -43,6 +43,10 @@ function startupHarness(overrides={}){
   return {options,events,get listenCalls(){return listenCalls;}};
 }
 
+function modelWithIndexes(indexes){
+  return {collection:{indexes:async()=>indexes}};
+}
+
 test("startup waits for lifecycle index initialization before listening",async()=>{
   const gate=deferred();
   const harness=startupHarness({
@@ -75,23 +79,41 @@ test("index initialization failure prevents listener startup",async()=>{
   assert.equal(harness.listenCalls,0);
 });
 
-test("missing or wrong critical unique index fails verification",async()=>{
-  const missingUnique={collection:{indexes:async()=>[
-    {name:"_id_",key:{_id:1}},
-    {name:"appId_1_installationId_1",key:{appId:1,installationId:1}}
-  ]}};
-  await assert.rejects(
-    verifyNativePushLifecycleIndexes({model:missingUnique}),
-    /index verification failed/
-  );
+test("critical lifecycle index verification accepts only exact ordered unique pair",async()=>{
+  const accepted={name:"any-name",key:{appId:1,installationId:1},unique:true};
+  const verified=await verifyNativePushLifecycleIndexes({model:modelWithIndexes([accepted])});
+  assert.equal(verified,accepted);
+  assert.deepEqual(Object.entries(verified.key),[["appId",1],["installationId",1]]);
 
-  const wrongKeys={collection:{indexes:async()=>[
-    {name:"wrong",key:{appId:1,userId:1},unique:true}
-  ]}};
-  await assert.rejects(
-    verifyNativePushLifecycleIndexes({model:wrongKeys}),
-    /index verification failed/
-  );
+  const rejected=[
+    ["missing index",[]],
+    ["non-unique",[{key:{appId:1,installationId:1},unique:false}]],
+    ["only appId",[{key:{appId:1},unique:true}]],
+    ["only installationId",[{key:{installationId:1},unique:true}]],
+    ["extra field",[{key:{appId:1,installationId:1,userId:1},unique:true}]],
+    ["wrong direction",[{key:{appId:-1,installationId:1},unique:true}]],
+    ["reversed order",[{key:{installationId:1,appId:1},unique:true}]],
+    ["malformed metadata",[{key:null,unique:true}]]
+  ];
+  for(const [label,indexes] of rejected){
+    await assert.rejects(
+      verifyNativePushLifecycleIndexes({model:modelWithIndexes(indexes)}),
+      /index verification failed/,
+      label
+    );
+  }
+});
+
+test("reversed critical index fails closed before HTTP listener startup",async()=>{
+  const reversed=modelWithIndexes([
+    {name:"installationId_1_appId_1",key:{installationId:1,appId:1},unique:true}
+  ]);
+  const harness=startupHarness({
+    initializeLifecycleIndexes:()=>verifyNativePushLifecycleIndexes({model:reversed})
+  });
+  await assert.rejects(bootstrapServer(harness.options),/index verification failed/);
+  assert.equal(harness.listenCalls,0);
+  assert.deepEqual(harness.events,["db"]);
 });
 
 test("explicit index init is awaited and correct metadata allows startup",async()=>{
