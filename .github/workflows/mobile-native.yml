@@ -18,6 +18,11 @@ on:
         required: false
         default: true
         type: boolean
+      native_fcm:
+        description: "Require and validate FIREBASE_ANDROID_CONFIG_BASE64 for this Android artifact (feature flag still remains false)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -52,10 +57,15 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Validate native push code/config contract
+        working-directory: customer-app
+        run: npm run test:native-push
+
       - name: Build web app
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+          VITE_NATIVE_PUSH_ENABLED: "false"
         run: npm run build
 
       - name: Verify Android production web environment
@@ -78,6 +88,17 @@ jobs:
       - name: Sync Android project
         working-directory: customer-app
         run: npx cap sync android
+
+      - name: Prepare generated Android Google Services integration
+        working-directory: customer-app
+        run: npm run mobile:fcm:prepare
+
+      - name: Inject validated Firebase Android config when explicitly requested
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_fcm }}
+        working-directory: customer-app
+        env:
+          FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_CONFIG_BASE64 }}
+        run: npm run mobile:fcm:prepare -- --require-config
 
       - name: Verify synced Android web artifact
         working-directory: customer-app
@@ -127,10 +148,15 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Validate native push code/config contract
+        working-directory: customer-app
+        run: npm run test:native-push
+
       - name: Build web app
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+          VITE_NATIVE_PUSH_ENABLED: "false"
         run: npm run build
 
       - name: Verify iOS production web environment
