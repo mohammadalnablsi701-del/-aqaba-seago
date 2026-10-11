@@ -95,6 +95,10 @@ function writeCleanupPending(state){
       state?.serverFenceWasConfirmedPreviously===true||
       state?.fenceConfirmed===true||
       state?.serverRevoked===true,
+    // Retained only for backward-compatible recovery diagnostics. readCleanupPending
+    // never restores these booleans as current-lifecycle authority.
+    fenceConfirmed:state?.fenceConfirmed===true,
+    serverRevoked:state?.fenceConfirmed===true&&state?.serverRevoked===true,
     localUnregistered:state?.localUnregistered===true
   }));
 }
