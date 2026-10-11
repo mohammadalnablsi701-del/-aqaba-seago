@@ -192,4 +192,18 @@ test("refund provider events share the durable PaymentEvent transaction boundary
     assert.equal(await PaymentEvent.countDocuments({ paymentId: f.payment._id }), 0);
     assert.equal((await Refund.findById(f.refund._id).lean()).state, "requested");
   });
+
+  await t.test("R8 missing parent Payment aborts webhook with neither event nor Refund mutation", async () => {
+    const f = await fixture();
+    const eventId = crypto.randomUUID();
+    await Payment.deleteOne({ _id: f.payment._id });
+    await assert.rejects(
+      send(f, { eventId, providerRefundId: "provider_r8" }),
+      { statusCode: 409 }
+    );
+    assert.equal(await PaymentEvent.countDocuments({ provider: "mock", eventId }), 0);
+    const refund = await Refund.findById(f.refund._id).lean();
+    assert.equal(refund.state, "requested");
+    assert.equal(refund.reviewReason, undefined);
+  });
 });
