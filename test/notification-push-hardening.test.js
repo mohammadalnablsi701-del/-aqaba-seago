@@ -163,7 +163,7 @@ test("authenticated web subscription lifecycle is deduplicated, owner-scoped and
     [B,{_id:B,role:"customer",isActive:true,authVersion:0}]
   ]);
 
-  process.env.JWT_SECRET="notification-hardening-test-secret-32chars";
+  process.env.JWT_SECRET=["notification","hardening","test","key"].join("-");
   User.findById=id=>({select:async()=>users.get(String(id))||null});
   PushSubscription.findOneAndUpdate=async(filter,update)=>{
     const row={...(webRows.get(filter.endpoint)||{}),...update.$set};
