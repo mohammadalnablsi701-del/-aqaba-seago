@@ -15,12 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node 20
+      - name: Setup Node 20.20.2
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Install backend dependencies
-        run: npm install
+          node-version: 20.20.2
+      - name: Install backend dependencies from lockfile
+        run: npm ci
       - name: Install disposable MongoDB replica set runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
       - name: Run customer-safe payment DTO integration test

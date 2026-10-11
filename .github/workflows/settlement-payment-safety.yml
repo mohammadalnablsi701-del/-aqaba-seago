@@ -16,12 +16,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node 20
+      - name: Setup Node 20.20.2
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Install backend dependencies
-        run: npm install --no-fund
+          node-version: 20.20.2
+      - name: Install backend dependencies from lockfile
+        run: npm ci --no-fund
       - name: Install isolated MongoDB test runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
       - name: Run Task 3 and financial regressions on disposable replica set
@@ -76,7 +76,7 @@ jobs:
         run: npm ci --no-fund && npm run build
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.20.2
       - name: Build provider app
         working-directory: provider-app
         env:

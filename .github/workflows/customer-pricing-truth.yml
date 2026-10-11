@@ -15,14 +15,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node 20
+      - name: Setup Node 20.20.2
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.20.2
       - name: Run customer pricing truth unit regressions
         run: node --test test/customer-pricing-truth.test.js
-      - name: Install backend dependencies
-        run: npm install
+      - name: Install backend dependencies from lockfile
+        run: npm ci
       - name: Install disposable MongoDB replica set runner
         run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
       - name: Run checkout repricing and booking snapshot regression
