@@ -30,7 +30,8 @@ function storedGeneration(storage){
 }
 
 export function createNativePushController({plugin,nativeBridge,storage,enabled,platform,api,notify=()=>{},onReceive=()=>{},onTap=()=>{},timeoutMs=15000,uuid=()=>crypto.randomUUID(),identityForToken=tokenIdentity}) {
-  let auth="",accountIdentity="",epoch=storedGeneration(storage),handles=[],pendingCancel=null,queue=Promise.resolve(),nativeDeletionFailure=false;
+  let auth="",accountIdentity="",epoch=storedGeneration(storage),handles=[],pendingCancel=null,queue=Promise.resolve();
+  let nativeDeletionState="clear",nativeDeletionPromise=null;
   let state={supported:enabled && platform === "android",permission:"default",subscribed:false};
   const publish=patch=>{state={...state,...patch};notify({...state});return {...state};};
   const current=ctx=>Boolean(ctx)&&ctx.generation===epoch&&ctx.token===auth&&ctx.accountIdentity===accountIdentity;
@@ -67,11 +68,45 @@ export function createNativePushController({plugin,nativeBridge,storage,enabled,
       return result===true||result?.configured===true;
     }catch{return false;}
   }
-  async function deleteNativeToken(){
-    if(!(await nativeConfigured())){nativeDeletionFailure=false;return {skipped:true};}
-    if(!nativeBridge?.deleteToken){nativeDeletionFailure=true;throw problem("revoked");}
-    try{await nativeBridge.deleteToken();nativeDeletionFailure=false;return {deleted:true};}
-    catch{nativeDeletionFailure=true;throw problem("revoked");}
+  function deleteNativeToken(){
+    if(nativeDeletionPromise)return nativeDeletionPromise;
+    const previousState=nativeDeletionState;
+    nativeDeletionState="pending";
+    const operation=(async()=>{
+      if(!(await nativeConfigured())){
+        nativeDeletionState=previousState==="failed"?"failed":"clear";
+        return {skipped:true};
+      }
+      if(!nativeBridge?.deleteToken){
+        nativeDeletionState="failed";
+        throw problem("revoked");
+      }
+      try{
+        await nativeBridge.deleteToken();
+        nativeDeletionState="clear";
+        return {deleted:true};
+      }catch{
+        nativeDeletionState="failed";
+        throw problem("revoked");
+      }
+    })();
+    nativeDeletionPromise=operation.finally(()=>{nativeDeletionPromise=null;});
+    return nativeDeletionPromise;
+  }
+  async function enforceNativeDeletionBarrier(ctx,{retryFailed=false}={}){
+    const canRetryNow=retryFailed&&nativeDeletionState==="failed"&&!nativeDeletionPromise;
+    const pending=nativeDeletionPromise;
+    if(pending){
+      try{await pending;}catch{}
+      assertCurrent(ctx);
+      if(nativeDeletionState==="failed")throw problem("revoked",ctx);
+    }
+    if(nativeDeletionState==="failed"){
+      if(!canRetryNow)throw problem("revoked",ctx);
+      await deleteNativeToken();
+      assertCurrent(ctx);
+      if(nativeDeletionState!=="clear")throw problem("revoked",ctx);
+    }
   }
   async function revoke(token,generation,deleteDeviceToken=true){
     const tasks=[token?api.unregister(installationId(),token,generation):Promise.resolve()];
@@ -82,7 +117,7 @@ export function createNativePushController({plugin,nativeBridge,storage,enabled,
   }
   async function registerToken(value,ctx){
     assertCurrent(ctx);
-    if(nativeDeletionFailure)throw problem("revoked",ctx);
+    await enforceNativeDeletionBarrier(ctx);
     if(typeof value!=="string" || value.length<16)throw problem("registration",ctx);
     assertCurrent(ctx);
     try { await api.register({...NATIVE_PUSH_CONTEXT,token:value,installationId:installationId(),lifecycleGeneration:ctx.generation},ctx.token,ctx.generation); }
@@ -93,10 +128,11 @@ export function createNativePushController({plugin,nativeBridge,storage,enabled,
   async function start(ctx,prompt){
     assertCurrent(ctx);
     if(!state.supported || !ctx.token)throw problem("disabled",ctx);
-    if(nativeDeletionFailure)throw problem("revoked",ctx);
     const configured=await nativeConfigured();
     assertCurrent(ctx);
     if(!configured)throw problem("disabled",ctx);
+    await enforceNativeDeletionBarrier(ctx,{retryFailed:prompt===true});
+    assertCurrent(ctx);
     let backend;
     try { backend=await api.status(ctx.token); } catch { throw problem("sync",ctx); }
     assertCurrent(ctx);
