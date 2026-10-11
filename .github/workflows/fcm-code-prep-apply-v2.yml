@@ -1,0 +1,95 @@
+name: One-shot Android FCM Code Prep Apply v2
+
+on:
+  push:
+    branches: [feature/android-fcm-code-prep]
+    paths:
+      - "scripts/fix-fcm-apply.py"
+      - ".github/workflows/fcm-code-prep-apply-v2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout preparation branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/android-fcm-code-prep
+
+      - name: Correct patch matcher and apply deterministic code preparation
+        run: |
+          python3 scripts/fix-fcm-apply.py
+          python3 scripts/apply-fcm-code-prep.py
+
+      - name: Setup exact backend Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Backend npm ci
+        run: npm ci --no-fund
+
+      - name: Backend tests
+        run: npm test
+
+      - name: Setup customer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Customer npm ci
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Customer native push/config tests
+        working-directory: customer-app
+        run: npm run test:native-push
+
+      - name: Customer production build with native push disabled
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+          VITE_NATIVE_PUSH_ENABLED: "false"
+        run: npm run build
+
+      - name: Generate Android project and validate Gradle preparation without Firebase config
+        working-directory: customer-app
+        run: |
+          set -euo pipefail
+          npx cap add android
+          npx cap sync android
+          npm run mobile:fcm:prepare
+          grep -q "com.google.gms:google-services" android/build.gradle
+          grep -q "com.google.gms.google-services" android/app/build.gradle
+          test ! -f android/app/google-services.json
+
+      - name: Diff safety check
+        run: git diff --check
+
+      - name: Remove one-shot preparation machinery and generated artifacts
+        run: |
+          rm -rf customer-app/android customer-app/dist
+          git rm -f \
+            .github/workflows/fcm-lock-prep.yml \
+            .github/workflows/fcm-code-prep-apply.yml \
+            .github/workflows/fcm-code-prep-apply-v2.yml \
+            scripts/apply-fcm-code-prep.py \
+            scripts/fix-fcm-apply.py
+
+      - name: Commit validated FCM code preparation
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: prepare Android FCM delivery safely"
+          git push origin HEAD:feature/android-fcm-code-prep
