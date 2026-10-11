@@ -54,13 +54,15 @@ export async function deliverWebPush(subscription,payload,{send=webpush.sendNoti
     data:safePushData(payload?.data)
   };
   let lastError;
+  let attempts=0;
   for(let attempt=1;attempt<=MAX_DELIVERY_ATTEMPTS;attempt++){
+    attempts=attempt;
     try{
       await send(
         {endpoint:subscription.endpoint,keys:subscription.keys},
         JSON.stringify(safePayload)
       );
-      return {ok:true,attempts:attempt};
+      return {ok:true,attempts};
     }catch(error){
       lastError=error;
       if(pushFailureCode(error)==="push_subscription_invalid")break;
@@ -69,7 +71,7 @@ export async function deliverWebPush(subscription,payload,{send=webpush.sendNoti
   }
   return {
     ok:false,
-    attempts:MAX_DELIVERY_ATTEMPTS,
+    attempts,
     code:pushFailureCode(lastError),
     statusCode:safeProviderStatus(lastError?.statusCode||lastError?.status)
   };
