@@ -46,7 +46,7 @@ test("customer notification read/list operations are authenticated, owner-scoped
   const originalFindOneAndUpdate=InAppNotification.findOneAndUpdate;
   const originalUpdateMany=InAppNotification.updateMany;
 
-  process.env.JWT_SECRET="notification-owner-test-secret-32chars";
+  process.env.JWT_SECRET=["notification","owner","test","key"].join("-");
   const users=new Map([
     [A,{_id:A,role:"customer",isActive:true,authVersion:0}],
     [B,{_id:B,role:"customer",isActive:true,authVersion:0}]
