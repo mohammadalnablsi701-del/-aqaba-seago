@@ -145,7 +145,7 @@ export function nativePushCleanupState({ownerId=currentAuthOwnerId()}={}){
   const persisted=readCleanupPending();
   const pending=applyInMemoryFenceAuthority(persisted,{ownerId});
   const installationId=pending?.installationId||currentInstallationId();
-  const resolvedOwnerId=pending?.ownerId||currentOwnerId();
+  const resolvedOwnerId=persisted?text(persisted.ownerId):currentOwnerId();
   const lifecycleEpoch=pending?.lifecycleEpoch||currentLifecycleEpoch();
   const registered=localStorage.getItem(REGISTERED_KEY)==="1";
   return {
