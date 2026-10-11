@@ -11,8 +11,7 @@ import {
 
 const PERMANENT_FCM_CODES=new Set([
   "messaging/invalid-registration-token",
-  "messaging/registration-token-not-registered",
-  "messaging/invalid-argument"
+  "messaging/registration-token-not-registered"
 ]);
 
 const TRANSIENT_FCM_CODES=new Set([
