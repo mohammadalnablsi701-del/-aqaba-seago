@@ -9,8 +9,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "test:native-push": "node scripts/test-native-push-config.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "mobile:sync": "npm run build && cap sync",
+    "mobile:fcm:prepare": "node scripts/prepare-android-fcm.mjs",
     "mobile:add:android": "cap add android",
     "mobile:add:ios": "cap add ios",
     "mobile:assets": "bash scripts/generate-native-assets.sh all",

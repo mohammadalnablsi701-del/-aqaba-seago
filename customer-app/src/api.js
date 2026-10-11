@@ -1,6 +1,19 @@
 import { applyCustomerTicketState } from "./ticketLifecycle.js";
+import { nativePushFeatureEnabled, resolvePushChannel } from "./nativePushConfig.js";
 
 const API_BASE = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+async function runtimePushContext(){
+  try{
+    const {Capacitor}=await import("@capacitor/core");
+    const isNative=Capacitor.isNativePlatform();
+    const platform=Capacitor.getPlatform();
+    const enabled=nativePushFeatureEnabled();
+    return {isNative,platform,channel:resolvePushChannel({enabled,isNative,platform})};
+  }catch{
+    return {isNative:false,platform:"web",channel:"web"};
+  }
+}
 
 async function request(path, options = {}) {
   if (!API_BASE) throw new Error("API_NOT_CONFIGURED");
@@ -146,6 +159,9 @@ async function currentWebPushSubscription(){
 }
 
 export async function enablePushNotifications(token){
+  const runtime=await runtimePushContext();
+  if(runtime.channel==="native-android")return (await import("./nativePush.js")).enableNativePush(token);
+  if(runtime.isNative)throw new Error("Native push is disabled for this build");
   if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))throw new Error("Push notifications are not supported on this device/browser");
   const permission=await Notification.requestPermission();
   if(permission!=="granted")throw new Error("Notification permission was not granted");
@@ -160,6 +176,8 @@ export async function enablePushNotifications(token){
 }
 
 export async function reconcileExistingPushSubscription(token){
+  const runtime=await runtimePushContext();
+  if(runtime.isNative)return {reconciled:false};
   if(!token||typeof Notification==="undefined"||Notification.permission!=="granted")return {reconciled:false};
   const subscription=await currentWebPushSubscription();
   if(!subscription)return {reconciled:false};
@@ -168,6 +186,11 @@ export async function reconcileExistingPushSubscription(token){
 }
 
 export async function disablePushNotifications(token,{timeoutMs=1500}={}){
+  const runtime=await runtimePushContext();
+  if(runtime.isNative){
+    if(runtime.platform==="android")return (await import("./nativePush.js")).disableNativePush(token);
+    return {serverRevoked:false,native:true};
+  }
   const subscription=await currentWebPushSubscription().catch(()=>null);
   if(!subscription)return {serverRevoked:false,browserUnsubscribed:false,hadSubscription:false};
 
@@ -191,6 +214,9 @@ export async function disablePushNotifications(token,{timeoutMs=1500}={}){
 }
 
 export async function pushNotificationStatus(){
+  const runtime=await runtimePushContext();
+  if(runtime.channel==="native-android")return (await import("./nativePush.js")).nativePushPermission();
+  if(runtime.isNative)return {supported:false,permission:"disabled",subscribed:false,native:true};
   if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return {supported:false,permission:"unsupported",subscribed:false};
   const registration=await navigator.serviceWorker.ready;
   const subscription=await registration.pushManager.getSubscription();
