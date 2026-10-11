@@ -118,8 +118,6 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
   const pastScheduled = await makeBooking({ departureId: pastScheduledDep._id, marker: 8 });
   const otherBooking = await makeBooking({ customerId: otherCustomer._id, departureId: otherDep._id, marker: 9 });
 
-  // A platform pause blocks new selling but does not invalidate an already
-  // confirmed booking. This protects the existing-booking safety contract.
   trip.platformStatus = "paused";
   await trip.save();
 
@@ -216,7 +214,7 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
     assert.equal(checkIn.response.status, 409);
     assert.equal(checkIn.body.code, "departure_expired");
     const stored = await Booking.findById(pastScheduled._id).lean();
-    assert.equal(stored.checkedInAt, undefined);
+    assert.equal(stored.checkedInAt ?? null, null);
     assert.equal(stored.checkInCount, 0);
   });
 
