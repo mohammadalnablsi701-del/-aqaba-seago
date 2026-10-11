@@ -1,12 +1,33 @@
+const SAFE_SCREENS=new Set(["notifications","bookings","manifest"]);
+const SAFE_ID=/^[A-Za-z0-9_-]{1,80}$/;
+
+function safeText(value,fallback,max){
+  return typeof value==="string"&&value.trim()?value.trim().slice(0,max):fallback;
+}
+function safeData(value){
+  if(!value||typeof value!=="object"||Array.isArray(value))return {};
+  const data={};
+  if(SAFE_SCREENS.has(value.screen))data.screen=value.screen;
+  for(const key of ["notificationId","departureId"]){
+    const item=String(value[key]||"");
+    if(SAFE_ID.test(item))data[key]=item;
+  }
+  return data;
+}
+
 self.addEventListener("push",event=>{
   let payload={};
-  try{payload=event.data?event.data.json():{}}catch{payload={body:event.data?.text()||""}}
-  const title=payload.title||"Aqaba SeaGo";
+  try{
+    const parsed=event.data?event.data.json():{};
+    if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed))payload=parsed;
+  }catch{payload={};}
+  const data=safeData(payload.data);
+  const title=safeText(payload.title,"Aqaba SeaGo",80);
   const options={
-    body:payload.body||"You have a new SeaGo update.",
+    body:safeText(payload.body,"You have a new SeaGo update.",180),
     badge:undefined,
-    tag:payload.data?.notificationId||payload.data?.screen||"seago",
-    data:payload.data||{},
+    tag:data.notificationId||data.screen||"seago",
+    data,
     renotify:true
   };
   event.waitUntil(self.registration.showNotification(title,options));
