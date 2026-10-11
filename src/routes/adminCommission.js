@@ -4,10 +4,11 @@ import Provider from "../models/Provider.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { attachAdminActionReason } from "../services/adminActionReason.js";
 import { createAdminAuditEvent, withAdminAuditTransaction } from "../services/adminAudit.js";
+import { InvalidCommissionConfiguration, SUPPORTED_COMMISSION_TYPES, validateCommissionConfig } from "../services/commission.js";
 import { commissionMatchesApprovedPlan, isFunNSunProviderName, resolveFunNSunCommissionPlan } from "../services/pilotCommissionRules.js";
 
 const router=express.Router();
-const TYPES=new Set(["percentage","fixed_per_person","fixed_per_booking"]);
+const TYPES=new Set(SUPPORTED_COMMISSION_TYPES);
 const TIER_KEYS=["adultCommission","childCommission","buffetAdultCommission","buffetChildCommission"];
 const SNAPSHOT_KEYS=["commissionType","commissionValue",...TIER_KEYS];
 const ALLOWED_BODY_KEYS=new Set(["commissionType","commissionValue",...TIER_KEYS,"confirmTypeChange","percentage","reason"]);
@@ -39,12 +40,29 @@ function commissionSnapshot(pricing={}){
 function sameSnapshot(a,b){return JSON.stringify(a)===JSON.stringify(b);}
 function clearedTiers(){return Object.fromEntries(TIER_KEYS.map(key=>[key,undefined]));}
 
+function validateFinalCommissionUpdate(currentPricing,update){
+  const finalConfig=commissionSnapshot(currentPricing);
+  for(const [key,value] of Object.entries(update)){
+    if(value===undefined)delete finalConfig[key];
+    else finalConfig[key]=value;
+  }
+  try{
+    validateCommissionConfig(finalConfig);
+  }catch(error){
+    if(error instanceof InvalidCommissionConfiguration)error.statusCode=400;
+    throw error;
+  }
+  return update;
+}
+
 export function buildCommissionUpdate(currentPricing={},body={}){
   assertPayload(body);
-  const currentType=String(currentPricing.commissionType||"percentage");
+  const currentType=currentPricing?.commissionType;
   const legacyPercentage=body.percentage!==undefined&&body.commissionType===undefined;
-  const nextType=legacyPercentage?"percentage":String(body.commissionType||currentType);
-  if(!TYPES.has(nextType))fail("Unsupported commission type");
+  const nextType=legacyPercentage
+    ? "percentage"
+    : (body.commissionType!==undefined?body.commissionType:currentType);
+  if(typeof nextType!=="string"||!TYPES.has(nextType))fail("Unsupported commission type");
 
   if(legacyPercentage&&currentType!=="percentage"){
     fail("This trip uses a fixed commission. Use the fixed commission editor instead of percentage commission.",409);
@@ -55,12 +73,12 @@ export function buildCommissionUpdate(currentPricing={},body={}){
 
   if(nextType==="percentage"){
     const commissionValue=number(legacyPercentage?body.percentage:body.commissionValue,"Commission percentage",{max:100});
-    return {commissionType:nextType,commissionValue,...clearedTiers()};
+    return validateFinalCommissionUpdate(currentPricing,{commissionType:nextType,commissionValue,...clearedTiers()});
   }
 
   if(nextType==="fixed_per_booking"){
     const commissionValue=number(body.commissionValue,"Fixed booking commission");
-    return {commissionType:nextType,commissionValue,...clearedTiers()};
+    return validateFinalCommissionUpdate(currentPricing,{commissionType:nextType,commissionValue,...clearedTiers()});
   }
 
   const switchingIntoFixed=currentType!=="fixed_per_person";
@@ -79,7 +97,7 @@ export function buildCommissionUpdate(currentPricing={},body={}){
   if(present(update.adultCommission)!==present(update.childCommission))fail("Adult and child commissions must be configured together");
   if(present(update.buffetAdultCommission)!==present(update.buffetChildCommission))fail("Buffet adult and child commissions must be configured together");
   if(buffetPair&&!adultPair)fail("Buffet commission tiers require adult and child commission tiers");
-  return update;
+  return validateFinalCommissionUpdate(currentPricing,update);
 }
 
 router.use(requireAuth,requireRole("admin"));
