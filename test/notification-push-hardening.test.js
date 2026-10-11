@@ -225,11 +225,12 @@ test("native push registration contract uses authenticated installation binding 
   const nativeSource=source("../customer-app/src/nativePush.js");
   assert.match(routeSource,/router\.post\("\/native-subscribe",requireAuth,requireRole\("customer"\)/);
   assert.match(routeSource,/installationId/);
-  assert.match(routeSource,/ownershipFilter=\{appId:APP_ID,installationId,\$or:\[\{userId:req\.user\._id\},\{token\}\]\}/);
+  assert.match(routeSource,/ownershipFilter=\{appId:APP_ID,installationId,userId:req\.user\._id\}/);
+  assert.doesNotMatch(routeSource,/ownershipFilter=\{appId:APP_ID,installationId,\$or:/);
   assert.doesNotMatch(routeSource,/deleteMany\(\{appId:APP_ID,installationId,token:/);
   assert.match(routeSource,/res\.json\(\{ok:true\}\)/);
   assert.match(nativeSource,/registration.*registerToken/s);
-  assert.match(nativeSource,/disableNativePush\(authToken\)/);
+  assert.match(nativeSource,/disableNativePush\(authToken/);
   assert.doesNotMatch(nativeSource,/localStorage\.setItem\([^,]+,token/);
 });
 

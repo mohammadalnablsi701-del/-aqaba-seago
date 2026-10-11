@@ -1,7 +1,7 @@
 import { applyCustomerTicketState } from "./ticketLifecycle.js";
 import { nativePushFeatureEnabled, resolvePushChannel } from "./nativePushConfig.js";
 
-const API_BASE = String(import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = String((import.meta.env && import.meta.env.VITE_API_BASE_URL) || "").replace(/\/$/, "");
 
 async function runtimePushContext(){
   try{
