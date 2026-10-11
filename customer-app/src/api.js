@@ -218,6 +218,6 @@ export async function googleSignIn(credential,role="customer"){
 
 export const deleteAccount=token=>request("/api/auth/account",{method:"DELETE",token});
 export const registerNativePushToken=(registration,token)=>request("/api/push/native-subscribe",{method:"POST",token,body:JSON.stringify(registration),signal:AbortSignal.timeout(10000)});
-export const unregisterNativePushToken=(installationId,token)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId}),signal:AbortSignal.timeout(10000)});
+export const unregisterNativePushToken=(installationId,token,lifecycleGeneration)=>request("/api/push/native-unsubscribe",{method:"POST",token,body:JSON.stringify({installationId,lifecycleGeneration}),signal:AbortSignal.timeout(10000)});
 export const nativePushStatus=token=>request("/api/push/native-status",{token,signal:AbortSignal.timeout(10000)});
 export const sendNativeTestPush=token=>request("/api/push/native-test",{method:"POST",token,signal:AbortSignal.timeout(20000)});

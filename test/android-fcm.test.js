@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import router from "../src/routes/push.js";
 import User from "../src/models/User.js";
 import NativePushToken from "../src/models/NativePushToken.js";
+import NativePushLifecycle from "../src/models/NativePushLifecycle.js";
 import { NATIVE_PUSH_CONTEXT as context } from "../shared/nativePushContext.js";
 import { sendNativePushToUser, configuredMessaging } from "../src/services/nativeFcm.js";
 import { sendPushToUser, sendWebPushToUser } from "../src/services/push.js";
@@ -12,7 +14,7 @@ import { sendPushToUser, sendWebPushToUser } from "../src/services/push.js";
 const token="private-fcm-token-that-must-never-be-logged";
 const userId="507f1f77bcf86cd799439011";
 const installationId="installation_customer_123";
-const registration={...context,token,installationId};
+const registration={...context,token,installationId,lifecycleGeneration:1};
 const row={...registration,userId,_id:"binding-1"};
 
 function senderHarness(code){
@@ -84,18 +86,32 @@ test("browser Web Push and native sending are independent of each other's config
   }finally{if(old===undefined)delete process.env.VAPID_PUBLIC_KEY;else process.env.VAPID_PUBLIC_KEY=old;}
 });
 
-test("native routes enforce customer role, Android context, ownership, disabled state and safe DB errors",async()=>{
-  const originals={find:User.findById,upsert:NativePushToken.findOneAndUpdate,remove:NativePushToken.deleteMany,secret:process.env.JWT_SECRET,enabled:process.env.FCM_ENABLED};
+test("native routes enforce customer role, Android context, lifecycle generation, ownership, disabled state and safe DB errors",async()=>{
+  const originals={
+    find:User.findById,
+    upsert:NativePushToken.findOneAndUpdate,
+    remove:NativePushToken.deleteMany,
+    lifecycleFind:NativePushLifecycle.findOne,
+    lifecycleUpsert:NativePushLifecycle.findOneAndUpdate,
+    startSession:mongoose.startSession,
+    secret:process.env.JWT_SECRET,
+    enabled:process.env.FCM_ENABLED
+  };
   process.env.JWT_SECRET="android-fcm-isolated-test-signing-secret";
   process.env.FCM_ENABLED="true";
-  const writes=[],removals=[];
+  const writes=[],removals=[],fenceWrites=[];let fence=null;
   let dbError=false;
   User.findById=id=>({select:async()=>({_id:id,role:id===userId?"customer":id==="507f1f77bcf86cd799439012"?"provider":"admin",isActive:true,authVersion:0})});
+  mongoose.startSession=async()=>({withTransaction:async fn=>fn(),endSession:async()=>{}});
+  NativePushLifecycle.findOne=filter=>({session:()=>({lean:async()=>fence&&String(fence.userId)===String(filter.userId)&&fence.installationId===filter.installationId?{...fence}:null})});
+  NativePushLifecycle.findOneAndUpdate=async(filter,update,options)=>{
+    fence={...filter,...update.$set};fenceWrites.push({filter,update,options});return fence;
+  };
   NativePushToken.findOneAndUpdate=async(filter,update,options)=>{
     if(dbError)throw Object.assign(new Error(token),{code:11000});
     writes.push({filter,update,options});return {};
   };
-  NativePushToken.deleteMany=async filter=>removals.push(filter);
+  NativePushToken.deleteMany=filter=>({session:async()=>{removals.push(filter);return {deletedCount:1};}});
   const app=express();app.use(express.json());app.use("/api/push",router);
   const server=await new Promise(resolve=>{const s=app.listen(0,"127.0.0.1",()=>resolve(s));});
   async function post(path,body,id=userId){
@@ -107,25 +123,38 @@ test("native routes enforce customer role, Android context, ownership, disabled 
     assert.equal((await post("native-subscribe",registration,null)).status,401);
     for(const id of ["507f1f77bcf86cd799439012","507f1f77bcf86cd799439013"]){
       assert.equal((await post("native-subscribe",registration,id)).status,403);
-      assert.equal((await post("native-unsubscribe",{installationId},id)).status,403);
+      assert.equal((await post("native-unsubscribe",{installationId,lifecycleGeneration:2},id)).status,403);
     }
     for(const bad of [{platform:"ios"},{provider:"apns"},{firebaseProjectId:"wrong"},{firebaseAppId:"wrong"},{appId:"other.app"}])assert.equal((await post("native-subscribe",{...registration,...bad})).status,400);
+    assert.equal((await post("native-subscribe",{...registration,lifecycleGeneration:undefined})).status,400);
     assert.equal(writes.length,0);
     assert.deepEqual(await post("native-subscribe",registration),{status:200,body:{ok:true}});
     assert.deepEqual(writes[0].filter,{appId:context.appId,installationId,userId});
     assert.deepEqual(Object.fromEntries(Object.keys(context).map(k=>[k,writes[0].update.$set[k]])),context);
     assert.equal(writes[0].update.$set.token,token);
     assert.equal(writes[0].options.runValidators,true);
+    assert.equal(writes[0].options.session!=null,true);
+    assert.equal(fenceWrites[0].update.$set.generation,1);
+    assert.equal(fenceWrites[0].update.$set.state,"active");
+
+    const revoke=await post("native-unsubscribe",{installationId,lifecycleGeneration:2});
+    assert.equal(revoke.status,200);
+    assert.deepEqual(removals,[{appId:context.appId,installationId,userId}]);
+    assert.equal(fence.state,"revoked");assert.equal(fence.generation,2);
+    const stale=await post("native-subscribe",{...registration,lifecycleGeneration:1});
+    assert.equal(stale.status,409);assert.doesNotMatch(JSON.stringify(stale),/private-fcm/);
+    assert.equal(writes.length,1);
+
     process.env.FCM_ENABLED="false";
     assert.equal((await post("native-subscribe",registration)).status,503);
-    assert.equal((await post("native-unsubscribe",{installationId})).status,200);
-    assert.deepEqual(removals,[{appId:context.appId,installationId,userId}]);
-    process.env.FCM_ENABLED="true";dbError=true;
-    const failed=await post("native-subscribe",registration);
+    assert.equal((await post("native-unsubscribe",{installationId,lifecycleGeneration:3})).status,200);
+    process.env.FCM_ENABLED="true";fence=null;dbError=true;
+    const failed=await post("native-subscribe",{...registration,lifecycleGeneration:4});
     assert.equal(failed.status,409);assert.doesNotMatch(JSON.stringify(failed),/private-fcm/);
   }finally{
     await new Promise(resolve=>server.close(resolve));
     User.findById=originals.find;NativePushToken.findOneAndUpdate=originals.upsert;NativePushToken.deleteMany=originals.remove;
+    NativePushLifecycle.findOne=originals.lifecycleFind;NativePushLifecycle.findOneAndUpdate=originals.lifecycleUpsert;mongoose.startSession=originals.startSession;
     for(const [name,value] of [["JWT_SECRET",originals.secret],["FCM_ENABLED",originals.enabled]])if(value===undefined)delete process.env[name];else process.env[name]=value;
   }
 });

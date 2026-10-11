@@ -2,6 +2,7 @@ import { NATIVE_PUSH_CONTEXT } from "../../shared/nativePushContext.js";
 
 const INSTALLATION_KEY="seago_native_installation_id";
 const OPT_IN_KEY="seago_android_push_opt_in";
+const LIFECYCLE_KEY="seago_native_push_lifecycle_generation";
 const messages={
   disabled:"Native notifications are not available yet.",
   denied:"Notifications are blocked in your device settings for SeaGo.",
@@ -12,105 +13,193 @@ const messages={
   cancelled:"Notification registration was cancelled."
 };
 
-export function createNativePushController({plugin,storage,enabled,platform,api,notify=()=>{},onReceive=()=>{},onTap=()=>{},timeoutMs=15000,uuid=()=>crypto.randomUUID()}) {
-  let auth="",epoch=0,handles=[],pendingCancel=null,queue=Promise.resolve();
+function tokenIdentity(token){
+  const raw=String(token||"");
+  try{
+    const part=raw.split(".")[1];
+    if(!part)return raw;
+    const padded=part.replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-part.length%4)%4);
+    if(typeof globalThis.atob!=="function")return raw;
+    const payload=JSON.parse(globalThis.atob(padded));
+    return String(payload?.sub||payload?.userId||raw);
+  }catch{return raw;}
+}
+function storedGeneration(storage){
+  const value=Number(storage.getItem(LIFECYCLE_KEY)||0);
+  return Number.isSafeInteger(value)&&value>=0?value:0;
+}
+
+export function createNativePushController({plugin,nativeBridge,storage,enabled,platform,api,notify=()=>{},onReceive=()=>{},onTap=()=>{},timeoutMs=15000,uuid=()=>crypto.randomUUID(),identityForToken=tokenIdentity}) {
+  let auth="",accountIdentity="",epoch=storedGeneration(storage),handles=[],pendingCancel=null,queue=Promise.resolve(),nativeDeletionFailure=false;
   let state={supported:enabled && platform === "android",permission:"default",subscribed:false};
   const publish=patch=>{state={...state,...patch};notify({...state});return {...state};};
-  const problem=code=>{publish({subscribed:false,message:messages[code]});return new Error(messages[code]);};
+  const current=ctx=>Boolean(ctx)&&ctx.generation===epoch&&ctx.token===auth&&ctx.accountIdentity===accountIdentity;
+  const problem=(code,ctx)=>{if(!ctx||current(ctx))publish({subscribed:false,message:messages[code]});return new Error(messages[code]);};
+  const assertCurrent=ctx=>{if(!current(ctx))throw new Error(messages.cancelled);};
   function installationId(){
     let id=storage.getItem(INSTALLATION_KEY);
     if(!id || !/^[A-Za-z0-9_-]{16,128}$/.test(id)){id=uuid();storage.setItem(INSTALLATION_KEY,id);}
     return id;
   }
+  function nextGeneration(){
+    if(epoch>=Number.MAX_SAFE_INTEGER)throw problem("registration");
+    epoch+=1;storage.setItem(LIFECYCLE_KEY,String(epoch));return epoch;
+  }
   const serialize=fn=>{const task=queue.then(fn);queue=task.catch(()=>{});return task;};
   async function clearListeners(){
     const old=handles;handles=[];
-    await Promise.all(old.map(h=>h.remove()));
+    await Promise.allSettled(old.map(h=>h.remove()));
   }
-  function cancel(){epoch++;pendingCancel?.();pendingCancel=null;publish({subscribed:false});return epoch;}
-  async function revoke(token,unregisterDevice=true){
-    const results=await Promise.allSettled([token?api.unregister(installationId(),token):Promise.resolve(),unregisterDevice?plugin.unregister():Promise.resolve()]);
-    if(results.some(r=>r.status==="rejected")) throw problem("revoked");
+  function cancel(){
+    const generation=nextGeneration();
+    pendingCancel?.();pendingCancel=null;publish({subscribed:false});return generation;
   }
-  async function registerToken(value,token,generation){
-    if(generation!==epoch || token!==auth)return;
-    if(typeof value!=="string" || value.length<16)throw problem("registration");
-    try { await api.register({...NATIVE_PUSH_CONTEXT,token:value,installationId:installationId()},token); }
-    catch { throw problem("sync"); }
-    if(generation===epoch && token===auth) publish({subscribed:true,message:""});
+  const tapListenerReady=(async()=>{
+    if(platform!=="android"||typeof plugin?.addListener!=="function")return;
+    try{
+      await plugin.addListener("pushNotificationActionPerformed",()=>onTap({authenticated:Boolean(auth),accountIdentity:accountIdentity||null}));
+    }catch{}
+  })();
+  async function nativeConfigured(){
+    if(platform!=="android"||!nativeBridge?.isConfigured)return false;
+    try{
+      const result=await nativeBridge.isConfigured();
+      return result===true||result?.configured===true;
+    }catch{return false;}
   }
-  async function start(token,generation,prompt){
-    if(!state.supported || !token)throw problem("disabled");
+  async function deleteNativeToken(){
+    if(!(await nativeConfigured())){nativeDeletionFailure=false;return {skipped:true};}
+    if(!nativeBridge?.deleteToken){nativeDeletionFailure=true;throw problem("revoked");}
+    try{await nativeBridge.deleteToken();nativeDeletionFailure=false;return {deleted:true};}
+    catch{nativeDeletionFailure=true;throw problem("revoked");}
+  }
+  async function revoke(token,generation,deleteDeviceToken=true){
+    const tasks=[token?api.unregister(installationId(),token,generation):Promise.resolve()];
+    if(deleteDeviceToken)tasks.push(deleteNativeToken());
+    const results=await Promise.allSettled(tasks);
+    if(results.some(r=>r.status==="rejected"))throw problem("revoked");
+    return results;
+  }
+  async function registerToken(value,ctx){
+    assertCurrent(ctx);
+    if(nativeDeletionFailure)throw problem("revoked",ctx);
+    if(typeof value!=="string" || value.length<16)throw problem("registration",ctx);
+    assertCurrent(ctx);
+    try { await api.register({...NATIVE_PUSH_CONTEXT,token:value,installationId:installationId(),lifecycleGeneration:ctx.generation},ctx.token,ctx.generation); }
+    catch { throw problem("sync",ctx); }
+    assertCurrent(ctx);
+    publish({subscribed:true,message:""});
+  }
+  async function start(ctx,prompt){
+    assertCurrent(ctx);
+    if(!state.supported || !ctx.token)throw problem("disabled",ctx);
+    if(nativeDeletionFailure)throw problem("revoked",ctx);
+    const configured=await nativeConfigured();
+    assertCurrent(ctx);
+    if(!configured)throw problem("disabled",ctx);
     let backend;
-    try { backend=await api.status(token); } catch { throw problem("sync"); }
-    if(generation!==epoch)return state;
-    if(!backend.enabled)throw problem("disabled");
+    try { backend=await api.status(ctx.token); } catch { throw problem("sync",ctx); }
+    assertCurrent(ctx);
+    if(!backend.enabled)throw problem("disabled",ctx);
     let permission=await plugin.checkPermissions();
-    if(prompt && ["prompt","prompt-with-rationale"].includes(permission.receive))permission=await plugin.requestPermissions();
-    if(generation!==epoch)return state;
+    assertCurrent(ctx);
+    if(prompt && ["prompt","prompt-with-rationale"].includes(permission.receive)){
+      permission=await plugin.requestPermissions();
+      assertCurrent(ctx);
+    }
     publish({permission:permission.receive,...(permission.receive!=="granted"?{subscribed:false}:{})});
     if(permission.receive!=="granted"){
-      if(prompt)throw problem("denied");
+      if(prompt)throw problem("denied",ctx);
       return state;
     }
     await clearListeners();
+    assertCurrent(ctx);
     await plugin.createChannel({id:"seago_updates",name:"SeaGo trip updates",importance:3,visibility:0});
+    assertCurrent(ctx);
     let resolveFirst,rejectFirst,first=true,timer;
     const registered=new Promise((resolve,reject)=>{resolveFirst=resolve;rejectFirst=reject;});
     registered.catch(()=>{});
     pendingCancel=()=>rejectFirst(new Error(messages.cancelled));
     try{
       handles.push(await plugin.addListener("registration",value=>{
-        if(generation!==epoch)return;
+        if(!current(ctx))return;
         if(first){first=false;resolveFirst(value?.value);}
-        else void serialize(()=>registerToken(value?.value,token,generation)).catch(()=>{});
+        else void serialize(()=>registerToken(value?.value,ctx)).catch(()=>{});
       }));
+      assertCurrent(ctx);
       handles.push(await plugin.addListener("registrationError",()=>{
-        if(generation!==epoch)return;
-        if(first)rejectFirst(problem("registration"));else problem("registration");
+        if(!current(ctx))return;
+        if(first)rejectFirst(problem("registration",ctx));else problem("registration",ctx);
       }));
-      handles.push(await plugin.addListener("pushNotificationReceived",()=>{if(generation===epoch && auth)onReceive();}));
-      handles.push(await plugin.addListener("pushNotificationActionPerformed",()=>{if(generation===epoch && auth)onTap();}));
-      if(generation!==epoch)throw new Error(messages.cancelled);
-      timer=setTimeout(()=>rejectFirst(problem("timeout")),timeoutMs);
-      void plugin.register().catch(()=>rejectFirst(problem("registration")));
+      assertCurrent(ctx);
+      handles.push(await plugin.addListener("pushNotificationReceived",()=>{if(current(ctx))onReceive();}));
+      assertCurrent(ctx);
+      timer=setTimeout(()=>rejectFirst(problem("timeout",ctx)),timeoutMs);
+      assertCurrent(ctx);
+      void plugin.register().catch(()=>rejectFirst(problem("registration",ctx)));
       const value=await registered;
-      await registerToken(value,token,generation);
-      if(generation===epoch)storage.setItem(OPT_IN_KEY,"true");
+      assertCurrent(ctx);
+      await registerToken(value,ctx);
+      assertCurrent(ctx);
+      storage.setItem(OPT_IN_KEY,"true");
       return state;
     }catch(error){
       await clearListeners();
       throw error;
-    }finally{clearTimeout(timer);pendingCancel=null;}
+    }finally{clearTimeout(timer);if(pendingCancel)pendingCancel=null;}
   }
   function setAuth(token=""){
     token=String(token||"");
-    if(token===auth)return queue.then(()=>({...state}));
-    const previous=auth;auth=token;
+    const nextIdentity=token?String(identityForToken(token)||token):"";
+    if(token===auth && nextIdentity===accountIdentity)return queue.then(()=>({...state}));
+    const previous=auth;
+    auth=token;accountIdentity=nextIdentity;
     const generation=cancel();
+    const ctx={token,accountIdentity:nextIdentity,generation};
     return serialize(async()=>{
+      await tapListenerReady;
       await clearListeners();
       if(platform!=="android")return state;
-      // Rebind after server revocation; Capacitor unregister() does not await Android deleteToken().
-      if(previous)await revoke(previous,!token);
-      if(generation!==epoch)return state;
-      if(!state.supported){if(token && storage.getItem(OPT_IN_KEY)==="true")await revoke(token);return state;}
-      if(token && storage.getItem(OPT_IN_KEY)==="true")return start(token,generation,false);
+      if(previous)await revoke(previous,generation,!token);
+      if(!current(ctx))return state;
+      if(!state.supported){
+        if(token && storage.getItem(OPT_IN_KEY)==="true"){
+          storage.removeItem(OPT_IN_KEY);
+          await revoke(token,generation,true);
+        }
+        return state;
+      }
+      if(token && storage.getItem(OPT_IN_KEY)==="true")return start(ctx,false);
       return state;
     });
   }
   function enable(token){
+    token=String(token||"");
     const ready=setAuth(token);
-    return ready.then(()=>serialize(()=>start(auth,epoch,true))).catch(error=>{if(!Object.values(messages).includes(error.message))throw problem("registration");throw error;});
+    const ctx={token,accountIdentity:token?String(identityForToken(token)||token):"",generation:epoch};
+    return ready.then(()=>serialize(()=>start(ctx,true))).catch(error=>{
+      if(error?.message===messages.cancelled)throw error;
+      if(Object.values(messages).includes(error?.message))throw error;
+      if(current(ctx))throw problem("registration",ctx);
+      throw new Error(messages.cancelled);
+    });
   }
   function disable(token=auth){
-    auth="";cancel();storage.removeItem(OPT_IN_KEY);
-    return serialize(async()=>{await clearListeners();if(platform==="android")await revoke(token);return state;});
+    const revokeToken=String(token||auth||"");
+    auth="";accountIdentity="";
+    const generation=cancel();
+    storage.removeItem(OPT_IN_KEY);
+    return serialize(async()=>{
+      await tapListenerReady;
+      await clearListeners();
+      if(platform==="android")await revoke(revokeToken,generation,true);
+      return state;
+    });
   }
   function resume(){
-    const token=auth,generation=epoch;
-    if(!token || !state.supported || storage.getItem(OPT_IN_KEY)!=="true")return Promise.resolve(state);
-    return serialize(()=>generation===epoch?start(token,generation,false):state);
+    const ctx={token:auth,accountIdentity,generation:epoch};
+    if(!ctx.token || !state.supported || storage.getItem(OPT_IN_KEY)!=="true")return Promise.resolve(state);
+    return serialize(()=>current(ctx)?start(ctx,false):state);
   }
   return {setAuth,enable,disable,resume,status:()=>({...state}),installationId};
 }

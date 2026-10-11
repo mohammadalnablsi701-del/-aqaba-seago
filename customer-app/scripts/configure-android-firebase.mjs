@@ -3,6 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NATIVE_PUSH_CONTEXT as context } from "../../shared/nativePushContext.js";
 
+const scriptDir=path.dirname(fileURLToPath(import.meta.url));
+const bridgeTemplate=path.resolve(scriptDir,"../native/android/SeaGoFirebasePlugin.java");
+
 export function decodeAndroidConfig(encoded) {
   if (!encoded || encoded.length > 131072 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) throw new Error("Invalid Firebase Android configuration encoding");
   let config;
@@ -17,9 +20,30 @@ export function decodeAndroidConfig(encoded) {
   return config;
 }
 
+export function installSeaGoFirebaseBridge(root) {
+  const packageDir=path.join(root,"android/app/src/main/java/com/aqabaseago/app");
+  const mainActivity=path.join(packageDir,"MainActivity.java");
+  if(!fs.existsSync(mainActivity))throw new Error("Generated Android MainActivity is missing");
+  if(!fs.existsSync(bridgeTemplate))throw new Error("SeaGo Firebase bridge template is missing");
+  fs.copyFileSync(bridgeTemplate,path.join(packageDir,"SeaGoFirebasePlugin.java"));
+
+  let main=fs.readFileSync(mainActivity,"utf8");
+  if(!main.includes("registerPlugin(SeaGoFirebasePlugin.class)")){
+    if(!main.includes("import android.os.Bundle;")){
+      main=main.replace(/(package\s+com\.aqabaseago\.app;\s*)/,"$1\nimport android.os.Bundle;\n");
+    }
+    const emptyClass=/public\s+class\s+MainActivity\s+extends\s+BridgeActivity\s*\{\s*\}/m;
+    if(!emptyClass.test(main))throw new Error("Generated Android MainActivity shape is unsupported for Firebase bridge injection");
+    main=main.replace(emptyClass,`public class MainActivity extends BridgeActivity {\n  @Override\n  public void onCreate(Bundle savedInstanceState) {\n    registerPlugin(SeaGoFirebasePlugin.class);\n    super.onCreate(savedInstanceState);\n  }\n}`);
+    fs.writeFileSync(mainActivity,main);
+  }
+  return path.join(packageDir,"SeaGoFirebasePlugin.java");
+}
+
 export function configureAndroidFirebase({root=process.cwd(),env=process.env}={}) {
   const app=path.join(root,"android/app");
   if (!fs.existsSync(app)) throw new Error("Generate the Android project before configuring Firebase");
+  installSeaGoFirebaseBridge(root);
   const target=path.join(app,"google-services.json");
   const encoded=env.FIREBASE_ANDROID_CONFIG_BASE64;
   if (encoded) {
