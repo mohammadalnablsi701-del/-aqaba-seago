@@ -19,7 +19,9 @@ const paymentSchema = new mongoose.Schema({
   paidAt: Date,
   failedAt: Date,
   refundedAmount: { type: Number, min: 0, default: 0 },
+  refundReservedAmount: { type: Number, min: 0, default: 0 },
   refundedAt: Date,
+  // Legacy single-reference mirror. New refunds use the durable Refund entity.
   refundReference: String,
   lastEventId: String,
   rawLastEvent: mongoose.Schema.Types.Mixed
