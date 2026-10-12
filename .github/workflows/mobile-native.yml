@@ -18,7 +18,7 @@ on:
       build_ios:
         description: "Also build an unsigned iOS simulator app"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -30,11 +30,11 @@ concurrency:
 
 jobs:
   android-debug:
-    name: Android APK and AAB
+    name: Android APK and AAB — Staging FCM Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      VITE_NATIVE_PUSH_ENABLED: ${{ vars.VITE_NATIVE_PUSH_ENABLED || 'false' }}
+      VITE_NATIVE_PUSH_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,15 +56,15 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
-      - name: Build web app
+      - name: Build web app against staging API
         working-directory: customer-app
         env:
-          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+          VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
         run: npm run build
 
-      - name: Verify Android production web environment
+      - name: Verify Android staging web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="Android Staging"
 
       - name: Create Android project
         working-directory: customer-app
@@ -89,9 +89,9 @@ jobs:
         working-directory: customer-app
         run: npx cap sync android
 
-      - name: Verify synced Android web artifact
+      - name: Verify synced Android staging web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="Android Staging synced artifact"
 
       - name: Run Firebase Task completion unit test
         working-directory: customer-app/android
@@ -105,25 +105,25 @@ jobs:
         working-directory: customer-app/android
         run: ./gradlew bundleRelease --stacktrace
 
-      - name: Upload debug APK
+      - name: Upload staging debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-debug
+          name: aqaba-seago-android-debug-staging
           path: customer-app/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload unsigned release AAB
+      - name: Upload staging unsigned release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-release-unsigned
+          name: aqaba-seago-android-release-unsigned-staging
           path: customer-app/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
 
   ios-simulator:
     name: iOS simulator build
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.build_ios }}
+    if: ${{ inputs.build_ios }}
     runs-on: macos-26
     timeout-minutes: 35
     steps:
@@ -141,15 +141,15 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
-      - name: Build web app
+      - name: Build web app against staging API
         working-directory: customer-app
         env:
-          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+          VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
         run: npm run build
 
-      - name: Verify iOS production web environment
+      - name: Verify iOS staging web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="iOS Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="iOS Staging"
 
       - name: Create iOS project
         working-directory: customer-app
@@ -168,9 +168,9 @@ jobs:
         working-directory: customer-app
         run: npx cap sync ios
 
-      - name: Verify synced iOS web artifact
+      - name: Verify synced iOS staging web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="iOS synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="iOS Staging synced artifact"
 
       - name: Build unsigned simulator app
         working-directory: customer-app
@@ -187,7 +187,7 @@ jobs:
       - name: Upload iOS simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-ios-simulator
+          name: aqaba-seago-ios-simulator-staging
           path: customer-app/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
           if-no-files-found: error
           retention-days: 14
