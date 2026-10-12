@@ -28,6 +28,16 @@ export function configuredMessaging(env = process.env) {
   return getMessaging(app);
 }
 
+export function validateNativeFcmStartup(env = process.env) {
+  if (!fcmEnabled(env)) return {enabled:false,ready:true};
+  try {
+    configuredMessaging(env);
+    return {enabled:true,ready:true};
+  } catch {
+    throw new Error("fcm_configuration_invalid");
+  }
+}
+
 export function nativeFailure(code) {
   if (["messaging/registration-token-not-registered", "messaging/invalid-registration-token"].includes(code)) return "fcm_token_invalid";
   if (["messaging/server-unavailable", "messaging/internal-error", "messaging/quota-exceeded", "messaging/unknown-error"].includes(code)) return "fcm_delivery_transient";
