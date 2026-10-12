@@ -56,15 +56,15 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
-      - name: Build web app against staging API
+      - name: Build web app against staging API for Capacitor
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
-        run: npm run build
+        run: npm run build -- --base=./
 
       - name: Verify Android staging web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="Android Staging"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="Android Staging Capacitor"
 
       - name: Create Android project
         working-directory: customer-app
@@ -91,7 +91,7 @@ jobs:
 
       - name: Verify synced Android staging web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="/-aqaba-seago/" --label="Android Staging synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="Android Staging Capacitor synced artifact"
 
       - name: Run Firebase Task completion unit test
         working-directory: customer-app/android
