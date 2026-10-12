@@ -23,14 +23,16 @@ function makePanel({
   let copyWrites = 0;
   const googleState = trackedStyle(googleDisplay);
   const dividerState = trackedStyle(dividerDisplay);
+  const google = { style: googleState.style };
+  const divider = { style: dividerState.style };
   const copy = {
     get textContent() { return copyValue; },
     set textContent(value) { copyWrites += 1; copyValue = value; }
   };
   const panel = {
     querySelector(selector) {
-      if (selector === ".google-auth-wrap") return googleState.style;
-      if (selector === ".auth-divider") return dividerState.style;
+      if (selector === ".google-auth-wrap") return google;
+      if (selector === ".auth-divider") return divider;
       if (selector === ".auth-panel__head p") return copy;
       return null;
     }
