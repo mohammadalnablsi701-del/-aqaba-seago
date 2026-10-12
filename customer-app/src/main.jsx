@@ -18,7 +18,7 @@ const params=new URLSearchParams(window.location.search);
 if(params.get("open")==="tickets") sessionStorage.setItem("seago_active_screen","tickets");
 const recovery=Boolean(params.get("resetToken")||params.get("forgotPassword"));
 const nativeApp=Capacitor.isNativePlatform();
-document.documentElement.style.setProperty("--seago-hero-image",`url("${customerHeroAssetUrl(import.meta.env.BASE_URL)}")`);
+document.documentElement.style.setProperty("--seago-hero-image",`url("${customerHeroAssetUrl(import.meta.env.BASE_URL,window.location.href)}")`);
 if(nativeApp){
   document.documentElement.dataset.seagoNative="1";
 }
