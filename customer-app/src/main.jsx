@@ -6,6 +6,7 @@ import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
 import "./vessel-polish.css";
 import "./cancellation-ux.css";
+import "./native-touch-fix.css";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 import { enableCancellationUi } from "./cancellationUi.js";
 import { enableNotificationLogoutGuard } from "./notificationCredentialLifecycle.js";
