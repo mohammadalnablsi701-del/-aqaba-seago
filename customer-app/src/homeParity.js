@@ -15,9 +15,10 @@ export function formatCustomerDate(value) {
   return `${day} ${MONTHS[month - 1]} ${year}`;
 }
 
-export function customerHeroAssetUrl(baseUrl = "/") {
+export function customerHeroAssetUrl(baseUrl = "/", documentUrl = "http://localhost/") {
   const base = String(baseUrl || "/");
-  return `${base.endsWith("/") ? base : `${base}/`}aqaba-hero.jpg`;
+  const assetPath = `${base.endsWith("/") ? base : `${base}/`}aqaba-hero.jpg`;
+  return new URL(assetPath, documentUrl).href;
 }
 
 export function syncCustomerDateInput(input) {
