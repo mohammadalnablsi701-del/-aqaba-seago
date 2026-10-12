@@ -1,0 +1,6 @@
+html[data-seago-native="1"] .side-menu-layer{pointer-events:none}
+html[data-seago-native="1"] .side-menu-backdrop{z-index:0;pointer-events:auto;touch-action:manipulation}
+html[data-seago-native="1"] .side-menu{z-index:2;pointer-events:auto;isolation:isolate}
+html[data-seago-native="1"] .side-menu button,
+html[data-seago-native="1"] .side-menu nav,
+html[data-seago-native="1"] .side-menu nav button{pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
