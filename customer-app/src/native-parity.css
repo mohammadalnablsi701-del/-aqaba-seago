@@ -1,6 +1,2 @@
-html[data-seago-native="1"] .hero-scene{
-  background-image:var(--seago-native-hero-image)!important;
-  background-size:cover;
-  background-position:center 42%;
-  background-repeat:no-repeat;
-}
+/* Intentionally empty: Android uses the shared customer presentation.
+   Add only proven platform-required safe-area or native-control fixes here. */

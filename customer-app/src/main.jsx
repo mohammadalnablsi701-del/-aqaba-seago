@@ -6,9 +6,11 @@ import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
 import "./vessel-polish.css";
 import "./cancellation-ux.css";
+import "./customer-parity.css";
 import "./native-parity.css";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 import { enableCancellationUi } from "./cancellationUi.js";
+import { customerHeroAssetUrl, enableCustomerHomeParity } from "./homeParity.js";
 import { enableNotificationLogoutGuard } from "./notificationCredentialLifecycle.js";
 import { syncNativeStorePanels } from "./nativeStoreGuard.js";
 
@@ -16,9 +18,9 @@ const params=new URLSearchParams(window.location.search);
 if(params.get("open")==="tickets") sessionStorage.setItem("seago_active_screen","tickets");
 const recovery=Boolean(params.get("resetToken")||params.get("forgotPassword"));
 const nativeApp=Capacitor.isNativePlatform();
+document.documentElement.style.setProperty("--seago-hero-image",`url("${customerHeroAssetUrl(import.meta.env.BASE_URL)}")`);
 if(nativeApp){
   document.documentElement.dataset.seagoNative="1";
-  document.documentElement.style.setProperty("--seago-native-hero-image",`url("${import.meta.env.BASE_URL}aqaba-hero.jpg")`);
 }
 
 function PasswordRecoveryEntry(){
@@ -78,6 +80,7 @@ createRoot(document.getElementById("root")).render(
 );
 
 if(!recovery){
+  enableCustomerHomeParity();
   enableAccountDeletionUi();
   enableCancellationUi();
   enableNotificationLogoutGuard();
