@@ -1,0 +1,6 @@
+html[data-seago-native="1"] .hero-scene{
+  background-image:var(--seago-native-hero-image)!important;
+  background-size:cover;
+  background-position:center 42%;
+  background-repeat:no-repeat;
+}
