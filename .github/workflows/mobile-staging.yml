@@ -1,0 +1,99 @@
+name: Android Staging QA APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-staging:
+    name: Android STAGING QA APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VITE_NATIVE_PUSH_ENABLED: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies from lockfile
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Build Android staging web app for Capacitor
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
+        run: npm run build -- --base=./
+
+      - name: Stamp Android staging environment
+        working-directory: customer-app
+        run: |
+          cat > dist/build-environment.json <<'EOF'
+          {"environment":"staging","apiBaseUrl":"https://aqaba-seago-api-staging.onrender.com"}
+          EOF
+
+      - name: Verify Android staging web environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="Android STAGING QA"
+
+      - name: Create Android project
+        working-directory: customer-app
+        run: npx cap add android
+
+      - name: Validate and inject Android Firebase configuration
+        working-directory: customer-app
+        env:
+          FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_CONFIG_BASE64 }}
+        run: node scripts/configure-android-firebase.mjs
+
+      - name: Install native image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick librsvg2-bin
+
+      - name: Generate branded Android assets
+        working-directory: customer-app
+        run: bash scripts/generate-native-assets.sh android
+
+      - name: Sync Android project
+        working-directory: customer-app
+        run: npx cap sync android
+
+      - name: Verify synced Android staging web artifact
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="Android STAGING QA synced artifact"
+
+      - name: Run Firebase Task completion unit test
+        working-directory: customer-app/android
+        run: ./gradlew testDebugUnitTest --tests "com.aqabaseago.app.SeaGoFirebasePluginTaskTest" --stacktrace
+
+      - name: Build staging debug APK
+        working-directory: customer-app/android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload STAGING QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-android-STAGING-QA-debug
+          path: customer-app/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

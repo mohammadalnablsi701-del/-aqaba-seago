@@ -1,4 +1,4 @@
-name: Android Release Bundle
+name: Android Production Release Bundle
 
 on:
   push:
@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   android-release:
-    name: Android release AAB
+    name: Android Production release AAB
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -102,15 +102,22 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
-      - name: Build web app
+      - name: Build Android production web app for Capacitor
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-        run: npm run build
+        run: npm run build -- --base=./
+
+      - name: Stamp Android production environment
+        working-directory: customer-app
+        run: |
+          cat > dist/build-environment.json <<'EOF'
+          {"environment":"production","apiBaseUrl":"https://aqaba-seago-api.onrender.com"}
+          EOF
 
       - name: Verify Android release production web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android Release Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Release Production"
 
       - name: Create Android project
         working-directory: customer-app
@@ -137,7 +144,7 @@ jobs:
 
       - name: Verify synced Android release web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android release synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Release Production synced artifact"
 
       - name: Decode signing keystore
         if: steps.release.outputs.signed == 'true'
@@ -228,9 +235,9 @@ jobs:
           MODE="${{ steps.release.outputs.mode }}"
           OUT="release-artifacts"
           mkdir -p "$OUT"
-          cp app/build/outputs/bundle/release/app-release.aab "$OUT/Aqaba-SeaGo-${VERSION_NAME}-${VERSION_CODE}-${MODE}.aab"
+          cp app/build/outputs/bundle/release/app-release.aab "$OUT/Aqaba-SeaGo-${VERSION_NAME}-${VERSION_CODE}-PRODUCTION-${MODE}.aab"
           if [[ "$MODE" == "signed" ]]; then
-            cp app/build/outputs/apk/release/app-release.apk "$OUT/Aqaba-SeaGo-${VERSION_NAME}-${VERSION_CODE}-release.apk"
+            cp app/build/outputs/apk/release/app-release.apk "$OUT/Aqaba-SeaGo-${VERSION_NAME}-${VERSION_CODE}-PRODUCTION-release.apk"
           fi
           (
             cd "$OUT"
@@ -240,6 +247,8 @@ jobs:
           {
             "appName": "Aqaba SeaGo",
             "applicationId": "com.aqabaseago.app",
+            "environment": "production",
+            "apiBaseUrl": "https://aqaba-seago-api.onrender.com",
             "versionName": "$VERSION_NAME",
             "versionCode": $VERSION_CODE,
             "commit": "${GITHUB_SHA}",
@@ -247,10 +256,10 @@ jobs:
           }
           EOF
 
-      - name: Upload release artifacts
+      - name: Upload production release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-${{ steps.release.outputs.mode }}-${{ steps.release.outputs.version_name }}
+          name: aqaba-seago-android-PRODUCTION-${{ steps.release.outputs.mode }}-${{ steps.release.outputs.version_name }}
           path: customer-app/android/release-artifacts/
           if-no-files-found: error
           retention-days: 30
