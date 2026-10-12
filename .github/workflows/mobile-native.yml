@@ -29,8 +29,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  web-production:
+    name: Customer Web Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Install dependencies from lockfile
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Build Customer Web production
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: npm run build
+
+      - name: Verify Customer Web production environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Customer Web Production parity"
+
   android-debug:
     name: Android Production APK and AAB
+    needs: web-production
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
