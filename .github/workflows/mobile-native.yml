@@ -1,4 +1,4 @@
-name: Mobile Native Build
+name: Mobile Native Production Build
 
 on:
   push:
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   android-debug:
-    name: Android APK and AAB
+    name: Android Production APK and AAB
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -56,15 +56,22 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
-      - name: Build web app
+      - name: Build Android production web app for Capacitor
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-        run: npm run build
+        run: npm run build -- --base=./
+
+      - name: Stamp Android production environment
+        working-directory: customer-app
+        run: |
+          cat > dist/build-environment.json <<'EOF'
+          {"environment":"production","apiBaseUrl":"https://aqaba-seago-api.onrender.com"}
+          EOF
 
       - name: Verify Android production web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Production"
 
       - name: Create Android project
         working-directory: customer-app
@@ -89,9 +96,9 @@ jobs:
         working-directory: customer-app
         run: npx cap sync android
 
-      - name: Verify synced Android web artifact
+      - name: Verify synced Android production web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Production synced artifact"
 
       - name: Run Firebase Task completion unit test
         working-directory: customer-app/android
@@ -105,18 +112,18 @@ jobs:
         working-directory: customer-app/android
         run: ./gradlew bundleRelease --stacktrace
 
-      - name: Upload debug APK
+      - name: Upload production debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-debug
+          name: aqaba-seago-android-PRODUCTION-debug
           path: customer-app/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload unsigned release AAB
+      - name: Upload production unsigned release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-release-unsigned
+          name: aqaba-seago-android-PRODUCTION-release-unsigned
           path: customer-app/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
