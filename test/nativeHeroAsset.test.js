@@ -8,11 +8,12 @@ const sharedCss=fs.readFileSync(new URL("../customer-app/src/customer-parity.css
 const nativeCss=fs.readFileSync(new URL("../customer-app/src/native-parity.css",import.meta.url),"utf8");
 const heroUrl=new URL("../customer-app/public/aqaba-hero.jpg",import.meta.url);
 
-test("shared hero resolves through the active Vite BASE_URL",()=>{
-  assert.equal(customerHeroAssetUrl("/-aqaba-seago/"),"/-aqaba-seago/aqaba-hero.jpg");
-  assert.equal(customerHeroAssetUrl("./"),"./aqaba-hero.jpg");
+test("shared hero resolves through the active Vite BASE_URL and current document",()=>{
+  assert.equal(customerHeroAssetUrl("/-aqaba-seago/","https://example.test/-aqaba-seago/"),"https://example.test/-aqaba-seago/aqaba-hero.jpg");
+  assert.equal(customerHeroAssetUrl("./","https://localhost/"),"https://localhost/aqaba-hero.jpg");
+  assert.equal(customerHeroAssetUrl("./","capacitor://localhost/"),"capacitor://localhost/aqaba-hero.jpg");
   assert.match(main,/--seago-hero-image/);
-  assert.match(main,/customerHeroAssetUrl\(import\.meta\.env\.BASE_URL\)/);
+  assert.match(main,/customerHeroAssetUrl\(import\.meta\.env\.BASE_URL,window\.location\.href\)/);
 });
 
 test("one authoritative local hero rule is shared by Web and Android",()=>{
