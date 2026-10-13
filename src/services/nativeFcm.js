@@ -1,3 +1,4 @@
+import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
@@ -8,6 +9,40 @@ import { credentialFingerprint, minimizedPushEnvelope } from "../utils/notificat
 
 export function fcmEnabled(env = process.env) { return env.FCM_ENABLED === "true"; }
 const empty = () => ({sent:0,failed:0,skipped:true,permanentFailures:0,transientFailures:0});
+
+export async function probeNativeFcmCredentials(env = process.env, {credentialFactory = cert} = {}) {
+  const result = {
+    event:"fcm_credential_probe",
+    credential_present:Boolean(env.GOOGLE_APPLICATION_CREDENTIALS),
+    env_project_ok:env.FIREBASE_PROJECT_ID === NATIVE_PUSH_CONTEXT.firebaseProjectId,
+    credential_project_ok:false,
+    service_account_type_ok:false,
+    client_email_present:false,
+    private_key_present:false,
+    private_key_parseable:false,
+    google_auth_ok:false
+  };
+  if (!result.credential_present) return result;
+  try {
+    const key = JSON.parse(readFileSync(env.GOOGLE_APPLICATION_CREDENTIALS, "utf8"));
+    result.credential_project_ok = key.project_id === NATIVE_PUSH_CONTEXT.firebaseProjectId;
+    result.service_account_type_ok = key.type === "service_account";
+    result.client_email_present = typeof key.client_email === "string" && key.client_email.trim().length > 0;
+    result.private_key_present = typeof key.private_key === "string" && key.private_key.length > 0;
+    if (result.private_key_present) {
+      try {
+        createPrivateKey(key.private_key);
+        result.private_key_parseable = true;
+      } catch {}
+    }
+    if (!(result.env_project_ok && result.credential_project_ok && result.service_account_type_ok && result.client_email_present && result.private_key_parseable)) {
+      return result;
+    }
+    const token = await credentialFactory(key).getAccessToken();
+    result.google_auth_ok = Boolean(token?.access_token);
+  } catch {}
+  return result;
+}
 
 export function configuredMessaging(env = process.env) {
   // Do not fall back to a developer's ambient Google credentials or another project.
