@@ -5,7 +5,7 @@ import { validateJwtSecurity } from "./config/security.js";
 import { createApp } from "./app.js";
 import { releaseExpiredCheckoutHolds } from "./services/payments.js";
 import { processUpcomingReminders } from "./services/notifications.js";
-import { probeNativeFcmCredentials, validateNativeFcmStartup } from "./services/nativeFcm.js";
+import { validateNativeFcmStartup } from "./services/nativeFcm.js";
 
 const port=Number(process.env.PORT||4000);
 if(!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
@@ -36,11 +36,6 @@ if(isProduction){
   if(deprecatedStartupFlags.length){
     throw new Error(`Deprecated development startup flags are not allowed in production: ${deprecatedStartupFlags.join(", ")}`);
   }
-}
-
-if(process.env.FCM_CREDENTIAL_PROBE==="true"){
-  const probe=await probeNativeFcmCredentials(process.env);
-  console.log(JSON.stringify(probe));
 }
 
 validateNativeFcmStartup(process.env);
