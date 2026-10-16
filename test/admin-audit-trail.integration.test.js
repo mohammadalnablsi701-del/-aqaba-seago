@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -12,7 +13,8 @@ import Booking from "../src/models/Booking.js";
 import CheckoutHold from "../src/models/CheckoutHold.js";
 import AdminAuditLog from "../src/models/AdminAuditLog.js";
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const SECRET="admin-audit-trail-test-secret-at-least-32-chars";
 
 async function requestJson(base,path,{token,method="GET",body}={}){
@@ -27,11 +29,11 @@ async function latest(action,entityId){
   return AdminAuditLog.findOne({action,entityId}).sort({createdAt:-1}).lean();
 }
 
-test("minimal admin audit trail is server-side, append-only and fail-safe",{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,"Only a local disposable replica set is allowed");
+test("minimal admin audit trail is server-side, append-only and fail-safe",{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;process.env.JWT_SECRET=SECRET;
-  await mongoose.connect(uri,{dbName:"seago_admin_audit_"+crypto.randomUUID().replaceAll("-","")});
-  t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret});
+  await connectFixture();
+  t.after(async()=>{if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret});
   await Promise.all([User,Provider,Trip,Departure,Booking,CheckoutHold,AdminAuditLog].map(model=>model.init()));
 
   const admin=await User.create({name:"Audit Admin",email:"audit-admin@example.test",role:"admin",isActive:true});

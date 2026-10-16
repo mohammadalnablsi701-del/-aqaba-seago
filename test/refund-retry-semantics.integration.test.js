@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -10,14 +11,13 @@ import {
   executeRefundIntent
 } from "../src/services/refunds.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test("refund retry semantics distinguish definite failure, pending and review states", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
-  await mongoose.connect(uri, { dbName: "seago_refund_retry_" + crypto.randomUUID().replaceAll("-", "") });
+test("refund retry semantics distinguish definite failure, pending and review states", {}, async t => {
+
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
   });
   await Promise.all([Payment, Refund].map(model => model.init()));
 

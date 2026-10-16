@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, allocateDatabase, addCleanup } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
@@ -7,7 +8,8 @@ import mongoose from "mongoose";
 import { backupDatabase,restoreDatabase,assertRestoreAllowed } from "../src/ops/databaseBackup.js";
 
 const {MongoClient,ObjectId,Decimal128}=mongoose.mongo;
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+const { uri } = requireFixture();
+test.after(cleanupFixtures);
 
 test("restore guard blocks unsafe production restores",()=>{
   assert.throws(()=>assertRestoreAllowed({
@@ -22,14 +24,16 @@ test("restore guard blocks unsafe production restores",()=>{
   }),/must differ/);
 });
 
-test("backup and restore preserve BSON values, documents and indexes",{skip:!uri},async()=>{
-  const sourceDatabase=`seago_backup_source_${Date.now()}`;
-  const targetDatabase=`seago_restore_test_${Date.now()}`;
+test("backup and restore preserve BSON values, documents and indexes",{},async()=>{
+  const sourceDatabase=requireFixture().name;
+  const targetDatabase=(await allocateDatabase()).name;
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),"seago-backup-"));
   const backupPath=path.join(dir,"backup.json.gz");
   const client=new MongoClient(uri);
+  addCleanup(() => client.close());
+  addCleanup(() => fs.rm(dir,{recursive:true,force:true}));
   await client.connect();
-  try{
+  {
     const source=client.db(sourceDatabase);
     await source.collection("bookings").createIndex({bookingRef:1},{unique:true,name:"bookingRef_1"});
     const id=new ObjectId();
@@ -69,10 +73,5 @@ test("backup and restore preserve BSON values, documents and indexes",{skip:!uri
     assert.equal(await restored.collection("empty_collection").countDocuments(),0);
     const indexes=await restored.collection("bookings").indexes();
     assert.ok(indexes.some(index=>index.name==="bookingRef_1"&&index.unique===true));
-  }finally{
-    await client.db(sourceDatabase).dropDatabase().catch(()=>{});
-    await client.db(targetDatabase).dropDatabase().catch(()=>{});
-    await client.close();
-    await fs.rm(dir,{recursive:true,force:true});
   }
 });

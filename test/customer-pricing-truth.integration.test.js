@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -16,7 +17,8 @@ import Provider from "../src/models/Provider.js";
 import User from "../src/models/User.js";
 import InAppNotification from "../src/models/InAppNotification.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function pricing(adultPrice, childPrice) {
   return {
@@ -36,8 +38,8 @@ function pricing(adultPrice, childPrice) {
   };
 }
 
-test("L/M/N: checkout re-prices current server truth and confirmed booking keeps that snapshot", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("L/M/N: checkout re-prices current server truth and confirmed booking keeps that snapshot", {}, async t => {
+
   const saved = {
     secret: process.env.MOCK_PAYMENT_WEBHOOK_SECRET,
     paymentProvider: process.env.PAYMENT_PROVIDER,
@@ -49,10 +51,8 @@ test("L/M/N: checkout re-prices current server truth and confirmed booking keeps
   delete process.env.RESEND_API_KEY;
   delete process.env.VAPID_PUBLIC_KEY;
 
-  await mongoose.connect(uri, { dbName: `seago_pricing_truth_${crypto.randomUUID().replaceAll("-", "")}` });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     for (const [key, value] of [
       ["MOCK_PAYMENT_WEBHOOK_SECRET", saved.secret], ["PAYMENT_PROVIDER", saved.paymentProvider],
       ["RESEND_API_KEY", saved.email], ["VAPID_PUBLIC_KEY", saved.push]

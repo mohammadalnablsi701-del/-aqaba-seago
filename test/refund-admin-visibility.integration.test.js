@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -8,16 +9,15 @@ import User from "../src/models/User.js";
 import Payment from "../src/models/Payment.js";
 import Refund from "../src/models/Refund.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test("admin payment detail exposes safe refund reconciliation metadata only", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("admin payment detail exposes safe refund reconciliation metadata only", {}, async t => {
+
   const oldSecret = process.env.JWT_SECRET;
   process.env.JWT_SECRET = "refund-admin-visibility-secret-at-least-32-characters";
-  await mongoose.connect(uri, { dbName: "seago_refund_admin_" + crypto.randomUUID().replaceAll("-", "") });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if (oldSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = oldSecret;
   });

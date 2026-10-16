@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -12,16 +13,15 @@ import Departure from '../src/models/Departure.js';
 import Booking from '../src/models/Booking.js';
 import ProviderMember from '../src/models/ProviderMember.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test('ticket provider isolation and exactly-once check-in',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
+test('ticket provider isolation and exactly-once check-in',{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   process.env.JWT_SECRET='ticket-checkin-test-secret-at-least-32-characters';
-  await mongoose.connect(uri,{dbName:'seago_ticket_test_'+crypto.randomUUID().replaceAll('-','')});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
   });
   await Promise.all([User,Provider,Trip,Departure,Booking,ProviderMember].map(m=>m.init()));

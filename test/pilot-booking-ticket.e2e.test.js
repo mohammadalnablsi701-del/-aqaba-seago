@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -16,15 +17,16 @@ import PaymentEvent from '../src/models/PaymentEvent.js';
 import Booking from '../src/models/Booking.js';
 import ProviderMember from '../src/models/ProviderMember.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test('pilot customer -> payment -> ticket -> provider scan E2E',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'E2E is restricted to a local disposable MongoDB replica set');
+test('pilot customer -> payment -> ticket -> provider scan E2E',{},async t=>{
+
   const saved={jwt:process.env.JWT_SECRET,webhook:process.env.MOCK_PAYMENT_WEBHOOK_SECRET};
   process.env.JWT_SECRET=crypto.randomBytes(48).toString('base64url');
   process.env.MOCK_PAYMENT_WEBHOOK_SECRET=crypto.randomBytes(48).toString('base64url');
-  await mongoose.connect(uri,{dbName:'seago_pilot_e2e_'+crypto.randomUUID().replaceAll('-','')});
-  t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();if(saved.jwt===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=saved.jwt;if(saved.webhook===undefined)delete process.env.MOCK_PAYMENT_WEBHOOK_SECRET;else process.env.MOCK_PAYMENT_WEBHOOK_SECRET=saved.webhook;});
+  await connectFixture();
+  t.after(async()=>{if(saved.jwt===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=saved.jwt;if(saved.webhook===undefined)delete process.env.MOCK_PAYMENT_WEBHOOK_SECRET;else process.env.MOCK_PAYMENT_WEBHOOK_SECRET=saved.webhook;});
   await Promise.all([User,Provider,Trip,Departure,Hold,Payment,PaymentEvent,Booking,ProviderMember].map(m=>m.init()));
 
   const seaOwner=await User.create({name:'Sea Breeze E2E',phone:'+962790001001',role:'provider'});

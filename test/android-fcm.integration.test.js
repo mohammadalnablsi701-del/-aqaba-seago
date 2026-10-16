@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
@@ -11,17 +12,19 @@ import NativePushLifecycle from "../src/models/NativePushLifecycle.js";
 import { NATIVE_PUSH_CONTEXT as context } from "../shared/nativePushContext.js";
 import { sendNativePushToUser } from "../src/services/nativeFcm.js";
 
+requireFixture();
+test.after(cleanupFixtures);
+
 function deferred(){let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});return {promise,resolve,reject};}
 
-test("MongoDB preserves Android token metadata, unique ownership, lifecycle fencing, refresh, revocation and account deletion cleanup",{skip:!process.env.SEAGO_TEST_MONGODB_URI},async()=>{
+test("MongoDB preserves Android token metadata, unique ownership, lifecycle fencing, refresh, revocation and account deletion cleanup",{},async()=>{
   const previous={secret:process.env.JWT_SECRET,enabled:process.env.FCM_ENABLED};
   process.env.JWT_SECRET="isolated-android-fcm-integration-test-secret";
   process.env.FCM_ENABLED="true";
-  await mongoose.connect(process.env.SEAGO_TEST_MONGODB_URI,{dbName:"aqaba-seago-test-android-fcm"});
+  await connectFixture();
   let server;
   const originalLifecycleUpdate=NativePushLifecycle.findOneAndUpdate;
   try{
-    await mongoose.connection.dropDatabase();
     await Promise.all([NativePushToken.init(),NativePushLifecycle.init()]);
     const [a,b,provider,deletedCustomer]=await User.create([{name:"A",role:"customer"},{name:"B",role:"customer"},{name:"P",role:"provider"},{name:"Delete Me",role:"customer"}]);
     const app=express();app.use(express.json());app.use("/auth",authRouter);app.use(router);
@@ -92,7 +95,6 @@ test("MongoDB preserves Android token metadata, unique ownership, lifecycle fenc
   }finally{
     NativePushLifecycle.findOneAndUpdate=originalLifecycleUpdate;
     if(server)await new Promise(resolve=>server.close(resolve));
-    await mongoose.connection.dropDatabase();await mongoose.disconnect();
     for(const [name,value] of [["JWT_SECRET",previous.secret],["FCM_ENABLED",previous.enabled]])if(value===undefined)delete process.env[name];else process.env[name]=value;
   }
 });
