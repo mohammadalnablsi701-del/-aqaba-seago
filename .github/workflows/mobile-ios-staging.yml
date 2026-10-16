@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ios-staging-simulator:
-    name: iOS STAGING simulator readiness
+  ios-staging-build:
+    name: iOS STAGING build readiness
     runs-on: macos-26
     timeout-minutes: 35
     env:
@@ -82,7 +82,8 @@ jobs:
           set -euo pipefail
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.aqabaseago.app;' ios/App/App.xcodeproj/project.pbxproj
           grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;' ios/App/App.xcodeproj/project.pbxproj
-          echo "Bundle ID and iOS deployment target verified"
+          grep -A1 '<key>CFBundleDisplayName</key>' ios/App/App/Info.plist | grep -q 'Aqaba SeaGo'
+          echo "Display name, bundle ID and iOS deployment target verified"
 
       - name: Verify no unnecessary privacy or ATS exceptions
         working-directory: customer-app
@@ -93,8 +94,8 @@ jobs:
             echo "Unexpected camera/photo permission found in Customer App Info.plist" >&2
             exit 1
           fi
-          if grep -q 'NSAllowsArbitraryLoads' "$INFO"; then
-            echo "Unexpected ATS arbitrary-load exception found" >&2
+          if grep -Eq 'NSAllowsArbitraryLoads|NSAllowsArbitraryLoadsInWebContent' "$INFO"; then
+            echo "Unexpected broad ATS exception found" >&2
             exit 1
           fi
           echo "No camera/photo permission or broad ATS exception present"
@@ -111,11 +112,32 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Build unsigned iPhone device app
+        working-directory: customer-app
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/DerivedDataDevice \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
       - name: Upload iOS STAGING simulator app
         uses: actions/upload-artifact@v4
         with:
           name: aqaba-seago-ios-STAGING-simulator
           path: customer-app/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unsigned iPhone device build
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-ios-STAGING-iphoneos-unsigned
+          path: customer-app/ios/DerivedDataDevice/Build/Products/Debug-iphoneos/App.app
           if-no-files-found: error
           retention-days: 14
 
