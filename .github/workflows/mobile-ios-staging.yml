@@ -1,0 +1,153 @@
+name: iOS STAGING Test Build
+
+on:
+  push:
+    branches: [chore/ios-test-build]
+    paths:
+      - "customer-app/**"
+      - "shared/**"
+      - ".github/workflows/mobile-ios-staging.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-staging-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-staging-build:
+    name: iOS STAGING build readiness
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
+      VITE_NATIVE_PUSH_ENABLED: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Install dependencies from lockfile
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Build iOS STAGING web app for Capacitor
+        working-directory: customer-app
+        run: npm run build -- --base=./
+
+      - name: Stamp test environment
+        working-directory: customer-app
+        run: |
+          cat > dist/build-environment.json <<'EOF'
+          {"environment":"staging","platform":"ios","nativePushEnabled":false,"apiBaseUrl":"https://aqaba-seago-api-staging.onrender.com"}
+          EOF
+
+      - name: Verify iOS STAGING web environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="iOS STAGING test"
+
+      - name: Create iOS project
+        working-directory: customer-app
+        run: npx cap add ios
+
+      - name: Install native image tools
+        run: |
+          brew list imagemagick >/dev/null 2>&1 || brew install imagemagick
+          brew list librsvg >/dev/null 2>&1 || brew install librsvg
+
+      - name: Generate branded iOS assets
+        working-directory: customer-app
+        run: bash scripts/generate-native-assets.sh ios
+
+      - name: Sync iOS project
+        working-directory: customer-app
+        run: npx cap sync ios
+
+      - name: Verify synced iOS STAGING artifact
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="iOS STAGING synced artifact"
+
+      - name: Verify iOS identity and minimum target
+        working-directory: customer-app
+        run: |
+          set -euo pipefail
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.aqabaseago.app;' ios/App/App.xcodeproj/project.pbxproj
+          grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;' ios/App/App.xcodeproj/project.pbxproj
+          grep -A1 '<key>CFBundleDisplayName</key>' ios/App/App/Info.plist | grep -q 'Aqaba SeaGo'
+          echo "Display name, bundle ID and iOS deployment target verified"
+
+      - name: Verify no unnecessary privacy or ATS exceptions
+        working-directory: customer-app
+        run: |
+          set -euo pipefail
+          INFO="ios/App/App/Info.plist"
+          if grep -Eq 'NSCameraUsageDescription|NSPhotoLibraryUsageDescription|NSPhotoLibraryAddUsageDescription' "$INFO"; then
+            echo "Unexpected camera/photo permission found in Customer App Info.plist" >&2
+            exit 1
+          fi
+          if grep -Eq 'NSAllowsArbitraryLoads|NSAllowsArbitraryLoadsInWebContent' "$INFO"; then
+            echo "Unexpected broad ATS exception found" >&2
+            exit 1
+          fi
+          echo "No camera/photo permission or broad ATS exception present"
+
+      - name: Build unsigned iOS simulator app
+        working-directory: customer-app
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Build unsigned iPhone device app
+        working-directory: customer-app
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/DerivedDataDevice \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload iOS STAGING simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-ios-STAGING-simulator
+          path: customer-app/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unsigned iPhone device build
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-ios-STAGING-iphoneos-unsigned
+          path: customer-app/ios/DerivedDataDevice/Build/Products/Debug-iphoneos/App.app
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload generated iOS project for Mac handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-ios-STAGING-xcode-project
+          path: |
+            customer-app/ios/App/App.xcodeproj
+            customer-app/ios/App/App
+            customer-app/ios/App/CapApp-SPM
+          if-no-files-found: error
+          retention-days: 14
