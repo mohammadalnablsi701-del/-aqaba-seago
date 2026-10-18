@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -11,7 +12,8 @@ import Departure from "../src/models/Departure.js";
 import Booking from "../src/models/Booking.js";
 import ProviderMember from "../src/models/ProviderMember.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function auth(userId, secret) {
   return jwt.sign({ sub: String(userId) }, secret, { expiresIn: "1h" });
@@ -33,18 +35,16 @@ async function json(response) {
   return { response, body };
 }
 
-test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("customer ticket lifecycle DTO matches validator truth", {}, async t => {
+
   const oldJwt = process.env.JWT_SECRET;
   const oldTicket = process.env.TICKET_SIGNING_SECRET;
   const secret = "ticket-lifecycle-test-secret-at-least-32-characters";
   process.env.JWT_SECRET = secret;
   process.env.TICKET_SIGNING_SECRET = secret;
 
-  await mongoose.connect(uri, { dbName: "seago_ticket_lifecycle_" + crypto.randomUUID().replaceAll("-", "") });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if (oldJwt === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = oldJwt;
     if (oldTicket === undefined) delete process.env.TICKET_SIGNING_SECRET; else process.env.TICKET_SIGNING_SECRET = oldTicket;
   });

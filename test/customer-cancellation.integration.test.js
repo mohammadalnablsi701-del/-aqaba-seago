@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -12,7 +13,8 @@ import Booking from "../src/models/Booking.js";
 import Payment from "../src/models/Payment.js";
 import InAppNotification from "../src/models/InAppNotification.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function auth(userId, secret) {
   return jwt.sign({ sub: String(userId) }, secret, { expiresIn: "1h" });
@@ -23,18 +25,16 @@ async function readJson(response) {
   return { response, body };
 }
 
-test("customer cancellation is server-authoritative, idempotent and ownership-safe", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("customer cancellation is server-authoritative, idempotent and ownership-safe", {}, async t => {
+
   const previousJwt = process.env.JWT_SECRET;
   const previousTicket = process.env.TICKET_SIGNING_SECRET;
   const secret = "customer-cancellation-test-secret-at-least-32-characters";
   process.env.JWT_SECRET = secret;
   process.env.TICKET_SIGNING_SECRET = secret;
 
-  await mongoose.connect(uri, { dbName: "seago_customer_cancellation_" + crypto.randomUUID().replaceAll("-", "") });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if (previousJwt === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previousJwt;
     if (previousTicket === undefined) delete process.env.TICKET_SIGNING_SECRET; else process.env.TICKET_SIGNING_SECRET = previousTicket;
   });

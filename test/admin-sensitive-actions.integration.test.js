@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -14,7 +15,8 @@ import Payment from "../src/models/Payment.js";
 import AdminAuditLog from "../src/models/AdminAuditLog.js";
 import {settlementLedger} from "../src/services/settlements.js";
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const SECRET="admin-sensitive-actions-test-secret-at-least-32-chars";
 
 async function requestJson(base,path,{token,method="GET",body}={}){
@@ -22,11 +24,11 @@ async function requestJson(base,path,{token,method="GET",body}={}){
   const json=await response.json().catch(()=>({}));return{response,json};
 }
 
-test("sensitive admin actions enforce safety without changing lifecycle semantics",{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,"Only a local disposable replica set is allowed");
+test("sensitive admin actions enforce safety without changing lifecycle semantics",{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;process.env.JWT_SECRET=SECRET;
-  await mongoose.connect(uri,{dbName:"seago_admin_sensitive_"+crypto.randomUUID().replaceAll("-","")});
-  t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret});
+  await connectFixture();
+  t.after(async()=>{if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret});
   await Promise.all([User,Provider,Trip,Departure,Booking,CheckoutHold,Payment,AdminAuditLog].map(m=>m.init()));
 
   const admin=await User.create({name:"Admin",email:"admin-sensitive@example.test",role:"admin"});

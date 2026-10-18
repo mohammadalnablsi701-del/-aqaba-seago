@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -8,21 +9,20 @@ import PaymentEvent from "../src/models/PaymentEvent.js";
 import Refund from "../src/models/Refund.js";
 import { ensureRefundIntent, processRefundWebhook } from "../src/services/refunds.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function sign(rawBody, secret) {
   return crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
 }
 
-test("refund provider events share the durable PaymentEvent transaction boundary", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("refund provider events share the durable PaymentEvent transaction boundary", {}, async t => {
+
   const previousSecret = process.env.MOCK_PAYMENT_WEBHOOK_SECRET;
   process.env.MOCK_PAYMENT_WEBHOOK_SECRET = "refund-event-durability-secret";
 
-  await mongoose.connect(uri, { dbName: `seago_refund_event_durability_${crypto.randomUUID().replaceAll("-", "")}` });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if (previousSecret === undefined) delete process.env.MOCK_PAYMENT_WEBHOOK_SECRET;
     else process.env.MOCK_PAYMENT_WEBHOOK_SECRET = previousSecret;
   });

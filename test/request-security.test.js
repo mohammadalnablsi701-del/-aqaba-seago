@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import User from '../src/models/User.js';
 import { createApp } from '../src/app.js';
 
 async function withServer(run) {
@@ -50,7 +51,8 @@ test('rejects operator-shaped query keys', async () => {
   });
 });
 
-test('allows dollar signs in values because only keys are blocked', async () => {
+test('allows dollar signs in values because only keys are blocked', async t => {
+  t.mock.method(User, 'findOne', async () => null);
   await withServer(async base => {
     const response = await fetch(`${base}/api/auth/login`, {
       method: 'POST',

@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -14,18 +15,17 @@ import {
   refundReferenceFor
 } from "../src/services/refunds.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function hmac(raw, secret) {
   return crypto.createHmac("sha256", secret).update(raw).digest("hex");
 }
 
-test("provider-neutral refund contract is durable, idempotent and reconciliation-safe", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
-  await mongoose.connect(uri, { dbName: "seago_refund_contract_" + crypto.randomUUID().replaceAll("-", "") });
+test("provider-neutral refund contract is durable, idempotent and reconciliation-safe", {}, async t => {
+
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
   });
   await Promise.all([Payment, Refund].map(model => model.init()));
 

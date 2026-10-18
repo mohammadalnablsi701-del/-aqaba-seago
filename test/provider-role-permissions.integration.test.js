@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -11,19 +12,18 @@ import Trip from '../src/models/Trip.js';
 import Departure from '../src/models/Departure.js';
 import Booking from '../src/models/Booking.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test('provider role permissions are enforced at HTTP boundaries',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
+test('provider role permissions are enforced at HTTP boundaries',{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   const oldCommission=process.env.DEFAULT_COMMISSION_PERCENTAGE;
   process.env.JWT_SECRET='provider-role-test-secret-at-least-32-characters';
   process.env.DEFAULT_COMMISSION_PERCENTAGE='10';
 
-  await mongoose.connect(uri,{dbName:'seago_provider_roles_'+crypto.randomUUID().replaceAll('-','')});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
     if(oldCommission===undefined)delete process.env.DEFAULT_COMMISSION_PERCENTAGE;else process.env.DEFAULT_COMMISSION_PERCENTAGE=oldCommission;
   });
