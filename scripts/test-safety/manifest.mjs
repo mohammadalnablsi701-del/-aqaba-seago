@@ -6,6 +6,7 @@ export const databaseTests = [
   "test/admin-sellability-semantics.integration.test.js",
   "test/admin-sensitive-actions.integration.test.js",
   "test/android-fcm.integration.test.js",
+  "test/browser-checkin.integration.test.js",
   "test/checkout-capacity.integration.test.js",
   "test/customer-cancellation.integration.test.js",
   "test/customer-payment-dto.integration.test.js",
