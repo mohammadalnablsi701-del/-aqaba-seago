@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "test:hero": "node --test test/hero-loading.browser.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "mobile:sync": "npm run build && cap sync",
     "mobile:sync:android": "npm run build && node scripts/configure-android-firebase.mjs && cap sync android",
