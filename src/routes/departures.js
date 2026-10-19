@@ -209,7 +209,10 @@ router.get("/:departureId/quote", async (req, res, next) => {
     await releaseExpiredCheckoutHolds({ limit: 200 });
     const adults = Number(req.query.adults ?? req.query.seats ?? 0);
     const children = Number(req.query.children ?? 0);
-    const mealPlan = req.query.mealPlan === "with_buffet" ? "with_buffet" : "without_buffet";
+    const mealPlan = req.query.mealPlan ?? "without_buffet";
+    if (!["without_buffet", "with_buffet"].includes(mealPlan)) {
+      return res.status(400).json({ error: "Invalid mealPlan" });
+    }
     if (!Number.isInteger(adults) || adults < 0) {
       return res.status(400).json({ error: "Invalid adults" });
     }

@@ -216,6 +216,52 @@ test("customer ticket lifecycle DTO matches validator truth", {}, async t => {
   assert.equal(otherList.response.status, 200);
   assert.deepEqual(otherList.body.map(row => row._id), [String(otherBooking._id)]);
 
+  await t.test("legacy trip binding rejects a different trip without redeeming the booking", async () => {
+    const otherTrip = await Trip.create({
+      providerId: provider._id,
+      titleAr: "رحلة اختبار أخرى",
+      titleEn: "Phase2B Test Different Trip",
+      category: "yacht",
+      durationMinutes: 60,
+      active: true,
+      pricing: { currency: "JOD", pricePerPerson: 20, adultPrice: 20, commissionType: "fixed_per_person", commissionValue: 4 }
+    });
+    const bindings = {
+      v: 1,
+      bookingId: String(ready._id),
+      departureId: String(readyDep._id),
+      providerId: String(provider._id)
+    };
+    const mismatched = legacyTicket({ ...bindings, tripId: String(otherTrip._id) }, secret);
+    const headers = { authorization: `Bearer ${providerToken}`, "content-type": "application/json" };
+
+    const inspection = await json(await fetch(`${base}/api/tickets/inspect`, {
+      method: "POST", headers, body: JSON.stringify({ token: mismatched })
+    }));
+    assert.equal(inspection.response.status, 400);
+    assert.equal(inspection.body.error, "Invalid ticket binding");
+
+    const validation = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(mismatched)}`));
+    assert.equal(validation.response.status, 400);
+    assert.equal(validation.body.error, "invalid_ticket_link");
+
+    const checkIn = await json(await fetch(`${base}/api/tickets/check-in`, {
+      method: "POST", headers, body: JSON.stringify({ token: mismatched })
+    }));
+    assert.equal(checkIn.response.status, 400);
+    assert.equal(checkIn.body.error, "Invalid ticket binding");
+    const unchanged = await Booking.findById(ready._id).lean();
+    assert.equal(unchanged.checkedInAt ?? null, null);
+    assert.equal(unchanged.checkInCount, 0);
+
+    const matching = legacyTicket({ ...bindings, tripId: String(trip._id) }, secret);
+    const compatible = await json(await fetch(`${base}/api/tickets/inspect`, {
+      method: "POST", headers, body: JSON.stringify({ token: matching })
+    }));
+    assert.equal(compatible.response.status, 200, "matching legacy bindings must remain compatible");
+    assert.equal(compatible.body.boardable, true);
+  });
+
   await t.test("invalid signature and mismatched legacy binding are rejected before lifecycle acceptance", async () => {
     const readyPublicToken = publicTokenFrom(readyRow);
     const badSignature = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(readyPublicToken + "x")}`));

@@ -15,3 +15,37 @@ test("20 percent commission is calculated from the full booking gross",()=>{
   const pricing={currency:"JOD",pricePerPerson:14,adultPrice:14,childPrice:8,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:10,commissionType:"percentage",commissionValue:20};
   assert.deepEqual(calculateTieredPricing({pricing,adults:2,children:1,mealPlan:"with_buffet"}),{currency:"JOD",unitPrice:17,adultUnitPrice:17,childUnitPrice:10,adultSubtotal:34,childSubtotal:10,grossAmount:44,commissionAmount:8.8,providerNetAmount:35.2});
 });
+
+test("tiered pricing rejects malformed meal selections rather than choosing a different package",()=>{
+  const pricing={pricePerPerson:15,commissionType:"fixed_per_person",commissionValue:3};
+  for(const mealPlan of ["with-buffet","",null,true,{}]){
+    assert.throws(()=>calculateTieredPricing({pricing,adults:1,children:0,mealPlan}),/Invalid mealPlan/);
+  }
+});
+
+test("selected enabled buffet requires both stored buffet prices instead of substituting base rates",()=>{
+  const configured={pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"fixed_per_person",commissionValue:3};
+  for(const missing of ["buffetAdultPrice","buffetChildPrice"]){
+    for(const value of [undefined,null]){
+      const pricing={...configured,[missing]:value};
+      assert.throws(()=>calculateTieredPricing({pricing,adults:1,children:1,mealPlan:"with_buffet"}),/Buffet prices are required/);
+    }
+  }
+});
+
+test("selected buffet rejects negative stored prices and preserves legitimate free child pricing",()=>{
+  const configured={pricePerPerson:15,adultPrice:15,childPrice:10,buffetEnabled:true,buffetAdultPrice:17,buffetChildPrice:12,commissionType:"fixed_per_person",commissionValue:3};
+  assert.throws(()=>calculateTieredPricing({pricing:{...configured,buffetAdultPrice:-1},adults:1,children:1,mealPlan:"with_buffet"}),/Invalid adult price/);
+  assert.throws(()=>calculateTieredPricing({pricing:{...configured,buffetChildPrice:-1},adults:1,children:1,mealPlan:"with_buffet"}),/Invalid child price/);
+  const freeChild=calculateTieredPricing({pricing:{...configured,buffetChildPrice:0},adults:1,children:1,mealPlan:"with_buffet"});
+  assert.equal(freeChild.childUnitPrice,0);
+  assert.equal(freeChild.grossAmount,17);
+});
+
+test("non-buffet legacy price fallback remains available without buffet prices",()=>{
+  const pricing={pricePerPerson:15,commissionType:"fixed_per_person",commissionValue:3};
+  const result=calculateTieredPricing({pricing,adults:1,children:1});
+  assert.equal(result.adultUnitPrice,15);
+  assert.equal(result.childUnitPrice,15);
+  assert.equal(result.grossAmount,30);
+});

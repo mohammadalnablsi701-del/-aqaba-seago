@@ -16,6 +16,7 @@ export function calculatePricing({pricePerPerson,seats,commissionType,commission
 
 export function calculateTieredPricing({pricing,adults,children,mealPlan="without_buffet"}) {
   if(!pricing||typeof pricing!=="object"||Array.isArray(pricing)) throw new Error("Invalid pricing configuration");
+  if(!["without_buffet","with_buffet"].includes(mealPlan)) throw new Error("Invalid mealPlan");
   if(!Number.isInteger(adults)||adults<0) throw new Error("Invalid adults");
   if(!Number.isInteger(children)||children<0) throw new Error("Invalid children");
   const seats=adults+children;
@@ -24,6 +25,9 @@ export function calculateTieredPricing({pricing,adults,children,mealPlan="withou
   const commission=validateCommissionConfig(pricing);
   const buffet=mealPlan==="with_buffet";
   if(buffet && !pricing.buffetEnabled) throw new Error("Buffet package is not available for this trip");
+  if(buffet && (pricing.buffetAdultPrice==null||pricing.buffetChildPrice==null)) {
+    throw new Error("Buffet prices are required for this trip");
+  }
 
   const legacy=Number(pricing.pricePerPerson||0);
   const adultUnitPrice=Number(
