@@ -8,7 +8,7 @@ import { createCheckoutForHold } from "../services/payments.js";
 import { toCustomerPaymentDto } from "../services/customerPaymentDto.js";
 
 const router = express.Router();
-const CHECKOUT_FIELDS = new Set(["departureId", "adults", "children", "seats", "mealPlan"]);
+const CHECKOUT_FIELDS = new Set(["departureId", "adults", "children", "seats", "mealPlan", "partyType", "partyPolicyConfirmed"]);
 const MEAL_PLANS = ["without_buffet", "with_buffet"];
 
 router.post("/checkout", requireAuth, requireRole("customer"), async (req, res, next) => {
@@ -48,7 +48,8 @@ router.post("/checkout", requireAuth, requireRole("customer"), async (req, res, 
       return res.status(400).json({ error: "Guest count must be between 1 and 500" });
     }
 
-    const hold = await reserveCheckout({ customerId: req.user._id, key, departureId, adults, children, mealPlan });
+    const hold = await reserveCheckout({ customerId: req.user._id, key, departureId, adults, children, mealPlan,
+      partyType: req.body.partyType, partyPolicyConfirmed: req.body.partyPolicyConfirmed });
 
     const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
     const payment = await createCheckoutForHold({ hold, customerId: req.user._id, baseUrl });

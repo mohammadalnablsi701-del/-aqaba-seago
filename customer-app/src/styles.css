@@ -199,6 +199,13 @@
 .booking-progress i:first-child{background:linear-gradient(90deg,var(--blue),var(--aqua))}
 .booking-verified{display:flex;align-items:center;gap:5px;margin-top:6px;color:#00a889;font-size:10px;font-weight:800}
 .booking-form__section-title{font-size:10px;font-weight:800;letter-spacing:1.8px;color:var(--aqua);margin:16px 0 8px}
+.booking-party-type{border:0;border-bottom:1px solid var(--line);margin:16px 0;padding:0 0 12px;min-width:0}
+.booking-party-type legend{font-size:12px;font-weight:800;color:#526b7c}
+.booking-party-options{display:flex;gap:24px}
+.booking-form .booking-party-option,.booking-form .booking-party-confirmation{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
+.booking-form .booking-party-confirmation{align-items:flex-start;margin:0}
+.booking-party-type input{width:17px;height:17px;margin:0;flex:none;accent-color:var(--aqua)}
+.booking-form .booking-party-confirmation>span{font-size:11px;font-weight:400;line-height:1.5;margin:0}
 .price-box__heading{display:flex!important;justify-content:space-between!important;align-items:center;margin:0 0 10px!important}
 .price-box__heading span{font-size:10px;font-weight:800;letter-spacing:1.5px;color:var(--aqua)}
 .price-box__heading small{font-size:10px;color:#6f8199}

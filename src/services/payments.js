@@ -249,6 +249,7 @@ async function confirmPaidHoldInSession({payment,event,session}){
           adults:hold.adults,
           children:hold.children,
           mealPlan:hold.mealPlan,
+          partyType:hold.partyType,
           status:"confirmed",
           holdExpiresAt:hold.expiresAt,
           pricing:hold.pricing,
