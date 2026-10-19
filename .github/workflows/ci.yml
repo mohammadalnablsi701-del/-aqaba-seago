@@ -66,6 +66,35 @@ jobs:
         run: |
           npm run test:db -- test/payment-transitions.integration.test.js test/checkout-capacity.integration.test.js test/ticket-checkin.integration.test.js test/customer-ticket-lifecycle.integration.test.js test/customer-cancellation.integration.test.js test/settlement-ledger.integration.test.js test/provider-role-permissions.integration.test.js test/provider-sales-control.integration.test.js test/admin-sellability-semantics.integration.test.js test/admin-sensitive-actions.integration.test.js test/admin-operations.integration.test.js test/admin-payment-operations.integration.test.js test/provider-access-admin.integration.test.js test/pilot-booking-ticket.e2e.test.js test/password-recovery.integration.test.js test/database-backup-restore.integration.test.js test/android-fcm.integration.test.js
 
+  browser-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+      - name: Install backend browser driver and disposable runner dependencies
+        run: npm ci --no-fund
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Customer dependencies from lockfile
+        working-directory: customer-app
+        run: npm ci --no-fund
+      - name: Install Provider dependencies from lockfile
+        working-directory: provider-app
+        run: npm ci --no-fund
+      - name: Build isolated same-origin browser artifacts without env files
+        run: npm run test:browser:build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+      - name: Run local browser acceptance through disposable fixture authority
+        run: npm run test:browser
+
   backend-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -418,6 +447,7 @@ jobs:
       - secret-scan
       - dependency-audit
       - payment-integration
+      - browser-acceptance
       - backend-test
       - backend-supply-chain
       - customer-app-build
@@ -430,6 +460,7 @@ jobs:
             ${{ needs.secret-scan.result }}
             ${{ needs.dependency-audit.result }}
             ${{ needs.payment-integration.result }}
+            ${{ needs.browser-acceptance.result }}
             ${{ needs.backend-test.result }}
             ${{ needs.backend-supply-chain.result }}
             ${{ needs.customer-app-build.result }}

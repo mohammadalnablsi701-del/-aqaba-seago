@@ -264,9 +264,36 @@ function scanAgain(){
 useEffect(()=>{
   activeRef.current=true;
   if(result)return;
-  const scanner=new Html5Qrcode("reader",{verbose:false});
+  // Own the library's DOM separately from React so an outstanding permission
+  // request can finish and release its stream after the screen is closed.
+  const host=document.createElement("div");
+  host.id="seago-reader-"+Math.random().toString(36).slice(2);
+  const reader=document.getElementById("reader");
+  const hostWidth=reader.clientWidth||320;
+  reader.appendChild(host);
+  const scanner=new Html5Qrcode(host.id,{verbose:false});
   qrRef.current=scanner;
   let stopped=false;
+  let starting=true;
+  let disposal=null;
+
+  function dispose(){
+    if(disposal)return disposal;
+    disposal=(async()=>{
+      const video=host.querySelector("video");
+      // html5-qrcode resolves start before video.play() settles. Stopping sooner
+      // rejects that library-owned promise, so allow its playing event first.
+      if(video&&!scanner.isScanning)await new Promise(resolve=>{
+        const done=()=>{clearTimeout(timer);video.removeEventListener("playing",done);resolve();};
+        const timer=setTimeout(done,300);
+        video.addEventListener("playing",done,{once:true});
+      });
+      try{await scanner.stop();}catch{}
+      try{scanner.clear();}catch{}
+      host.remove();
+    })();
+    return disposal;
+  }
 
   async function boot(){
     setCameraError("");
@@ -275,7 +302,7 @@ useEffect(()=>{
         {facingMode:{exact:"environment"}},
         {fps:18,qrbox:(w,h)=>{const side=Math.floor(Math.min(w,h)*0.72);return{width:side,height:side}},aspectRatio:1.0,disableFlip:true},
         async decoded=>{
-          if(!activeRef.current||busy||result)return;
+          if(stopped||!activeRef.current||busy||result)return;
           activeRef.current=false;
           setBusy(true);
           try{
@@ -286,29 +313,32 @@ useEffect(()=>{
             else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
             if(!t)throw new Error("Invalid SeaGo QR");
             const info=await inspectTicket(token,t);
+            if(stopped)return;
             scanFeedback("scan");
             setPendingToken(t);
             setResult({mode:"preview",...info});
             try{await scanner.stop()}catch{}
           }catch(e){
+            if(stopped)return;
             setResult({mode:"error",error:e.message});
             try{await scanner.stop()}catch{}
-          }finally{setBusy(false);}
+          }finally{if(!stopped)setBusy(false);}
         },
         ()=>{}
       );
-      if(stopped)return;
+      if(stopped||!activeRef.current)return;
       try{
         const caps=scanner.getRunningTrackCapabilities?.();
         setTorchSupported(Boolean(caps&&"torch" in caps&&caps.torch));
       }catch{setTorchSupported(false);}
     }catch(firstError){
+      if(stopped||!activeRef.current)return;
       try{
         await scanner.start(
           {facingMode:"environment"},
           {fps:18,qrbox:(w,h)=>{const side=Math.floor(Math.min(w,h)*0.72);return{width:side,height:side}},aspectRatio:1.0,disableFlip:true},
           async decoded=>{
-            if(!activeRef.current||busy||result)return;
+            if(stopped||!activeRef.current||busy||result)return;
             activeRef.current=false;setBusy(true);
             try{
               const raw=String(decoded||"").trim();
@@ -318,21 +348,26 @@ useEffect(()=>{
               else{const u=new URL(raw);t=u.searchParams.get("token")||"";}
               if(!t)throw new Error("Invalid SeaGo QR");
               const info=await inspectTicket(token,t);
+              if(stopped)return;
               scanFeedback("scan");
               setPendingToken(t);setResult({mode:"preview",...info});
               try{await scanner.stop()}catch{}
-            }catch(e){setResult({mode:"error",error:e.message});try{await scanner.stop()}catch{}}
-            finally{setBusy(false);}
+            }catch(e){if(stopped)return;setResult({mode:"error",error:e.message});try{await scanner.stop()}catch{}}
+            finally{if(!stopped)setBusy(false);}
           },
           ()=>{}
         );
+        if(stopped||!activeRef.current)return;
         try{
           const caps=scanner.getRunningTrackCapabilities?.();
           setTorchSupported(Boolean(caps&&"torch" in caps&&caps.torch));
         }catch{setTorchSupported(false);}
       }catch(e){
-        setCameraError("Could not open the rear camera. Check camera permission and try again.");
+        if(!stopped&&activeRef.current)setCameraError("Could not open the rear camera. Check camera permission and try again.");
       }
+    }finally{
+      starting=false;
+      if(stopped||!activeRef.current)await dispose();
     }
   }
 
@@ -340,9 +375,13 @@ useEffect(()=>{
   return()=>{
     stopped=true;
     activeRef.current=false;
-    const q=qrRef.current;
-    qrRef.current=null;
-    if(q?.isScanning){Promise.resolve(q.stop()).catch(()=>{})}
+    if(qrRef.current===scanner)qrRef.current=null;
+    // Keep the owned video host connected while delayed startup settles. Moving
+    // React's wrapper would corrupt its tree; only this imperative child moves.
+    Object.assign(host.style,{position:"fixed",left:"-10000px",top:"0",width:hostWidth+"px"});
+    host.setAttribute("aria-hidden","true");
+    document.body.appendChild(host);
+    if(!starting)void dispose();
   };
 },[scanCycle,result,token]);
 

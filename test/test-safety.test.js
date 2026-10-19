@@ -86,9 +86,9 @@ test('child environment allowlist excludes every live database and credential cl
   const env = childEnvironment(Object.fromEntries([...forbidden.map(key => [key, 'private']), ['PATH', 'bin']]));
   assert.deepEqual(env, { PATH: 'bin', NODE_ENV: 'test', PUBLIC_LAUNCH: 'false' });
 });
-test('all 30 database files require authority and cannot skip on missing URI', () => {
-  assert.equal(databaseTests.length, 30);
-  assert.equal(new Set([...databaseTests, ...unitTests]).size, 79);
+test('all 31 database files require authority and cannot skip on missing URI', () => {
+  assert.equal(databaseTests.length, 31);
+  assert.equal(new Set([...databaseTests, ...unitTests]).size, 80);
   for (const file of databaseTests) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
     assert.match(source, /requireFixture\(\)/);
