@@ -178,11 +178,32 @@ test('Phase2C isolated Customer and Provider browser/check-in acceptance', { tim
     await customerPage.waitForFunction(() => document.querySelector('.price-box__total strong')?.textContent.includes('25.00'));
     await customerPage.getByRole('button', { name: /Add open buffet/ }).click();
     await customerPage.waitForFunction(() => document.querySelector('.price-box__total strong')?.textContent.includes('29.00'));
+    const family = customerPage.getByRole('radio', { name: 'Family', exact: true });
+    const couple = customerPage.getByRole('radio', { name: 'Couple', exact: true });
+    const acknowledgement = customerPage.getByRole('checkbox', { name: 'I confirm that this booking is for a family or couple and complies with the trip policy.', exact: true });
+    const checkout = customerPage.locator('.booking-confirm');
+    assert.equal(await family.isChecked(), false);
+    assert.equal(await couple.isChecked(), false);
+    assert.equal(await checkout.isDisabled(), true);
+    await family.check();
+    assert.equal(await checkout.isDisabled(), true, 'booking type alone cannot continue to payment');
+    await acknowledgement.check();
+    assert.equal(await checkout.isDisabled(), false);
+    await acknowledgement.uncheck();
+    assert.equal(await checkout.isDisabled(), true, 'withdrawing confirmation blocks payment again');
+    await couple.check();
+    assert.equal(await checkout.isDisabled(), true);
+    await acknowledgement.check();
+    assert.equal(await checkout.isDisabled(), false, 'Couple and explicit confirmation permit checkout');
+    await family.check();
+    assert.equal(await checkout.isDisabled(), false, 'Family and explicit confirmation permit checkout');
+    assert.match(await customerPage.locator('.price-box__total strong').textContent(), /29\.00/);
+    assert.equal(await Hold.countDocuments(), 0);
     const manipulated = await customerPage.evaluate(async departureId => {
       const auth = JSON.parse(localStorage.getItem('seago_auth'));
       const response = await fetch('/__local_api/api/payments/checkout', { method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + auth.token, 'idempotency-key': crypto.randomUUID() },
-        body: JSON.stringify({ departureId, adults: 1, children: 1, mealPlan: 'with_buffet', total: 0.01, commissionAmount: 0 }) });
+        body: JSON.stringify({ departureId, adults: 1, children: 1, mealPlan: 'with_buffet', partyType: 'family', partyPolicyConfirmed: true, total: 0.01, commissionAmount: 0 }) });
       return response.status;
     }, String(departure._id));
     assert.equal(manipulated, 400);
@@ -193,6 +214,10 @@ test('Phase2C isolated Customer and Provider browser/check-in acceptance', { tim
     assert.equal(await Booking.countDocuments(), 0);
     payment = await Payment.findOne({ customerId: customer._id });
     assert.equal(payment.status, 'pending'); assert.equal(payment.amount, 29);
+    const hold = await Hold.findById(payment.holdId);
+    assert.equal(hold.partyType, 'family');
+    assert.equal(hold.partyPolicyConfirmed, true);
+    assert.equal(hold.seats, 2);
     assert.equal((await Departure.findById(departure._id)).reservedSeats, 2);
   });
 
@@ -212,6 +237,7 @@ test('Phase2C isolated Customer and Provider browser/check-in acceptance', { tim
     await writeFile(screenshots + 'synthetic-ticket.svg', ticketSvg);
     booking = await Booking.findOne({ customerId: customer._id });
     assert.equal(booking.status, 'confirmed');
+    assert.equal(booking.partyType, 'family');
     assert.deepEqual([booking.adults, booking.children, booking.pricing.grossAmount,
       booking.pricing.commissionAmount, booking.pricing.providerNetAmount], [1, 1, 29, 5, 24]);
     await customerPage.screenshot({ path: screenshots + 'customer-ticket.png', fullPage: true });
@@ -227,6 +253,7 @@ test('Phase2C isolated Customer and Provider browser/check-in acceptance', { tim
     await providerPage.locator('.booking-card-main').click();
     await providerPage.locator('.booking-detail-sheet').waitFor();
     assert.match(await providerPage.locator('.booking-detail-sheet').innerText(), /Phase2C Test Browser Cruise/);
+    assert.equal(await providerPage.locator('.booking-detail-grid > div').filter({ hasText: 'Booking type' }).locator('b').textContent(), 'Family');
     providerPage.once('dialog', dialog => dialog.dismiss());
     await providerPage.getByRole('button', { name: 'Check in manually', exact: true }).click();
     assert.equal((await Booking.findById(booking._id)).checkInCount, 0);

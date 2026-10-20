@@ -89,7 +89,7 @@ test("L/M/N: checkout re-prices current server truth and confirmed booking keeps
   // T3: checkout reloads Trip and calculates the new server truth.
   const hold = await reserveCheckout({
     customerId: customer._id, key: crypto.randomUUID(), departureId: departure._id,
-    adults: 1, children: 1, mealPlan: "without_buffet"
+    adults: 1, children: 1, mealPlan: "without_buffet", partyType: "family", partyPolicyConfirmed: true
   });
   assert.equal(hold.pricing.adultUnitPrice, 20);
   assert.equal(hold.pricing.childUnitPrice, 12);

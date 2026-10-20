@@ -182,7 +182,7 @@ test('payment lifecycle on isolated MongoDB replica set',{},async t=>{
  async function checkoutFixture(){
   const f=await setup();await Hold.deleteOne({_id:f.hold._id});await Payment.deleteOne({_id:f.payment._id});
   await Departure.updateOne({_id:f.dep._id},{$set:{reservedSeats:0,capacity:1}});
-  f.request={customerId:f.hold.customerId,key:crypto.randomUUID(),departureId:f.dep._id,adults:1,children:0,mealPlan:'without_buffet'};return f;
+  f.request={customerId:f.hold.customerId,key:crypto.randomUUID(),departureId:f.dep._id,adults:1,children:0,mealPlan:'without_buffet',partyType:'family',partyPolicyConfirmed:true};return f;
  }
  await t.test('hold creation failure rolls back inventory and retry succeeds',async sub=>{
   const f=await checkoutFixture();const stub=sub.mock.method(Hold,'create',async()=>{throw new Error('Injected hold failure')});

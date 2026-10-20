@@ -118,7 +118,9 @@ test("payment provider correlation and orphan checkout recovery", {}, async t =>
       departureId: departure._id,
       adults: 1,
       children: 0,
-      mealPlan: "without_buffet"
+      mealPlan: "without_buffet",
+      partyType: "family",
+      partyPolicyConfirmed: true
     };
     const hold = await reserveCheckout(request);
     const payment = await Payment.findOne({ holdId: hold._id });

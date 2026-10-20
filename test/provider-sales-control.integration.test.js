@@ -129,7 +129,7 @@ test("provider and platform trip sales authority are independent",{},async t=>{
   await t.test("I: platform-paused trip cannot checkout directly by departure ID",async()=>{
     await providerPatch({active:true});await adminPlatform("paused");
     const before=await Departure.findById(departureId).lean();
-    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"platform-paused-checkout"},body:{departureId:String(departureId),adults:1,children:0,mealPlan:"without_buffet"}});
+    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"platform-paused-checkout"},body:{departureId:String(departureId),adults:1,children:0,mealPlan:"without_buffet",partyType:"family",partyPolicyConfirmed:true}});
     assert.equal(checkout.response.status,409);
     assert.match(checkout.json.error,/Trip unavailable/);
     const after=await Departure.findById(departureId).lean();assert.equal(after.reservedSeats,before.reservedSeats);
@@ -152,7 +152,7 @@ test("provider and platform trip sales authority are independent",{},async t=>{
     await providerPatch({active:true});await adminPlatform("allowed");
     await Provider.findByIdAndUpdate(provider._id,{$set:{status:"suspended"}});
     assert.equal(await publicTripVisible(),false);assert.equal(await publicDepartureVisible(),false);
-    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"suspended-provider-checkout"},body:{departureId:String(departureId),adults:1,children:0}});assert.equal(checkout.response.status,409);
+    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"suspended-provider-checkout"},body:{departureId:String(departureId),adults:1,children:0,partyType:"family",partyPolicyConfirmed:true}});assert.equal(checkout.response.status,409);
     await Provider.findByIdAndUpdate(provider._id,{$set:{status:"approved"}});
   });
 

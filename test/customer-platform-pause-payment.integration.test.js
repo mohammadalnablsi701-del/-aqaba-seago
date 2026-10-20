@@ -110,7 +110,9 @@ test("customer final payment confirmation re-checks current sales authority", {}
       departureId: departure._id,
       adults: 1,
       children: 0,
-      mealPlan: "without_buffet"
+      mealPlan: "without_buffet",
+      partyType: "family",
+      partyPolicyConfirmed: true
     };
     const hold = await reserveCheckout(request);
     const payment = await createCheckoutForHold({ hold, customerId: customer._id, baseUrl: "https://example.test" });
