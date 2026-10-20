@@ -177,7 +177,9 @@ test("customer payment API exposes only the minimal status DTO and preserves che
       departureId: String(departure._id),
       adults: 1,
       children: 0,
-      mealPlan: "without_buffet"
+      mealPlan: "without_buffet",
+      partyType: "family",
+      partyPolicyConfirmed: true
     })
   });
   assert.equal(checkoutResponse.status, 201);

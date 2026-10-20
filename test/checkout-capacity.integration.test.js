@@ -36,7 +36,7 @@ test('checkout capacity and idempotency on isolated MongoDB replica set',{},asyn
 
   const customer=async name=>User.create({name,phone:'+96279'+String(Math.floor(Math.random()*1e7)).padStart(7,'0')});
   const reserve=(customerId,departureId,key=crypto.randomUUID(),adults=1,children=0)=>reserveCheckout({
-    customerId,key,departureId,adults,children,mealPlan:'without_buffet'
+    customerId,key,departureId,adults,children,mealPlan:'without_buffet',partyType:'family',partyPolicyConfirmed:true
   });
 
   await t.test('two customers racing for the final seat produce exactly one hold and one reserved seat',async()=>{

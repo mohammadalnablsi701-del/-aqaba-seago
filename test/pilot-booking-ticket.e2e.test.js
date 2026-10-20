@@ -105,7 +105,7 @@ test('Phase 2B disposable local API quote-to-check-in acceptance', async t => {
   async function checkout(departure, overrides = {}, key = crypto.randomUUID(), token = customerToken) {
     return api('/api/payments/checkout', {
       method: 'POST', token, headers: { 'idempotency-key': key },
-      body: { departureId: String(departure._id), adults: 1, children: 1, mealPlan: 'with_buffet', ...overrides }
+      body: { departureId: String(departure._id), adults: 1, children: 1, mealPlan: 'with_buffet', partyType: 'family', partyPolicyConfirmed: true, ...overrides }
     });
   }
   async function webhook(payment, overrides = {}, { eventId = crypto.randomUUID(), signature } = {}) {

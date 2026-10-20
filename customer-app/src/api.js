@@ -106,14 +106,14 @@ export async function listBookings(token) {
   return Array.isArray(rows) ? rows.map(applyCustomerTicketState) : rows;
 }
 
-export async function createPaymentCheckout({ departureId, adults, children = 0, mealPlan = "without_buffet", token, idempotencyKey }) {
+export async function createPaymentCheckout({ departureId, adults, children = 0, mealPlan = "without_buffet", partyType, partyPolicyConfirmed, token, idempotencyKey }) {
   const key = idempotencyKey || globalThis.crypto?.randomUUID?.() ||
     `checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return request("/api/payments/checkout", {
     method: "POST",
     token,
     headers: { "Idempotency-Key": key },
-    body: JSON.stringify({ departureId, adults, children, mealPlan })
+    body: JSON.stringify({ departureId, adults, children, mealPlan, partyType, partyPolicyConfirmed })
   });
 }
 
