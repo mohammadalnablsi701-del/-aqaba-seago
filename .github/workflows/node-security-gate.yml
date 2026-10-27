@@ -1,0 +1,49 @@
+name: Node Security Gate
+
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging, main]
+
+jobs:
+  backend-node-22-23-4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup patched Node 22.23.4
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verify exact runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.23.4"
+          node -e 'const p=require("./package.json"); if(p.engines?.node!=="22.23.4") throw new Error(`Expected package.json engines.node=22.23.4, got ${p.engines?.node}`); console.log(`Node contract: ${p.engines.node}`)'
+
+      - name: Install backend dependencies from lockfile
+        run: npm ci --no-fund
+
+      - name: Prove lockfile remains stable
+        run: git diff --exit-code -- package.json package-lock.json
+
+      - name: Run backend safety tests
+        run: npm run test:safety
+
+      - name: Run backend unit tests
+        run: npm run test:unit
+
+      - name: Run disposable database integration tests
+        run: npm run test:db
+
+      - name: Audit backend dependencies
+        run: npm audit --audit-level=high
