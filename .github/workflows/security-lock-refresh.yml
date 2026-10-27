@@ -1,0 +1,48 @@
+name: Security Lock Refresh
+
+on:
+  push:
+    branches:
+      - security/node-22.23.4-2026-10-27
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/node-22.23.4-2026-10-27
+
+      - name: Setup patched Node 22.23.4
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Refresh lockfile with non-breaking audit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit fix --package-lock-only --no-fund || true
+          npm audit --package-lock-only --audit-level=high
+
+      - name: Commit lockfile if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo "No lockfile changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "security: refresh lockfile audit fixes"
+          git push origin HEAD:security/node-22.23.4-2026-10-27
