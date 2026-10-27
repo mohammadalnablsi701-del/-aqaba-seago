@@ -25,9 +25,12 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Refresh non-breaking security fixes in lockfile
-        run: npm audit fix --package-lock-only --ignore-scripts --no-fund
+        shell: bash
+        run: |
+          set -uo pipefail
+          npm audit fix --package-lock-only --ignore-scripts --no-fund || true
 
-      - name: Verify expected security fixes
+      - name: Verify expected security fixes and high-severity gate
         shell: bash
         run: |
           set -euo pipefail
@@ -41,6 +44,7 @@ jobs:
           if (ip !== '10.7.5') throw new Error(`Expected ip-address 10.7.5, got ${ip}`);
           console.log({ node: root.engines.node, bodyParser: body, ipAddress: ip });
           NODE
+          npm audit --audit-level=high
 
       - name: Commit lockfile only
         shell: bash
