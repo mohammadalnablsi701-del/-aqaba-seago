@@ -9,13 +9,19 @@
   "description": "Aqaba SeaGo provider dashboard.",
   "icons": [
     {
-      "src": "./provider-icon-192.webp?v=identity-v3",
+      "src": "./provider-icon-192.webp?v=identity-v4",
       "sizes": "192x192",
       "type": "image/webp",
       "purpose": "any maskable"
     },
     {
-      "src": "./app-provider.svg?v=identity-v3",
+      "src": "./provider-icon-512.png?v=identity-v4",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./app-provider.svg?v=identity-v4",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

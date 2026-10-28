@@ -1,10 +1,14 @@
-# Branding identity v4
+# Aqaba SeaGo branding identity
 
-Customer icon source: `customer-app/assets/logo.svg`.
-Provider icon source: `provider-app/public/app-provider.svg`.
+The Customer and Provider experiences intentionally use related but clearly distinct app identities:
 
-Both production SVGs preserve the approved SeaGo identity: helm, yacht, sun, birds and layered waves. Customer uses the light sea palette; Provider uses the dark navy operational palette.
+- Customer: light marine background with blue helm, yacht, sun, birds and cyan/blue waves.
+- Provider: dark navy marine background with white helm/yacht, sun, birds and cyan/blue waves.
 
-PWA manifests include a 192 px raster fallback and the scalable SVG as the primary all-size/maskable representation. Native Android/iOS Customer builds continue to use `customer-app/scripts/generate-native-assets.sh`, which renders `assets/logo.svg` into platform launcher/AppIcon PNG resources.
+Production source-of-truth:
 
-Do not pre-round the icon canvas; Android/iOS/PWA launchers apply their own masks.
+- Customer native Android/iOS: `customer-app/assets/logo.svg`
+- Customer web/PWA: `customer-app/public/app-customer.svg`, plus 192×192 and 512×512 raster fallbacks and a dedicated 180×180 Apple Touch PNG.
+- Provider web/PWA: `provider-app/public/app-provider.svg`, plus 192×192 and 512×512 raster fallbacks and a dedicated 180×180 Apple Touch PNG.
+
+Do not bake operating-system corner masks into the master artwork. Android/iOS/browser surfaces own the final mask shape.

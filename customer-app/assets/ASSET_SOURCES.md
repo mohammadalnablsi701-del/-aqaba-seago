@@ -7,7 +7,7 @@ Editable brand masters:
 
 The mobile GitHub Actions workflow renders these SVG masters into the Android launcher and iOS AppIcon PNG sizes during the native build. Generated native resource files do not need to be committed because the build pipeline reproduces them deterministically.
 
-PWA identity is versioned separately in `customer-app/public/manifest.webmanifest`. The customer and provider manifests use a 192 px raster fallback plus a scalable SVG production icon so browsers can select the best representation for the device.
+PWA identity is versioned separately in `customer-app/public/manifest.webmanifest`. Customer and Provider publish dedicated 192 px and 512 px raster fallbacks plus scalable SVG production icons. Each app also exposes a dedicated 180×180 Apple Touch PNG from its `index.html`.
 
 Brand colors:
 
