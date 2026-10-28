@@ -1,4 +1,4 @@
-name: Mobile Native Build
+name: Mobile Native Production Build
 
 on:
   push:
@@ -29,8 +29,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  web-production:
+    name: Customer Web Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Install dependencies from lockfile
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Run customer home parity regressions
+        run: node --test test/nativeStoreGuard.test.js test/nativeHeroAsset.test.js test/customerHomeParity.test.js test/androidBookingAuthFlow.test.js
+
+      - name: Build Customer Web production
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: npm run build
+
+      - name: Verify Customer Web production environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Customer Web Production parity"
+
+      - name: Verify Customer Web visual parity contract
+        working-directory: customer-app
+        run: node scripts/verify-visual-parity.mjs --dist="dist" --label="Customer Web Production"
+
   android-debug:
-    name: Android APK and AAB
+    name: Android Production APK and AAB
+    needs: web-production
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -56,15 +93,40 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
-      - name: Build web app
+      - name: Build comparison Customer Web production artifact
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-        run: npm run build
+        run: |
+          set -euo pipefail
+          npm run build
+          rm -rf "$RUNNER_TEMP/customer-web-production"
+          mv dist "$RUNNER_TEMP/customer-web-production"
+
+      - name: Verify comparison Customer Web production artifact
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --dist="$RUNNER_TEMP/customer-web-production" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Customer Web Production comparison artifact"
+
+      - name: Build Android production web app for Capacitor
+        working-directory: customer-app
+        env:
+          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+        run: npm run build -- --base=./
+
+      - name: Stamp Android production environment
+        working-directory: customer-app
+        run: |
+          cat > dist/build-environment.json <<'EOF'
+          {"environment":"production","apiBaseUrl":"https://aqaba-seago-api.onrender.com"}
+          EOF
 
       - name: Verify Android production web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Production"
+
+      - name: Compare Web and Android production bundles
+        working-directory: customer-app
+        run: node scripts/verify-visual-parity.mjs --dist="dist" --web="$RUNNER_TEMP/customer-web-production" --label="Web vs Android Production bundle parity"
 
       - name: Create Android project
         working-directory: customer-app
@@ -81,6 +143,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick librsvg2-bin
 
+      - name: Compare 390x844 Web and Android rendering
+        working-directory: customer-app
+        run: |
+          set -euo pipefail
+          WEBROOT="$RUNNER_TEMP/seago-webroot"
+          rm -rf "$WEBROOT"
+          mkdir -p "$WEBROOT/-aqaba-seago"
+          cp -R "$RUNNER_TEMP/customer-web-production/." "$WEBROOT/-aqaba-seago/"
+
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory "$WEBROOT" >"$RUNNER_TEMP/seago-web-server.log" 2>&1 &
+          WEB_PID=$!
+          python3 -m http.server 4174 --bind 127.0.0.1 --directory dist >"$RUNNER_TEMP/seago-android-server.log" 2>&1 &
+          ANDROID_PID=$!
+          trap 'kill "$WEB_PID" "$ANDROID_PID" 2>/dev/null || true' EXIT
+
+          for i in {1..20}; do
+            if curl -fsS "http://127.0.0.1:4173/-aqaba-seago/" >/dev/null && curl -fsS "http://127.0.0.1:4174/" >/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$CHROME"
+          HOST_RULES="MAP fonts.googleapis.com 0.0.0.0, MAP fonts.gstatic.com 0.0.0.0, MAP aqaba-seago-api.onrender.com 0.0.0.0"
+
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size=390,844 --virtual-time-budget=3000 --host-resolver-rules="$HOST_RULES" --user-data-dir="$RUNNER_TEMP/chrome-web" --screenshot="$RUNNER_TEMP/web-390x844.png" "http://127.0.0.1:4173/-aqaba-seago/"
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size=390,844 --virtual-time-budget=3000 --host-resolver-rules="$HOST_RULES" --user-data-dir="$RUNNER_TEMP/chrome-android" --screenshot="$RUNNER_TEMP/android-390x844.png" "http://127.0.0.1:4174/"
+
+          compare -metric AE "$RUNNER_TEMP/web-390x844.png" "$RUNNER_TEMP/android-390x844.png" null: 2>"$RUNNER_TEMP/parity-pixels.txt" || true
+          PIXELS="$(tr -d '[:space:]' < "$RUNNER_TEMP/parity-pixels.txt")"
+          echo "390x844 differing pixels: $PIXELS"
+          test "$PIXELS" = "0"
+
       - name: Generate branded Android assets
         working-directory: customer-app
         run: bash scripts/generate-native-assets.sh android
@@ -89,9 +185,13 @@ jobs:
         working-directory: customer-app
         run: npx cap sync android
 
-      - name: Verify synced Android web artifact
+      - name: Verify synced Android production web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Production synced artifact"
+
+      - name: Audit synced Android production visual artifact
+        working-directory: customer-app
+        run: node scripts/verify-visual-parity.mjs --dist="android/app/src/main/assets/public" --web="$RUNNER_TEMP/customer-web-production" --label="Android Production synced artifact"
 
       - name: Run Firebase Task completion unit test
         working-directory: customer-app/android
@@ -105,18 +205,18 @@ jobs:
         working-directory: customer-app/android
         run: ./gradlew bundleRelease --stacktrace
 
-      - name: Upload debug APK
+      - name: Upload production debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-debug
+          name: aqaba-seago-android-PRODUCTION-debug
           path: customer-app/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload unsigned release AAB
+      - name: Upload production unsigned release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-android-release-unsigned
+          name: aqaba-seago-android-PRODUCTION-release-unsigned
           path: customer-app/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
