@@ -34,7 +34,7 @@ permissions:
 
 concurrency:
   group: ios-app-store-rc-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   release-gate:
@@ -69,6 +69,20 @@ jobs:
           set -euo pipefail
           [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version_name must look like 1.0.0" >&2; exit 1; }
           [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "build_number must be a positive integer" >&2; exit 1; }
+
+      - name: Verify Apple SDK toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk '/^Xcode /{print $2}')"
+          IOS_SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          XCODE_MAJOR="${XCODE_VERSION%%.*}"
+          IOS_SDK_MAJOR="${IOS_SDK_VERSION%%.*}"
+          echo "Xcode $XCODE_VERSION / iOS SDK $IOS_SDK_VERSION"
+          [[ "$XCODE_MAJOR" =~ ^[0-9]+$ ]] || { echo "Could not parse Xcode version" >&2; exit 1; }
+          [[ "$IOS_SDK_MAJOR" =~ ^[0-9]+$ ]] || { echo "Could not parse iOS SDK version" >&2; exit 1; }
+          (( XCODE_MAJOR >= 26 )) || { echo "App Store submission requires Xcode 26 or later" >&2; exit 1; }
+          (( IOS_SDK_MAJOR >= 26 )) || { echo "App Store submission requires the iOS 26 SDK or later" >&2; exit 1; }
 
       - name: Setup patched Node runtime
         uses: actions/setup-node@v4
@@ -168,6 +182,7 @@ jobs:
           PBX="ios/App/App.xcodeproj/project.pbxproj"
           INFO="ios/App/App/Info.plist"
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.aqabaseago.app;' "$PBX"
+          grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;' "$PBX"
           grep -A1 '<key>CFBundleDisplayName</key>' "$INFO" | grep -q 'Aqaba SeaGo'
           if grep -Eq 'NSCameraUsageDescription|NSPhotoLibraryUsageDescription|NSPhotoLibraryAddUsageDescription' "$INFO"; then
             echo "Unexpected Customer camera/photo permission" >&2
