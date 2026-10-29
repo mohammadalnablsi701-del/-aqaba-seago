@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [staging, main]
   push:
-    branches: [staging, main]
+    branches: [staging, main, "release/apple-rc-*"]
 
 jobs:
   backend-node-22-23-4:
@@ -23,12 +23,20 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Verify exact runtime contract
+      - name: Verify exact Production runtime and lockfile contract
         shell: bash
         run: |
           set -euo pipefail
           test "$(node --version)" = "v22.23.4"
-          node -e 'const p=require("./package.json"); if(p.engines?.node!=="22.23.4") throw new Error(`Expected package.json engines.node=22.23.4, got ${p.engines?.node}`); console.log(`Node contract: ${p.engines.node}`)'
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          const lock = require('./package-lock.json');
+          if (pkg.engines?.node !== '22.23.4') throw new Error(`package.json engines.node=${pkg.engines?.node}`);
+          if (lock.packages?.['']?.engines?.node !== '22.23.4') throw new Error(`lockfile engines.node=${lock.packages?.['']?.engines?.node}`);
+          if (lock.packages?.['node_modules/body-parser']?.version !== '1.20.9') throw new Error('body-parser security fix missing');
+          if (lock.packages?.['node_modules/ip-address']?.version !== '10.7.5') throw new Error('ip-address security fix missing');
+          console.log('Production Node/security contract verified');
+          NODE
 
       - name: Install backend dependencies from lockfile
         run: npm ci --no-fund
@@ -55,5 +63,13 @@ jobs:
       - name: Run disposable database integration tests
         run: npm run test:db
 
-      - name: Audit backend dependencies
-        run: npm audit --audit-level=high
+      - name: Reject High or Critical dependency advisories
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit_rc=0
+          npm audit --json > "$RUNNER_TEMP/npm-audit.json" || audit_rc=$?
+          node -e 'const fs=require("node:fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const v=x.metadata?.vulnerabilities||{};console.log("npm audit severities:",JSON.stringify(v));if((v.critical||0)>0||(v.high||0)>0)process.exit(1)' "$RUNNER_TEMP/npm-audit.json"
+          if [ "$audit_rc" -ne 0 ]; then
+            echo "npm audit returned $audit_rc; accepted only because no High/Critical advisories remain"
+          fi
