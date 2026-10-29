@@ -17,7 +17,9 @@
     "mobile:add:ios": "cap add ios",
     "mobile:assets": "bash scripts/generate-native-assets.sh all",
     "mobile:open:android": "cap open android",
-    "mobile:open:ios": "cap open ios"
+    "mobile:open:ios": "cap open ios",
+    "ios:free:staging": "bash scripts/prepare-free-ios-device.sh staging",
+    "ios:free:production": "bash scripts/prepare-free-ios-device.sh production"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
