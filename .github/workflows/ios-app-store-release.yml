@@ -6,7 +6,7 @@ on:
     paths:
       - "customer-app/**"
       - "provider-app/**"
-      - "admin-dashboard/**"
+      - "admin-app/**"
       - "shared/**"
       - "package.json"
       - "package-lock.json"
@@ -79,7 +79,7 @@ jobs:
             package-lock.json
             customer-app/package-lock.json
             provider-app/package-lock.json
-            admin-dashboard/package-lock.json
+            admin-app/package-lock.json
 
       - name: Verify Production security contract
         shell: bash
@@ -121,14 +121,14 @@ jobs:
           set -euo pipefail
           npm ci --prefix customer-app --no-fund
           npm ci --prefix provider-app --no-fund
-          npm ci --prefix admin-dashboard --no-fund
+          npm ci --prefix admin-app --no-fund
 
       - name: Build Provider and Admin regression artifacts
         shell: bash
         run: |
           set -euo pipefail
           npm --prefix provider-app run build
-          npm --prefix admin-dashboard run build
+          npm --prefix admin-app run build
 
       - name: Build Customer Production artifact for Capacitor
         working-directory: customer-app
