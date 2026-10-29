@@ -1,0 +1,186 @@
+name: Free iPhone Device Project
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/**"
+      - ".github/workflows/free-ios-device-project.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Backend to bake into the free iPhone project"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-iphone-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-free-device-project:
+    name: Prepare free Personal Team iPhone project
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+      VITE_NATIVE_PUSH_ENABLED: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Select safe backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENV" in
+            staging)
+              echo "TARGET_API=https://aqaba-seago-api-staging.onrender.com" >> "$GITHUB_ENV"
+              echo "FORBIDDEN_API=https://aqaba-seago-api.onrender.com" >> "$GITHUB_ENV"
+              ;;
+            production)
+              echo "TARGET_API=https://aqaba-seago-api.onrender.com" >> "$GITHUB_ENV"
+              echo "FORBIDDEN_API=https://aqaba-seago-api-staging.onrender.com" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported environment: $TARGET_ENV" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Verify Apple toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          XCODE_MAJOR="${XCODE_VERSION%%.*}"
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          SDK_MAJOR="${SDK_VERSION%%.*}"
+          [[ "$XCODE_MAJOR" =~ ^[0-9]+$ ]] && (( XCODE_MAJOR >= 26 ))
+          [[ "$SDK_MAJOR" =~ ^[0-9]+$ ]] && (( SDK_MAJOR >= 26 ))
+          echo "Xcode $XCODE_VERSION / iOS SDK $SDK_VERSION"
+
+      - name: Install Customer dependencies
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Build free-device web artifact
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist ios
+          VITE_API_BASE_URL="$TARGET_API" \
+          VITE_NATIVE_PUSH_ENABLED="false" \
+          npm run build -- --base=./
+          node scripts/verify-build-env.mjs \
+            --expected="$TARGET_API" \
+            --forbidden="$FORBIDDEN_API" \
+            --base="./" \
+            --label="Free iPhone $TARGET_ENV pre-sync"
+
+      - name: Create iOS project
+        working-directory: customer-app
+        run: npx cap add ios
+
+      - name: Install native image tools
+        shell: bash
+        run: |
+          brew list imagemagick >/dev/null 2>&1 || brew install imagemagick
+          brew list librsvg >/dev/null 2>&1 || brew install librsvg
+
+      - name: Generate branded iOS assets
+        working-directory: customer-app
+        run: bash scripts/generate-native-assets.sh ios
+
+      - name: Sync Capacitor iOS
+        working-directory: customer-app
+        run: npx cap sync ios
+
+      - name: Verify synced free-device artifact
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-build-env.mjs \
+            --dist="ios/App/App/public" \
+            --expected="$TARGET_API" \
+            --forbidden="$FORBIDDEN_API" \
+            --base="./" \
+            --label="Free iPhone $TARGET_ENV synced"
+          PBX="ios/App/App.xcodeproj/project.pbxproj"
+          INFO="ios/App/App/Info.plist"
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.aqabaseago.app;' "$PBX"
+          grep -A1 '<key>CFBundleDisplayName</key>' "$INFO" | grep -q 'Aqaba SeaGo'
+          if grep -Eq 'NSAllowsArbitraryLoads|NSAllowsArbitraryLoadsInWebContent' "$INFO"; then
+            echo "Unexpected broad ATS exception" >&2
+            exit 1
+          fi
+
+      - name: Prove unsigned Debug simulator build
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/DerivedDataFree \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Remove generated build cache before packaging
+        working-directory: customer-app
+        run: rm -rf ios/DerivedDataFree
+
+      - name: Add handoff note to artifact
+        working-directory: customer-app
+        shell: bash
+        run: |
+          cat > ios/FREE_IPHONE_README.txt <<EOF
+          Aqaba SeaGo — Free iPhone test project
+          Environment: $TARGET_ENV
+          API: $TARGET_API
+          Commit: $GITHUB_SHA
+
+          Open on a Mac with Xcode 26+:
+          ios/App/App.xcodeproj
+
+          Then:
+          1) Xcode > Settings > Accounts > sign in with your Apple Account.
+          2) App target > Signing & Capabilities > Automatically manage signing.
+          3) Team > choose your Personal Team.
+          4) Connect your iPhone and select it as the Run destination.
+          5) Press Run.
+
+          If the bundle identifier is unavailable for your Personal Team, change it only in this local test project to a unique development identifier. Do not commit that local-only change.
+
+          This project is for free on-device development testing. It is not a TestFlight/App Store distribution build.
+          EOF
+
+      - name: Upload ready Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-free-iphone-${{ env.TARGET_ENV }}-${{ github.sha }}
+          path: |
+            customer-app/ios/
+            docs/FREE_IPHONE_TESTING.md
+          if-no-files-found: error
+          retention-days: 14
