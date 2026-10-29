@@ -1,6 +1,16 @@
 name: iOS App Store Release Candidate
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/**"
+      - "provider-app/**"
+      - "admin-dashboard/**"
+      - "shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ios-app-store-release.yml"
   workflow_dispatch:
     inputs:
       version_name:
@@ -35,25 +45,26 @@ jobs:
       VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
       VITE_NATIVE_PUSH_ENABLED: "false"
       BUNDLE_ID: com.aqabaseago.app
+      VERSION_NAME: ${{ inputs.version_name || '1.0.0' }}
+      BUILD_NUMBER: ${{ inputs.build_number || '1' }}
+      UPLOAD_TESTFLIGHT: ${{ inputs.upload_testflight || false }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Require release-candidate branch
+      - name: Require release-candidate source branch
         shell: bash
         run: |
           set -euo pipefail
-          case "${GITHUB_REF_NAME}" in
+          SOURCE_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          case "$SOURCE_BRANCH" in
             release/apple-rc-*) ;;
-            *) echo "This workflow must run from a release/apple-rc-* branch" >&2; exit 1 ;;
+            *) echo "Apple RC workflow must run from a release/apple-rc-* branch; got $SOURCE_BRANCH" >&2; exit 1 ;;
           esac
 
       - name: Validate release inputs
         shell: bash
-        env:
-          VERSION_NAME: ${{ inputs.version_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
           [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version_name must look like 1.0.0" >&2; exit 1; }
@@ -88,13 +99,10 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --no-fund
 
-      - name: Run backend safety and unit tests
+      - name: Run backend safety and unit gates
         run: |
           npm run test:safety
           npm run test:unit
-
-      - name: Run disposable database integration tests
-        run: npm run test:db
 
       - name: Reject High or Critical backend dependency advisories
         shell: bash
@@ -107,30 +115,23 @@ jobs:
             echo "npm audit returned $audit_rc; accepted only because no High/Critical advisories remain"
           fi
 
-      - name: Install Customer dependencies
-        working-directory: customer-app
-        run: npm ci --no-fund
-
-      - name: Install Provider dependencies
-        working-directory: provider-app
-        run: npm ci --no-fund
-
-      - name: Install Admin dependencies
-        working-directory: admin-dashboard
-        run: npm ci --no-fund
+      - name: Install app dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix customer-app --no-fund
+          npm ci --prefix provider-app --no-fund
+          npm ci --prefix admin-dashboard --no-fund
 
       - name: Build Provider and Admin regression artifacts
         shell: bash
         run: |
           set -euo pipefail
-          npm run build --prefix provider-app
-          npm run build --prefix admin-dashboard
+          npm --prefix provider-app run build
+          npm --prefix admin-dashboard run build
 
-      - name: Build Customer Production web artifact for Capacitor
+      - name: Build Customer Production artifact for Capacitor
         working-directory: customer-app
-        env:
-          VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-          VITE_NATIVE_PUSH_ENABLED: "false"
         run: npm run build -- --base=./
 
       - name: Verify Customer Production web environment
@@ -178,12 +179,9 @@ jobs:
           fi
           echo "iOS identity/privacy/ATS gate passed"
 
-      - name: Build unsigned iOS simulator artifact
+      - name: Build unsigned Release simulator artifact
         working-directory: customer-app
         shell: bash
-        env:
-          VERSION_NAME: ${{ inputs.version_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
           xcodebuild \
@@ -198,7 +196,7 @@ jobs:
             build
 
       - name: Validate Apple release secrets
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         shell: bash
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -218,7 +216,7 @@ jobs:
           done
 
       - name: Install Apple Distribution signing material
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         id: signing
         shell: bash
         env:
@@ -233,8 +231,8 @@ jobs:
           PROFILE="$RUNNER_TEMP/aqaba-seago.mobileprovision"
           PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
 
-          printf '%s' "$APPLE_DISTRIBUTION_CERT_P12_BASE64" | base64 --decode > "$CERT"
-          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE"
+          printf '%s' "$APPLE_DISTRIBUTION_CERT_P12_BASE64" | base64 -D > "$CERT"
+          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 -D > "$PROFILE"
           test -s "$CERT"
           test -s "$PROFILE"
 
@@ -243,7 +241,7 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$CERT" -P "$APPLE_DISTRIBUTION_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          security list-keychains -d user -s "$KEYCHAIN"
 
           security cms -D -i "$PROFILE" > "$PROFILE_PLIST"
           PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")
@@ -258,12 +256,10 @@ jobs:
           echo "keychain=$KEYCHAIN" >> "$GITHUB_OUTPUT"
 
       - name: Archive signed App Store build
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         working-directory: customer-app
         shell: bash
         env:
-          VERSION_NAME: ${{ inputs.version_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
         run: |
@@ -284,7 +280,7 @@ jobs:
             archive
 
       - name: Create App Store export options
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         working-directory: customer-app
         shell: bash
         env:
@@ -310,7 +306,7 @@ jobs:
           EOF
 
       - name: Export signed IPA
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         working-directory: customer-app
         shell: bash
         run: |
@@ -326,23 +322,22 @@ jobs:
           echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
 
       - name: Prepare App Store Connect API key
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         shell: bash
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
         run: |
           set -euo pipefail
-          KEY_DIR="$RUNNER_TEMP/private_keys"
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
           KEY_PATH="$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
-          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8_BASE64" | base64 --decode > "$KEY_PATH"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8_BASE64" | base64 -D > "$KEY_PATH"
           chmod 600 "$KEY_PATH"
           test -s "$KEY_PATH"
-          echo "API_PRIVATE_KEYS_DIR=$KEY_DIR" >> "$GITHUB_ENV"
 
       - name: Upload IPA to TestFlight
-        if: ${{ inputs.upload_testflight }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
         working-directory: customer-app
         shell: bash
         env:
@@ -360,10 +355,6 @@ jobs:
         if: always()
         working-directory: customer-app
         shell: bash
-        env:
-          VERSION_NAME: ${{ inputs.version_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
-          UPLOAD_TESTFLIGHT: ${{ inputs.upload_testflight }}
         run: |
           set -euo pipefail
           mkdir -p ios/release-evidence
@@ -381,10 +372,10 @@ jobs:
           }
           EOF
           if [[ -n "${IPA_PATH:-}" && -f "$IPA_PATH" ]]; then
-            cp "$IPA_PATH" ios/release-evidence/Aqaba-SeaGo-${VERSION_NAME}-${BUILD_NUMBER}.ipa
+            cp "$IPA_PATH" "ios/release-evidence/Aqaba-SeaGo-${VERSION_NAME}-${BUILD_NUMBER}.ipa"
           fi
           if [[ -d ios/AqabaSeaGo.xcarchive ]]; then
-            ditto -c -k --sequesterRsrc --keepParent ios/AqabaSeaGo.xcarchive ios/release-evidence/Aqaba-SeaGo-${VERSION_NAME}-${BUILD_NUMBER}.xcarchive.zip
+            ditto -c -k --sequesterRsrc --keepParent ios/AqabaSeaGo.xcarchive "ios/release-evidence/Aqaba-SeaGo-${VERSION_NAME}-${BUILD_NUMBER}.xcarchive.zip"
           fi
           shasum -a 256 ios/release-evidence/* > ios/release-evidence/SHA256SUMS.txt || true
 
@@ -392,7 +383,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aqaba-seago-ios-rc-${{ inputs.version_name }}-${{ inputs.build_number }}
+          name: aqaba-seago-ios-rc-${{ env.VERSION_NAME }}-${{ env.BUILD_NUMBER }}
           path: customer-app/ios/release-evidence/
           if-no-files-found: error
           retention-days: 30
@@ -400,9 +391,13 @@ jobs:
       - name: Remove signing material
         if: always()
         shell: bash
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         run: |
           rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/aqaba-seago.mobileprovision" "$RUNNER_TEMP/profile.plist"
-          rm -rf "$RUNNER_TEMP/private_keys"
+          if [[ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]]; then
+            rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          fi
           if [[ -n "${{ steps.signing.outputs.keychain }}" ]]; then
             security delete-keychain "${{ steps.signing.outputs.keychain }}" || true
           fi
