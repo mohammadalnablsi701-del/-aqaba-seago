@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -8,7 +9,8 @@ import {createApp} from '../src/app.js';
 import User from '../src/models/User.js';
 import Provider from '../src/models/Provider.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const SECRET='provider-access-test-secret-at-least-32-characters';
 const PASSWORD='TemporaryPass123!';
 const REASON='Credential rotation test';
@@ -31,15 +33,13 @@ function iso(value){return value?new Date(value).toISOString():null;}
 
 async function rawProvider(id){return Provider.collection.findOne({_id:new mongoose.Types.ObjectId(String(id))});}
 
-test('admin provider access is lifecycle-neutral, ID-targeted and session-safe',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
+test('admin provider access is lifecycle-neutral, ID-targeted and session-safe',{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   process.env.JWT_SECRET=SECRET;
 
-  await mongoose.connect(uri,{dbName:'seago_provider_access_'+crypto.randomUUID().replaceAll('-','')});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
   });
 

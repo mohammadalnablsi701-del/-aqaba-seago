@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -12,13 +13,14 @@ import Trip from '../src/models/Trip.js';
 import Departure from '../src/models/Departure.js';
 import CheckoutHold from '../src/models/CheckoutHold.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const money=n=>Number(Number(n).toFixed(2));
 
-test('provider/admin settlement ledger matches hand-calculated cash economics',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
-  await mongoose.connect(uri,{dbName:'seago_settlement_test_'+crypto.randomUUID().replaceAll('-','')});
-  t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();});
+test('provider/admin settlement ledger matches hand-calculated cash economics',{},async t=>{
+
+  await connectFixture();
+
   await Promise.all([User,Provider,Booking,Payment,ProviderSettlement,Trip,Departure,CheckoutHold].map(m=>m.init()));
 
   const admin=await User.create({name:'Admin',phone:'+962790001001',role:'admin'});

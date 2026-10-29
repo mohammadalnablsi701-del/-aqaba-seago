@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -11,7 +12,8 @@ import Departure from "../src/models/Departure.js";
 import Booking from "../src/models/Booking.js";
 import ProviderMember from "../src/models/ProviderMember.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function auth(userId, secret) {
   return jwt.sign({ sub: String(userId) }, secret, { expiresIn: "1h" });
@@ -33,18 +35,16 @@ async function json(response) {
   return { response, body };
 }
 
-test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("customer ticket lifecycle DTO matches validator truth", {}, async t => {
+
   const oldJwt = process.env.JWT_SECRET;
   const oldTicket = process.env.TICKET_SIGNING_SECRET;
   const secret = "ticket-lifecycle-test-secret-at-least-32-characters";
   process.env.JWT_SECRET = secret;
   process.env.TICKET_SIGNING_SECRET = secret;
 
-  await mongoose.connect(uri, { dbName: "seago_ticket_lifecycle_" + crypto.randomUUID().replaceAll("-", "") });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if (oldJwt === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = oldJwt;
     if (oldTicket === undefined) delete process.env.TICKET_SIGNING_SECRET; else process.env.TICKET_SIGNING_SECRET = oldTicket;
   });
@@ -215,6 +215,52 @@ test("customer ticket lifecycle DTO matches validator truth", { skip: !uri }, as
   const otherList = await list(otherToken);
   assert.equal(otherList.response.status, 200);
   assert.deepEqual(otherList.body.map(row => row._id), [String(otherBooking._id)]);
+
+  await t.test("legacy trip binding rejects a different trip without redeeming the booking", async () => {
+    const otherTrip = await Trip.create({
+      providerId: provider._id,
+      titleAr: "رحلة اختبار أخرى",
+      titleEn: "Phase2B Test Different Trip",
+      category: "yacht",
+      durationMinutes: 60,
+      active: true,
+      pricing: { currency: "JOD", pricePerPerson: 20, adultPrice: 20, commissionType: "fixed_per_person", commissionValue: 4 }
+    });
+    const bindings = {
+      v: 1,
+      bookingId: String(ready._id),
+      departureId: String(readyDep._id),
+      providerId: String(provider._id)
+    };
+    const mismatched = legacyTicket({ ...bindings, tripId: String(otherTrip._id) }, secret);
+    const headers = { authorization: `Bearer ${providerToken}`, "content-type": "application/json" };
+
+    const inspection = await json(await fetch(`${base}/api/tickets/inspect`, {
+      method: "POST", headers, body: JSON.stringify({ token: mismatched })
+    }));
+    assert.equal(inspection.response.status, 400);
+    assert.equal(inspection.body.error, "Invalid ticket binding");
+
+    const validation = await json(await fetch(`${base}/api/tickets/validate?token=${encodeURIComponent(mismatched)}`));
+    assert.equal(validation.response.status, 400);
+    assert.equal(validation.body.error, "invalid_ticket_link");
+
+    const checkIn = await json(await fetch(`${base}/api/tickets/check-in`, {
+      method: "POST", headers, body: JSON.stringify({ token: mismatched })
+    }));
+    assert.equal(checkIn.response.status, 400);
+    assert.equal(checkIn.body.error, "Invalid ticket binding");
+    const unchanged = await Booking.findById(ready._id).lean();
+    assert.equal(unchanged.checkedInAt ?? null, null);
+    assert.equal(unchanged.checkInCount, 0);
+
+    const matching = legacyTicket({ ...bindings, tripId: String(trip._id) }, secret);
+    const compatible = await json(await fetch(`${base}/api/tickets/inspect`, {
+      method: "POST", headers, body: JSON.stringify({ token: matching })
+    }));
+    assert.equal(compatible.response.status, 200, "matching legacy bindings must remain compatible");
+    assert.equal(compatible.body.boardable, true);
+  });
 
   await t.test("invalid signature and mismatched legacy binding are rejected before lifecycle acceptance", async () => {
     const readyPublicToken = publicTokenFrom(readyRow);

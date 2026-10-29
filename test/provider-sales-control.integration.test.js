@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -12,10 +13,11 @@ import Booking from "../src/models/Booking.js";
 import CheckoutHold from "../src/models/CheckoutHold.js";
 import Payment from "../src/models/Payment.js";
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test("provider and platform trip sales authority are independent",{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,"Only a local disposable replica set is allowed");
+test("provider and platform trip sales authority are independent",{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   const oldCommission=process.env.DEFAULT_COMMISSION_PERCENTAGE;
   const oldPaymentProvider=process.env.PAYMENT_PROVIDER;
@@ -23,10 +25,8 @@ test("provider and platform trip sales authority are independent",{skip:!uri},as
   process.env.DEFAULT_COMMISSION_PERCENTAGE="20";
   process.env.PAYMENT_PROVIDER="mock";
 
-  await mongoose.connect(uri,{dbName:"seago_provider_sales_"+crypto.randomUUID().replaceAll("-","")});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
     if(oldCommission===undefined)delete process.env.DEFAULT_COMMISSION_PERCENTAGE;else process.env.DEFAULT_COMMISSION_PERCENTAGE=oldCommission;
     if(oldPaymentProvider===undefined)delete process.env.PAYMENT_PROVIDER;else process.env.PAYMENT_PROVIDER=oldPaymentProvider;
@@ -129,7 +129,7 @@ test("provider and platform trip sales authority are independent",{skip:!uri},as
   await t.test("I: platform-paused trip cannot checkout directly by departure ID",async()=>{
     await providerPatch({active:true});await adminPlatform("paused");
     const before=await Departure.findById(departureId).lean();
-    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"platform-paused-checkout"},body:{departureId:String(departureId),adults:1,children:0,mealPlan:"without_buffet"}});
+    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"platform-paused-checkout"},body:{departureId:String(departureId),adults:1,children:0,mealPlan:"without_buffet",partyType:"family",partyPolicyConfirmed:true}});
     assert.equal(checkout.response.status,409);
     assert.match(checkout.json.error,/Trip unavailable/);
     const after=await Departure.findById(departureId).lean();assert.equal(after.reservedSeats,before.reservedSeats);
@@ -152,7 +152,7 @@ test("provider and platform trip sales authority are independent",{skip:!uri},as
     await providerPatch({active:true});await adminPlatform("allowed");
     await Provider.findByIdAndUpdate(provider._id,{$set:{status:"suspended"}});
     assert.equal(await publicTripVisible(),false);assert.equal(await publicDepartureVisible(),false);
-    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"suspended-provider-checkout"},body:{departureId:String(departureId),adults:1,children:0}});assert.equal(checkout.response.status,409);
+    const checkout=await request("/api/payments/checkout",{auth:customerToken,method:"POST",headers:{"idempotency-key":"suspended-provider-checkout"},body:{departureId:String(departureId),adults:1,children:0,partyType:"family",partyPolicyConfirmed:true}});assert.equal(checkout.response.status,409);
     await Provider.findByIdAndUpdate(provider._id,{$set:{status:"approved"}});
   });
 

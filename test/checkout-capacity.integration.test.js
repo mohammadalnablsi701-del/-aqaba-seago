@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -13,12 +14,13 @@ import Hold from '../src/models/CheckoutHold.js';
 import Payment from '../src/models/Payment.js';
 import Booking from '../src/models/Booking.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test('checkout capacity and idempotency on isolated MongoDB replica set',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
-  await mongoose.connect(uri,{dbName:'seago_checkout_test_'+crypto.randomUUID().replaceAll('-','')});
-  t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();});
+test('checkout capacity and idempotency on isolated MongoDB replica set',{},async t=>{
+
+  await connectFixture();
+
   await Promise.all([User,Provider,Trip,Departure,Hold,Payment,Booking].map(m=>m.init()));
 
   async function fixture(capacity=1){
@@ -34,7 +36,7 @@ test('checkout capacity and idempotency on isolated MongoDB replica set',{skip:!
 
   const customer=async name=>User.create({name,phone:'+96279'+String(Math.floor(Math.random()*1e7)).padStart(7,'0')});
   const reserve=(customerId,departureId,key=crypto.randomUUID(),adults=1,children=0)=>reserveCheckout({
-    customerId,key,departureId,adults,children,mealPlan:'without_buffet'
+    customerId,key,departureId,adults,children,mealPlan:'without_buffet',partyType:'family',partyPolicyConfirmed:true
   });
 
   await t.test('two customers racing for the final seat produce exactly one hold and one reserved seat',async()=>{

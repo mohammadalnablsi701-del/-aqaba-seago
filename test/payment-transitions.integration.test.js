@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -17,13 +18,14 @@ import Notice from '../src/models/InAppNotification.js';
 import {cancelBooking, cancelDepartureBookings} from '../src/services/cancellations.js';
 import {releaseCheckoutHold} from '../src/services/inventory.js';
 import {processPaymentWebhook, releaseExpiredCheckoutHolds, createCheckoutForHold} from '../src/services/payments.js';
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
-test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
- assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/, 'Only a local disposable replica set is allowed');
+requireFixture();
+test.after(cleanupFixtures);
+test('payment lifecycle on isolated MongoDB replica set',{},async t=>{
+
  const saved={secret:process.env.MOCK_PAYMENT_WEBHOOK_SECRET,email:process.env.RESEND_API_KEY,push:process.env.VAPID_PUBLIC_KEY};
  process.env.MOCK_PAYMENT_WEBHOOK_SECRET='integration-only-webhook-key';delete process.env.RESEND_API_KEY;delete process.env.VAPID_PUBLIC_KEY;
- await mongoose.connect(uri,{dbName:'seago_payment_test_'+crypto.randomUUID().replaceAll('-','')});
- t.after(async()=>{await mongoose.connection.dropDatabase();await mongoose.disconnect();for(const [key,v] of [['MOCK_PAYMENT_WEBHOOK_SECRET',saved.secret],['RESEND_API_KEY',saved.email],['VAPID_PUBLIC_KEY',saved.push]]){if(v===undefined)delete process.env[key];else process.env[key]=v}});
+ await connectFixture();
+ t.after(async()=>{for(const [key,v] of [['MOCK_PAYMENT_WEBHOOK_SECRET',saved.secret],['RESEND_API_KEY',saved.email],['VAPID_PUBLIC_KEY',saved.push]]){if(v===undefined)delete process.env[key];else process.env[key]=v}});
  await Promise.all([Settlement,Payment,PaymentEvent,Booking,Hold,Departure,Trip,Provider,User,Notice].map(m=>m.init()));
  async function setup(){
   const user=await User.create({name:'Local test',phone:'+962790000000'});
@@ -180,7 +182,7 @@ test('payment lifecycle on isolated MongoDB replica set',{skip:!uri},async t=>{
  async function checkoutFixture(){
   const f=await setup();await Hold.deleteOne({_id:f.hold._id});await Payment.deleteOne({_id:f.payment._id});
   await Departure.updateOne({_id:f.dep._id},{$set:{reservedSeats:0,capacity:1}});
-  f.request={customerId:f.hold.customerId,key:crypto.randomUUID(),departureId:f.dep._id,adults:1,children:0,mealPlan:'without_buffet'};return f;
+  f.request={customerId:f.hold.customerId,key:crypto.randomUUID(),departureId:f.dep._id,adults:1,children:0,mealPlan:'without_buffet',partyType:'family',partyPolicyConfirmed:true};return f;
  }
  await t.test('hold creation failure rolls back inventory and retry succeeds',async sub=>{
   const f=await checkoutFixture();const stub=sub.mock.method(Hold,'create',async()=>{throw new Error('Injected hold failure')});

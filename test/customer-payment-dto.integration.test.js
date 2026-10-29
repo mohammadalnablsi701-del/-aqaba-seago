@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -15,7 +16,8 @@ import PaymentEvent from "../src/models/PaymentEvent.js";
 import Booking from "../src/models/Booking.js";
 import InAppNotification from "../src/models/InAppNotification.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const ALLOWED_STATUS_KEYS = ["bookingId", "status"];
 const FORBIDDEN_STATUS_KEYS = [
   "_id",
@@ -51,8 +53,7 @@ function assertCustomerStatusDto(body, { status, bookingId = null }) {
   for (const key of FORBIDDEN_STATUS_KEYS) assert.equal(Object.hasOwn(body, key), false, `${key} must not be customer-visible`);
 }
 
-test("customer payment API exposes only the minimal status DTO and preserves checkout/return flow", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("customer payment API exposes only the minimal status DTO and preserves checkout/return flow", {}, async t => {
 
   const saved = {
     jwt: process.env.JWT_SECRET,
@@ -70,10 +71,8 @@ test("customer payment API exposes only the minimal status DTO and preserves che
   delete process.env.RESEND_API_KEY;
   delete process.env.VAPID_PUBLIC_KEY;
 
-  await mongoose.connect(uri, { dbName: `seago_customer_payment_dto_${crypto.randomUUID().replaceAll("-", "")}` });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     for (const [key, value] of [
       ["JWT_SECRET", saved.jwt],
       ["PAYMENT_PROVIDER", saved.provider],
@@ -178,7 +177,9 @@ test("customer payment API exposes only the minimal status DTO and preserves che
       departureId: String(departure._id),
       adults: 1,
       children: 0,
-      mealPlan: "without_buffet"
+      mealPlan: "without_buffet",
+      partyType: "family",
+      partyPolicyConfirmed: true
     })
   });
   assert.equal(checkoutResponse.status, 201);

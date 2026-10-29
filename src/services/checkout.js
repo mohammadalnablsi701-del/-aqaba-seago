@@ -7,14 +7,19 @@ import Payment from "../models/Payment.js";
 import { calculateTieredPricing } from "./pricing.js";
 import { sellableTripFilter } from "./tripSales.js";
 
-function verifyRequest(hold,{departureId,adults,children,mealPlan}) {
-  if(String(hold.departureId)!==String(departureId)||hold.adults!==adults||hold.children!==children||hold.mealPlan!==mealPlan)
+function verifyRequest(hold,{departureId,adults,children,mealPlan,partyType}) {
+  if(String(hold.departureId)!==String(departureId)||hold.adults!==adults||hold.children!==children||hold.mealPlan!==mealPlan||hold.partyType!==partyType)
     throw Object.assign(new Error("Idempotency-Key already used for a different checkout"),{statusCode:409});
   return hold;
 }
 
-export async function reserveCheckout({customerId,key,departureId,adults,children,mealPlan}) {
-  const request={departureId,adults,children,mealPlan};
+export async function reserveCheckout({customerId,key,departureId,adults,children,mealPlan,partyType,partyPolicyConfirmed}) {
+  // Validate before reserving seats or creating a Payment, including service callers.
+  if(partyType!=="family"&&partyType!=="couple")
+    throw Object.assign(new Error("Booking type must be family or couple"),{statusCode:400});
+  if(partyPolicyConfirmed!==true)
+    throw Object.assign(new Error("Family or couple trip policy confirmation is required"),{statusCode:400});
+  const request={departureId,adults,children,mealPlan,partyType};
   const session=await mongoose.startSession();
   let hold;
   try {
@@ -34,7 +39,7 @@ export async function reserveCheckout({customerId,key,departureId,adults,childre
       const minutes=Number(process.env.BOOKING_HOLD_MINUTES||5);
       [hold]=await CheckoutHold.create([{
         customerId,providerId:trip.providerId,tripId:trip._id,departureId:departure._id,
-        seats,adults,children,mealPlan,pricing,idempotencyKey:key,
+        seats,adults,children,mealPlan,partyType,partyPolicyConfirmed,pricing,idempotencyKey:key,
         expiresAt:new Date(Date.now()+minutes*60000)
       }],{session});
       // Persist the SeaGo Payment identity with inventory. Payment._id becomes the

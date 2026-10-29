@@ -1,0 +1,418 @@
+name: iOS App Store Release Candidate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/**"
+      - "provider-app/**"
+      - "admin-app/**"
+      - "shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ios-app-store-release.yml"
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "iOS marketing version"
+        required: true
+        default: "1.0.0"
+        type: string
+      build_number:
+        description: "iOS build number (positive integer)"
+        required: true
+        default: "1"
+        type: string
+      upload_testflight:
+        description: "Sign/export and upload the IPA to TestFlight"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-store-rc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    name: Apple RC validation
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+      VITE_NATIVE_PUSH_ENABLED: "false"
+      BUNDLE_ID: com.aqabaseago.app
+      VERSION_NAME: ${{ inputs.version_name || '1.0.0' }}
+      BUILD_NUMBER: ${{ inputs.build_number || '1' }}
+      UPLOAD_TESTFLIGHT: ${{ inputs.upload_testflight || false }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require release-candidate source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          case "$SOURCE_BRANCH" in
+            release/apple-rc-*) ;;
+            *) echo "Apple RC workflow must run from a release/apple-rc-* branch; got $SOURCE_BRANCH" >&2; exit 1 ;;
+          esac
+
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version_name must look like 1.0.0" >&2; exit 1; }
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "build_number must be a positive integer" >&2; exit 1; }
+
+      - name: Verify Apple SDK toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk '/^Xcode /{print $2}')"
+          IOS_SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          XCODE_MAJOR="${XCODE_VERSION%%.*}"
+          IOS_SDK_MAJOR="${IOS_SDK_VERSION%%.*}"
+          echo "Xcode $XCODE_VERSION / iOS SDK $IOS_SDK_VERSION"
+          [[ "$XCODE_MAJOR" =~ ^[0-9]+$ ]] || { echo "Could not parse Xcode version" >&2; exit 1; }
+          [[ "$IOS_SDK_MAJOR" =~ ^[0-9]+$ ]] || { echo "Could not parse iOS SDK version" >&2; exit 1; }
+          (( XCODE_MAJOR >= 26 )) || { echo "App Store submission requires Xcode 26 or later" >&2; exit 1; }
+          (( IOS_SDK_MAJOR >= 26 )) || { echo "App Store submission requires the iOS 26 SDK or later" >&2; exit 1; }
+
+      - name: Setup patched Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            customer-app/package-lock.json
+            provider-app/package-lock.json
+            admin-app/package-lock.json
+
+      - name: Verify Production security contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.23.4"
+          node - <<'NODE'
+          const pkg=require('./package.json');
+          const lock=require('./package-lock.json');
+          if(pkg.engines?.node!=='22.23.4') throw new Error(`Expected Node 22.23.4, got ${pkg.engines?.node}`);
+          if(lock.packages?.['']?.engines?.node!=='22.23.4') throw new Error('Root lockfile Node contract is not 22.23.4');
+          if(lock.packages?.['node_modules/body-parser']?.version!=='1.20.9') throw new Error('body-parser 1.20.9 security fix missing');
+          if(lock.packages?.['node_modules/ip-address']?.version!=='10.7.5') throw new Error('ip-address 10.7.5 security fix missing');
+          console.log('Production Node/security contract verified');
+          NODE
+
+      - name: Install backend dependencies
+        run: npm ci --no-fund
+
+      - name: Run backend safety and unit gates
+        run: |
+          npm run test:safety
+          npm run test:unit
+
+      - name: Reject High or Critical backend dependency advisories
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit_rc=0
+          npm audit --json > "$RUNNER_TEMP/npm-audit.json" || audit_rc=$?
+          node -e 'const fs=require("node:fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const v=x.metadata?.vulnerabilities||{};console.log("npm audit severities:",JSON.stringify(v));if((v.critical||0)>0||(v.high||0)>0)process.exit(1)' "$RUNNER_TEMP/npm-audit.json"
+          if [ "$audit_rc" -ne 0 ]; then
+            echo "npm audit returned $audit_rc; accepted only because no High/Critical advisories remain"
+          fi
+
+      - name: Install app dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix customer-app --no-fund
+          npm ci --prefix provider-app --no-fund
+          npm ci --prefix admin-app --no-fund
+
+      - name: Build Provider and Admin regression artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix provider-app run build
+          npm --prefix admin-app run build
+
+      - name: Build Customer Production artifact for Capacitor
+        working-directory: customer-app
+        run: npm run build -- --base=./
+
+      - name: Verify Customer Production web environment
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="iOS App Store Production"
+
+      - name: Create iOS project
+        working-directory: customer-app
+        run: npx cap add ios
+
+      - name: Install native image tools
+        shell: bash
+        run: |
+          brew list imagemagick >/dev/null 2>&1 || brew install imagemagick
+          brew list librsvg >/dev/null 2>&1 || brew install librsvg
+
+      - name: Generate branded iOS assets
+        working-directory: customer-app
+        run: bash scripts/generate-native-assets.sh ios
+
+      - name: Sync Capacitor iOS
+        working-directory: customer-app
+        run: npx cap sync ios
+
+      - name: Verify synced iOS Production artifact
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="iOS App Store synced artifact"
+
+      - name: Verify iOS identity, privacy and transport policy
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          PBX="ios/App/App.xcodeproj/project.pbxproj"
+          INFO="ios/App/App/Info.plist"
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.aqabaseago.app;' "$PBX"
+          grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;' "$PBX"
+          grep -A1 '<key>CFBundleDisplayName</key>' "$INFO" | grep -q 'Aqaba SeaGo'
+          if grep -Eq 'NSCameraUsageDescription|NSPhotoLibraryUsageDescription|NSPhotoLibraryAddUsageDescription' "$INFO"; then
+            echo "Unexpected Customer camera/photo permission" >&2
+            exit 1
+          fi
+          if grep -Eq 'NSAllowsArbitraryLoads|NSAllowsArbitraryLoadsInWebContent' "$INFO"; then
+            echo "Unexpected broad ATS exception" >&2
+            exit 1
+          fi
+          echo "iOS identity/privacy/ATS gate passed"
+
+      - name: Build unsigned Release simulator artifact
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/DerivedDataRC \
+            MARKETING_VERSION="$VERSION_NAME" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Validate Apple release secrets
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_DISTRIBUTION_CERT_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12_BASE64 }}
+          APPLE_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_TEAM_ID APPLE_DISTRIBUTION_CERT_P12_BASE64 APPLE_DISTRIBUTION_CERT_PASSWORD APPLE_PROVISIONING_PROFILE_BASE64 APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_API_KEY_P8_BASE64; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required Apple release secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install Apple Distribution signing material
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        id: signing
+        shell: bash
+        env:
+          APPLE_DISTRIBUTION_CERT_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12_BASE64 }}
+          APPLE_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/seago-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          CERT="$RUNNER_TEMP/distribution.p12"
+          PROFILE="$RUNNER_TEMP/aqaba-seago.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
+
+          printf '%s' "$APPLE_DISTRIBUTION_CERT_P12_BASE64" | base64 -D > "$CERT"
+          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 -D > "$PROFILE"
+          test -s "$CERT"
+          test -s "$PROFILE"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT" -P "$APPLE_DISTRIBUTION_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+
+          security cms -D -i "$PROFILE" > "$PROFILE_PLIST"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")
+          [[ "$PROFILE_APP_ID" == *".$BUNDLE_ID" ]] || { echo "Provisioning profile does not match $BUNDLE_ID" >&2; exit 1; }
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          echo "profile_name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
+          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+          echo "keychain=$KEYCHAIN" >> "$GITHUB_OUTPUT"
+
+      - name: Archive signed App Store build
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        working-directory: customer-app
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+        run: |
+          set -euo pipefail
+          rm -rf ios/AqabaSeaGo.xcarchive
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath ios/AqabaSeaGo.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            MARKETING_VERSION="$VERSION_NAME" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            archive
+
+      - name: Create App Store export options
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        working-directory: customer-app
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+        run: |
+          cat > ios/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.aqabaseago.app</key><string>${PROFILE_NAME}</string>
+            </dict>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export signed IPA
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf ios/export
+          xcodebuild -exportArchive \
+            -archivePath ios/AqabaSeaGo.xcarchive \
+            -exportPath ios/export \
+            -exportOptionsPlist ios/ExportOptions.plist
+          IPA="$(find ios/export -maxdepth 1 -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          codesign --verify --deep --strict ios/AqabaSeaGo.xcarchive/Products/Applications/App.app
+          echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
+
+      - name: Prepare App Store Connect API key
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        shell: bash
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8_BASE64" | base64 -D > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          test -s "$KEY_PATH"
+
+      - name: Upload IPA to TestFlight
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_testflight }}
+        working-directory: customer-app
+        shell: bash
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: Package release evidence
+        if: always()
+        working-directory: customer-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ios/release-evidence
+          cat > ios/release-evidence/release-info.json <<EOF
+          {
+            "appName": "Aqaba SeaGo",
+            "bundleId": "com.aqabaseago.app",
+            "version": "$VERSION_NAME",
+            "buildNumber": "$BUILD_NUMBER",
+            "commit": "$GITHUB_SHA",
+            "productionApi": "https://aqaba-seago-api.onrender.com",
+            "nativeWebBase": "./",
+            "nativePushEnabled": false,
+            "testFlightRequested": $UPLOAD_TESTFLIGHT
+          }
+          EOF
+          if [[ -n "${IPA_PATH:-}" && -f "$IPA_PATH" ]]; then
+            cp "$IPA_PATH" "ios/release-evidence/Aqaba-SeaGo-${VERSION_NAME}-${BUILD_NUMBER}.ipa"
+          fi
+          if [[ -d ios/AqabaSeaGo.xcarchive ]]; then
+            ditto -c -k --sequesterRsrc --keepParent ios/AqabaSeaGo.xcarchive "ios/release-evidence/Aqaba-SeaGo-${VERSION_NAME}-${BUILD_NUMBER}.xcarchive.zip"
+          fi
+          shasum -a 256 ios/release-evidence/* > ios/release-evidence/SHA256SUMS.txt || true
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqaba-seago-ios-rc-${{ env.VERSION_NAME }}-${{ env.BUILD_NUMBER }}
+          path: customer-app/ios/release-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/aqaba-seago.mobileprovision" "$RUNNER_TEMP/profile.plist"
+          if [[ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]]; then
+            rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          fi
+          if [[ -n "${{ steps.signing.outputs.keychain }}" ]]; then
+            security delete-keychain "${{ steps.signing.outputs.keychain }}" || true
+          fi

@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture, addCleanup } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
@@ -9,7 +10,8 @@ import {
   runLegacyNotificationLogCleanup
 } from "../src/services/notificationLogPrivacyCleanup.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function stableSnapshot(rows) {
   return JSON.stringify(rows.map(row => ({ ...row, _id: String(row._id) })));
@@ -32,14 +34,12 @@ test("cleanup target and apply guards fail closed", () => {
   assert.doesNotThrow(() => assertApplySafety({ environment: "test", confirmation: "YES", declaredTarget: "test" }));
 });
 
-test("legacy NotificationLog cleanup is dry-run safe, bounded, auditable and idempotent on a disposable DB", { skip: !uri }, async () => {
-  const connection = await mongoose.createConnection(uri, {
-    dbName: "aqaba-seago-task10a-test",
-    autoIndex: false
-  }).asPromise();
+test("legacy NotificationLog cleanup is dry-run safe, bounded, auditable and idempotent on a disposable DB", {}, async () => {
+  const connection = await connectFixture({ autoIndex: false }, true);
 
-  try {
-    await connection.dropDatabase();
+  addCleanup(() => connection.close());
+  {
+
     const collection = connection.collection("notificationlogs");
     const createdAt = new Date("2026-09-01T10:00:00.000Z");
     const updatedAt = new Date("2026-09-01T10:05:00.000Z");
@@ -122,8 +122,5 @@ test("legacy NotificationLog cleanup is dry-run safe, bounded, auditable and ide
     assert.equal("recipient" in futureRaw, false);
     assert.equal("error" in futureRaw, false);
     assert.equal(futureRaw.errorCode, "email_delivery_rejected");
-  } finally {
-    await connection.dropDatabase();
-    await connection.close();
   }
 });

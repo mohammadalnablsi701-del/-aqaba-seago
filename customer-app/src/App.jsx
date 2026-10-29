@@ -202,36 +202,25 @@ function normalizeTrip(raw, index = 0) {
 }
 
 function HeroScene() {
+  const imageRef=useRef(null);
+  const [ready,setReady]=useState(false);
+  useEffect(()=>{
+    const image=imageRef.current;
+    let active=true;
+    async function reveal(){
+      if(!image.complete||!image.naturalWidth)return;
+      try{await image.decode?.();}catch{return;}
+      if(active)setReady(true);
+    }
+    image.addEventListener("load",reveal);
+    // A cached image can finish before this effect subscribes to load.
+    void reveal();
+    return()=>{active=false;image.removeEventListener("load",reveal);};
+  },[]);
   return (
     <div className="hero-scene" aria-hidden="true">
-      <svg viewBox="0 0 900 520" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#dff4ff" />
-            <stop offset="1" stopColor="#f8fdff" />
-          </linearGradient>
-          <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#0288D1" />
-            <stop offset="1" stopColor="#00BCD4" />
-          </linearGradient>
-        </defs>
-        <rect width="900" height="520" fill="url(#sky)" />
-        <path d="M0 240 L110 164 L188 223 L292 132 L408 231 L500 150 L620 238 L718 159 L900 245 L900 330 L0 330Z" fill="#b27569" opacity=".9"/>
-        <path d="M0 270 L105 207 L190 251 L299 176 L415 258 L524 194 L642 264 L760 211 L900 275 L900 345 L0 345Z" fill="#c99681" opacity=".8"/>
-        <path d="M0 300 C170 278, 280 316, 445 295 C610 274, 720 314, 900 294 L900 520 L0 520Z" fill="url(#sea)" />
-        <path d="M0 350 C180 322, 340 374, 520 343 C660 320, 760 360, 900 338" fill="none" stroke="white" strokeWidth="8" opacity=".4"/>
-        <g transform="translate(485 285)">
-          <path d="M0 55 L210 55 L180 98 L35 98Z" fill="#f9fbff"/>
-          <path d="M42 15 L166 15 L188 54 L24 54Z" fill="#e7f5fb"/>
-          <path d="M72 0 L150 0 L169 15 L56 15Z" fill="#0B3D91"/>
-          <path d="M88 4 L95 48" stroke="#0B3D91" strokeWidth="6"/>
-          <path d="M106 4 L116 48" stroke="#0B3D91" strokeWidth="5"/>
-          <rect x="54" y="23" width="28" height="16" rx="4" fill="#5BA4C9"/>
-          <rect x="92" y="23" width="28" height="16" rx="4" fill="#5BA4C9"/>
-          <rect x="130" y="23" width="28" height="16" rx="4" fill="#5BA4C9"/>
-          <path d="M28 67 C76 82, 138 82, 195 67" fill="none" stroke="#0288D1" strokeWidth="7"/>
-        </g>
-      </svg>
+      <img ref={imageRef} className={"hero-scene__image"+(ready?" is-ready":"")}
+        src={import.meta.env.BASE_URL+"aqaba-hero.jpg"} alt="" loading="eager" decoding="async" fetchpriority="high" />
     </div>
   );
 }
@@ -621,6 +610,9 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
   const [children,setChildren]=useState(0);
   const [mealPlan,setMealPlan]=useState("without_buffet");
+  const [partyType,setPartyType]=useState("");
+  const [partyPolicyConfirmed,setPartyPolicyConfirmed]=useState(false);
+  const partyConfirmed=(partyType==="family"||partyType==="couple")&&partyPolicyConfirmed===true;
   const guests=adults+children;
   const [departures,setDepartures]=useState([]);
   const [selected,setSelected]=useState(null);
@@ -713,8 +705,9 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     if(!auth?.token) return setError("AUTH_REQUIRED");
     if(!(auth?.user?.phoneNormalized||auth?.user?.phone)) return setError("Add your phone number before continuing to payment.");
     if(!quoteReady)return setError("Please wait for the current price before continuing.");
+    if(!partyConfirmed)return setError("Choose Family or Couple and confirm the trip policy before continuing.");
 
-    const fingerprint=[selected.id,adults,children,mealPlan].join("|");
+    const fingerprint=[selected.id,adults,children,mealPlan,partyType].join("|");
     if(checkoutAttempt.current.fingerprint!==fingerprint){
       checkoutAttempt.current={
         fingerprint,
@@ -724,7 +717,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     setSubmitting(true);
     try {
       const payment=await createPaymentCheckout({
-        departureId:selected.id,adults,children,mealPlan,token:auth.token,
+        departureId:selected.id,adults,children,mealPlan,partyType,partyPolicyConfirmed,token:auth.token,
         idempotencyKey:checkoutAttempt.current.key
       });
       setSuccess({
@@ -806,6 +799,14 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
             <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)} disabled={guests>=seatLimit}>+</button></div></label>
             <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
             {trip.buffetEnabled&&<div className="meal-options"><span>Buffet</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>No buffet</b><small>Base trip price</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Add open buffet</b><small>Live price updates below</small></button></div>}
+            <fieldset className="booking-party-type" disabled={submitting}>
+              <legend>Booking type</legend>
+              <div className="booking-party-options">
+                <label className="booking-party-option"><input type="radio" name="partyType" value="family" checked={partyType==="family"} onChange={e=>setPartyType(e.target.value)} required/> Family</label>
+                <label className="booking-party-option"><input type="radio" name="partyType" value="couple" checked={partyType==="couple"} onChange={e=>setPartyType(e.target.value)} required/> Couple</label>
+              </div>
+              <label className="booking-party-confirmation"><input type="checkbox" name="partyPolicyConfirmed" checked={partyPolicyConfirmed} onChange={e=>setPartyPolicyConfirmed(e.target.checked)} required/><span>I confirm that this booking is for a family or couple and complies with the trip policy.</span></label>
+            </fieldset>
             <div className="booking-account-row"><span>Account</span><div><UserRound size={18}/><b>{auth?.user?.email || "Sign in during booking"}</b><CheckCircle2 size={16}/></div></div>
             {(auth?.user?.phoneNormalized||auth?.user?.phone)&&<div className="booking-account-row"><span>Phone on ticket</span><div><b dir="ltr">{auth?.user?.phoneNormalized||auth?.user?.phone}</b><CheckCircle2 size={16}/></div></div>}
           </div>
@@ -814,7 +815,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
           <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quoteReady?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {formatServerMoney(pricingView.adultUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.adultSubtotal,pricingView.currency)}</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {formatServerMoney(pricingView.childUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.childSubtotal,pricingView.currency)}</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{currentQuote.mealPlan==="with_buffet"?"Open buffet":"No buffet"}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{formatServerMoney(pricingView.grossAmount,pricingView.currency)}</strong></div></>:<div className="live-price-loading"><LoaderCircle className={quoteLoading?"spin":""} size={16}/><span>{quoteLoading?"Updating price...":selected?"Current price unavailable. Try again.":"Choose a departure to see the live price"}</span></div>}</div>
-          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quoteReady)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
+          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || !partyConfirmed || (live && (!selected || !quoteReady)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
       )}

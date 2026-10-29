@@ -62,44 +62,38 @@ jobs:
           node-version: 20.20.2
       - name: Install backend dependencies from lockfile
         run: npm ci
-      - name: Install isolated MongoDB test runner
-        run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
       - name: Test payment, cancellation, ticket lifecycle, booking, permissions, operations, provider access, sellability semantics, sensitive admin actions, pilot E2E, recovery and backup/restore on a disposable replica set
         run: |
-          node <<'JS'
-          const {MongoMemoryReplSet}=require(process.env.RUNNER_TEMP+'/seago-mongo/node_modules/mongodb-memory-server');
-          const {spawn}=require('node:child_process');
-          (async()=>{
-            const db=await MongoMemoryReplSet.create({replSet:{count:1,storageEngine:'wiredTiger'}});
-            let code=1;
-            try{
-              const child=spawn(process.execPath,[
-                '--test',
-                'test/payment-transitions.integration.test.js',
-                'test/checkout-capacity.integration.test.js',
-                'test/ticket-checkin.integration.test.js',
-                'test/customer-ticket-lifecycle.integration.test.js',
-                'test/customer-cancellation.integration.test.js',
-                'test/settlement-ledger.integration.test.js',
-                'test/provider-role-permissions.integration.test.js',
-                'test/provider-sales-control.integration.test.js',
-                'test/admin-sellability-semantics.integration.test.js',
-                'test/admin-sensitive-actions.integration.test.js',
-                'test/admin-operations.integration.test.js',
-                'test/admin-payment-operations.integration.test.js',
-                'test/provider-access-admin.integration.test.js',
-                'test/pilot-booking-ticket.e2e.test.js',
-                'test/password-recovery.integration.test.js',
-                'test/database-backup-restore.integration.test.js',
-                'test/android-fcm.integration.test.js'
-              ],{
-                env:{...process.env,SEAGO_TEST_MONGODB_URI:db.getUri()},stdio:'inherit'
-              });
-              code=await new Promise((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject)});
-            }finally{await db.stop()}
-            process.exit(code??1);
-          })().catch(e=>{console.error(e);process.exit(1)});
-          JS
+          npm run test:db -- test/payment-transitions.integration.test.js test/checkout-capacity.integration.test.js test/ticket-checkin.integration.test.js test/customer-ticket-lifecycle.integration.test.js test/customer-cancellation.integration.test.js test/settlement-ledger.integration.test.js test/provider-role-permissions.integration.test.js test/provider-sales-control.integration.test.js test/admin-sellability-semantics.integration.test.js test/admin-sensitive-actions.integration.test.js test/admin-operations.integration.test.js test/admin-payment-operations.integration.test.js test/provider-access-admin.integration.test.js test/pilot-booking-ticket.e2e.test.js test/password-recovery.integration.test.js test/database-backup-restore.integration.test.js test/android-fcm.integration.test.js
+
+  browser-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+      - name: Install backend browser driver and disposable runner dependencies
+        run: npm ci --no-fund
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Customer dependencies from lockfile
+        working-directory: customer-app
+        run: npm ci --no-fund
+      - name: Install Provider dependencies from lockfile
+        working-directory: provider-app
+        run: npm ci --no-fund
+      - name: Build isolated same-origin browser artifacts without env files
+        run: npm run test:browser:build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+      - name: Run local browser acceptance through disposable fixture authority
+        run: npm run test:browser
 
   backend-test:
     runs-on: ubuntu-latest
@@ -114,7 +108,7 @@ jobs:
       - name: Install backend dependencies from lockfile
         run: npm ci
       - name: Run backend tests
-        run: npm test
+        run: npm run test:safety && npm run test:unit
 
   backend-supply-chain:
     runs-on: ubuntu-latest
@@ -141,7 +135,8 @@ jobs:
           rm -rf node_modules
           cp package-lock.json "$RUNNER_TEMP/package-lock.before.json"
           npm ci --no-fund
-          npm test
+          npm run test:safety
+          npm run test:unit
           npm ls --depth=0 --json > "$RUNNER_TEMP/tree-1.json"
           sha256sum package-lock.json > "$RUNNER_TEMP/lock-1.sha256"
           node -e 'const fs=require("node:fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const t=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n");fs.writeFileSync(process.argv[2],t+"\n")' "$RUNNER_TEMP/tree-1.json" "$RUNNER_TEMP/top-1.txt"
@@ -154,7 +149,8 @@ jobs:
           set -euo pipefail
           rm -rf node_modules
           npm ci --no-fund
-          npm test
+          npm run test:safety
+          npm run test:unit
           npm ls --depth=0 --json > "$RUNNER_TEMP/tree-2.json"
           sha256sum package-lock.json > "$RUNNER_TEMP/lock-2.sha256"
           node -e 'const fs=require("node:fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const t=Object.entries(x.dependencies||{}).map(([n,v])=>n+"@"+v.version).sort().join("\n");fs.writeFileSync(process.argv[2],t+"\n")' "$RUNNER_TEMP/tree-2.json" "$RUNNER_TEMP/top-2.txt"
@@ -451,6 +447,7 @@ jobs:
       - secret-scan
       - dependency-audit
       - payment-integration
+      - browser-acceptance
       - backend-test
       - backend-supply-chain
       - customer-app-build
@@ -463,6 +460,7 @@ jobs:
             ${{ needs.secret-scan.result }}
             ${{ needs.dependency-audit.result }}
             ${{ needs.payment-integration.result }}
+            ${{ needs.browser-acceptance.result }}
             ${{ needs.backend-test.result }}
             ${{ needs.backend-supply-chain.result }}
             ${{ needs.customer-app-build.result }}

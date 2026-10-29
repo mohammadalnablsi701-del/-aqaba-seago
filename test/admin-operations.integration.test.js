@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -13,7 +14,8 @@ import Trip from '../src/models/Trip.js';
 import Departure from '../src/models/Departure.js';
 import Booking from '../src/models/Booking.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 function ammanYmd(value=new Date()){
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Amman',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value);
@@ -27,15 +29,13 @@ function shiftYmd(value,days){
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;
 }
 
-test('admin operations queue is protected and global departures expose safe daily operations truth',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
+test('admin operations queue is protected and global departures expose safe daily operations truth',{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   process.env.JWT_SECRET='admin-operations-test-secret-at-least-32-characters';
 
-  await mongoose.connect(uri,{dbName:'seago_admin_ops_'+crypto.randomUUID().replaceAll('-','')});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
   });
 

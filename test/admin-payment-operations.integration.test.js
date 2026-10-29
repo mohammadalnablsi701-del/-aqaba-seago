@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -13,17 +14,16 @@ import CheckoutHold from '../src/models/CheckoutHold.js';
 import Payment from '../src/models/Payment.js';
 import PaymentEvent from '../src/models/PaymentEvent.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const bookingRef=id=>'SG-'+String(id).slice(-8).toUpperCase();
 
-test('admin payment operations are read-only, bounded, relation-aware and secret-safe',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
+test('admin payment operations are read-only, bounded, relation-aware and secret-safe',{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   process.env.JWT_SECRET='admin-payment-operations-test-secret-at-least-32-characters';
-  await mongoose.connect(uri,{dbName:'seago_admin_payment_ops_'+crypto.randomUUID().replaceAll('-','')});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
   });
   await Promise.all([User,Provider,Trip,Departure,Booking,CheckoutHold,Payment,PaymentEvent].map(model=>model.init()));

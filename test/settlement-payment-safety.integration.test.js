@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -16,7 +17,8 @@ import SettlementCorrection from "../src/models/SettlementCorrection.js";
 import AdminAuditLog from "../src/models/AdminAuditLog.js";
 import {settlementLedger} from "../src/services/settlements.js";
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 const SECRET="settlement-payment-safety-test-secret-at-least-32-chars";
 const money=n=>Number(Number(n||0).toFixed(2));
 
@@ -26,13 +28,12 @@ async function requestJson(base,path,{token,method="GET",body}={}){
   return{response,json};
 }
 
-test("Settlement Payment Safety hardening",{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,"Only a local disposable replica set is allowed");
+test("Settlement Payment Safety hardening",{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET,oldLimit=process.env.API_RATE_LIMIT;
   process.env.JWT_SECRET=SECRET;process.env.API_RATE_LIMIT="5000";
-  await mongoose.connect(uri,{dbName:"seago_settlement_safety_"+crypto.randomUUID().replaceAll("-","")});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
     if(oldLimit===undefined)delete process.env.API_RATE_LIMIT;else process.env.API_RATE_LIMIT=oldLimit;
   });

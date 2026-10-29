@@ -241,7 +241,7 @@ router.get("/:bookingId", async (req, res, next) => {
     }
 
     const booking = await Booking.findById(req.params.bookingId)
-      .select("customerId customerSnapshot providerId tripId departureId seats adults children mealPlan status pricing checkedInAt checkedInBy checkInCount cancellation createdAt updatedAt")
+      .select("customerId customerSnapshot providerId tripId departureId seats adults children mealPlan partyType status pricing checkedInAt checkedInBy checkInCount cancellation createdAt updatedAt")
       .populate({ path: "customerId", select: "name email phone phoneNormalized" })
       .populate({ path: "providerId", select: "businessName status settings.departureLocation" })
       .populate({ path: "tripId", select: "titleAr titleEn vesselName durationMinutes active platformStatus departureLocation providerId" })
@@ -276,6 +276,7 @@ router.get("/:bookingId", async (req, res, next) => {
         children: booking.children || 0,
         seats: booking.seats,
         mealPlan: booking.mealPlan || null,
+        partyType: booking.partyType || null,
         pricingSnapshot: {
           currency: booking.pricing?.currency || "JOD",
           unitPrice: booking.pricing?.unitPrice ?? null,

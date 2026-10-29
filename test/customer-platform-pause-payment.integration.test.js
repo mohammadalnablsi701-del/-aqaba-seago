@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
@@ -16,10 +17,10 @@ import Provider from "../src/models/Provider.js";
 import User from "../src/models/User.js";
 import InAppNotification from "../src/models/InAppNotification.js";
 
-const uri = process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
-test("customer final payment confirmation re-checks current sales authority", { skip: !uri }, async t => {
-  assert.match(uri, /^mongodb:\/\/(127\.0\.0\.1|localhost):/, "Only a local disposable replica set is allowed");
+test("customer final payment confirmation re-checks current sales authority", {}, async t => {
 
   const saved = {
     secret: process.env.MOCK_PAYMENT_WEBHOOK_SECRET,
@@ -32,10 +33,8 @@ test("customer final payment confirmation re-checks current sales authority", { 
   delete process.env.RESEND_API_KEY;
   delete process.env.VAPID_PUBLIC_KEY;
 
-  await mongoose.connect(uri, { dbName: `seago_customer_pause_${crypto.randomUUID().replaceAll("-", "")}` });
+  await connectFixture();
   t.after(async () => {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     for (const [key, value] of [
       ["MOCK_PAYMENT_WEBHOOK_SECRET", saved.secret],
       ["PAYMENT_PROVIDER", saved.paymentProvider],
@@ -111,7 +110,9 @@ test("customer final payment confirmation re-checks current sales authority", { 
       departureId: departure._id,
       adults: 1,
       children: 0,
-      mealPlan: "without_buffet"
+      mealPlan: "without_buffet",
+      partyType: "family",
+      partyPolicyConfirmed: true
     };
     const hold = await reserveCheckout(request);
     const payment = await createCheckoutForHold({ hold, customerId: customer._id, baseUrl: "https://example.test" });

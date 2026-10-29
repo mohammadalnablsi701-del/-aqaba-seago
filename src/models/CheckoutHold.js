@@ -9,6 +9,8 @@ const schema = new mongoose.Schema({
   adults: { type: Number, min: 0, default: 0 },
   children: { type: Number, min: 0, default: 0 },
   mealPlan: { type: String, enum: ["without_buffet","with_buffet"], default: "without_buffet" },
+  partyType: { type: String, enum: ["family", "couple"] },
+  partyPolicyConfirmed: { type: Boolean },
   pricing: {
     currency: { type: String, default: "JOD" },
     unitPrice: Number,

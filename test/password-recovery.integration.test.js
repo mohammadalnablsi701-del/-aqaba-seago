@@ -1,3 +1,4 @@
+import { cleanupFixtures, requireFixture, connectFixture } from "../scripts/test-safety/fixture.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -9,15 +10,16 @@ import User from '../src/models/User.js';
 import PasswordResetToken from '../src/models/PasswordResetToken.js';
 import {passwordRecoveryInternals} from '../src/services/passwordRecovery.js';
 
-const uri=process.env.SEAGO_TEST_MONGODB_URI;
+requireFixture();
+test.after(cleanupFixtures);
 
 async function post(base,path,body){
   const response=await fetch(`${base}${path}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
   return {response,body:await response.json()};
 }
 
-test('password recovery is enumeration-safe, one-time, expires, and invalidates old JWTs',{skip:!uri},async t=>{
-  assert.match(uri,/^mongodb:\/\/(127\.0\.0\.1|localhost):/,'Only a local disposable replica set is allowed');
+test('password recovery is enumeration-safe, one-time, expires, and invalidates old JWTs',{},async t=>{
+
   const oldSecret=process.env.JWT_SECRET;
   const oldExpiry=process.env.JWT_EXPIRES_IN;
   const oldResend=process.env.RESEND_API_KEY;
@@ -25,10 +27,8 @@ test('password recovery is enumeration-safe, one-time, expires, and invalidates 
   process.env.JWT_EXPIRES_IN='1h';
   delete process.env.RESEND_API_KEY;
 
-  await mongoose.connect(uri,{dbName:'seago_password_reset_'+crypto.randomUUID().replaceAll('-','')});
+  await connectFixture();
   t.after(async()=>{
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
     if(oldSecret===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=oldSecret;
     if(oldExpiry===undefined)delete process.env.JWT_EXPIRES_IN;else process.env.JWT_EXPIRES_IN=oldExpiry;
     if(oldResend===undefined)delete process.env.RESEND_API_KEY;else process.env.RESEND_API_KEY=oldResend;

@@ -2,14 +2,14 @@ name: Node Security Gate
 
 on:
   pull_request:
-    branches: [main]
+    branches: [staging, main]
   push:
-    branches: [main]
+    branches: [staging, main, "release/apple-rc-*"]
 
 jobs:
   backend-node-22-23-4:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -23,7 +23,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Verify exact runtime and lockfile contract
+      - name: Verify exact Production runtime and lockfile contract
         shell: bash
         run: |
           set -euo pipefail
@@ -44,48 +44,24 @@ jobs:
       - name: Prove backend lockfile remains stable
         run: git diff --exit-code -- package.json package-lock.json
 
-      - name: Run backend tests on Node 22.23.4
-        run: npm test
+      - name: Run backend safety tests
+        run: npm run test:safety
 
-      - name: Install isolated MongoDB integration runner
-        run: npm install --prefix "$RUNNER_TEMP/seago-mongo" mongodb-memory-server@11.3.0 --no-audit --no-fund
+      - name: Run backend unit tests
+        run: npm run test:unit
 
-      - name: Run critical integration tests on disposable MongoDB
+      - name: Install browser acceptance app dependencies
+        shell: bash
         run: |
-          node <<'JS'
-          const {MongoMemoryReplSet}=require(process.env.RUNNER_TEMP+'/seago-mongo/node_modules/mongodb-memory-server');
-          const {spawn}=require('node:child_process');
-          (async()=>{
-            const db=await MongoMemoryReplSet.create({replSet:{count:1,storageEngine:'wiredTiger'}});
-            let code=1;
-            try{
-              const child=spawn(process.execPath,[
-                '--test',
-                'test/payment-transitions.integration.test.js',
-                'test/checkout-capacity.integration.test.js',
-                'test/ticket-checkin.integration.test.js',
-                'test/customer-ticket-lifecycle.integration.test.js',
-                'test/customer-cancellation.integration.test.js',
-                'test/settlement-ledger.integration.test.js',
-                'test/provider-role-permissions.integration.test.js',
-                'test/provider-sales-control.integration.test.js',
-                'test/admin-sellability-semantics.integration.test.js',
-                'test/admin-sensitive-actions.integration.test.js',
-                'test/admin-operations.integration.test.js',
-                'test/admin-payment-operations.integration.test.js',
-                'test/provider-access-admin.integration.test.js',
-                'test/pilot-booking-ticket.e2e.test.js',
-                'test/password-recovery.integration.test.js',
-                'test/database-backup-restore.integration.test.js',
-                'test/android-fcm.integration.test.js'
-              ],{env:{...process.env,SEAGO_TEST_MONGODB_URI:db.getUri()},stdio:'inherit'});
-              code=await new Promise((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject)});
-            } finally {
-              await db.stop();
-            }
-            process.exit(code??1);
-          })().catch(e=>{console.error(e);process.exit(1)});
-          JS
+          set -euo pipefail
+          npm ci --prefix customer-app --no-fund
+          npm ci --prefix provider-app --no-fund
+
+      - name: Build isolated browser acceptance artifacts on Node 22
+        run: npm run test:browser:build
+
+      - name: Run disposable database integration tests
+        run: npm run test:db
 
       - name: Reject High or Critical dependency advisories
         shell: bash

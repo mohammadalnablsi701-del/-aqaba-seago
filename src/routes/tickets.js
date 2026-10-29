@@ -50,6 +50,10 @@ async function findTicketBooking(bookingId) {
 }
 
 function assertLegacyBindings(payload, booking, { publicAccess = false } = {}) {
+  if (payload.tripId !== undefined && !idsMatch(payload.tripId, booking.tripId)) {
+    if (publicAccess) throw publicTicketError("invalid_ticket_link", 400);
+    throw Object.assign(new Error("Invalid ticket binding"), { statusCode: 400 });
+  }
   if (payload.departureId !== undefined && !idsMatch(payload.departureId, booking.departureId)) {
     if (publicAccess) throw publicTicketError("invalid_ticket_link", 400);
     throw Object.assign(new Error("Invalid ticket binding"), { statusCode: 400 });
