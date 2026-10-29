@@ -1,0 +1,1 @@
+This temporary integration marker is intentionally empty of business logic. It exists only so the Apple RC branch can be proven to include current Production/main history before promotion.
