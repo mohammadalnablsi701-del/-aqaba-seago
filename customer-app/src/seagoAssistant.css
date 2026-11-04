@@ -1,0 +1,42 @@
+/* Isolated Customer guide UI, English only. Respects safe areas on iPhone. */
+.seago-assistant-launcher{position:fixed;z-index:60;right:max(14px,calc((100vw - 430px)/2 + 14px));bottom:calc(92px + env(safe-area-inset-bottom,0px));height:48px;display:flex;align-items:center;gap:8px;border:0;border-radius:100px;padding:0 17px;background:linear-gradient(135deg,#0c4e90,#087f9d);color:#fff;font-size:12px;font-weight:800;letter-spacing:.01em;box-shadow:0 12px 28px rgba(2,44,81,.28);cursor:pointer}
+.seago-assistant-launcher:hover{filter:brightness(1.08)}.seago-assistant-launcher:focus-visible,.seago-assistant-panel button:focus-visible,.seago-assistant-panel input:focus-visible{outline:3px solid #15c4db;outline-offset:2px}
+.seago-assistant-backdrop{position:fixed;inset:0;z-index:70;background:rgba(4,26,42,.38);border:0;width:100%;height:100%;cursor:default}
+.seago-assistant-panel{position:fixed;z-index:71;right:max(12px,calc((100vw - 430px)/2 + 12px));bottom:calc(88px + env(safe-area-inset-bottom,0px));height:min(630px,calc(100dvh - 119px - env(safe-area-inset-bottom,0px)));width:min(390px,calc(100vw - 24px));display:flex;flex-direction:column;overflow:hidden;min-height:300px;border:1px solid #d3e4ea;border-radius:22px;background:#fff;box-shadow:0 24px 65px rgba(0,30,64,.28);color:#14344a}
+.seago-assistant-header{flex:0 0 auto;display:flex;align-items:center;gap:11px;padding:17px 15px;background:linear-gradient(120deg,#0b3d91,#0887a0);color:white}
+.seago-assistant-avatar{width:43px;height:43px;display:grid;place-items:center;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.17)}
+.seago-assistant-identity{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
+.seago-assistant-identity h2{margin:0;font-size:15px;font-family:Poppins,Inter,sans-serif;letter-spacing:-.1px;color:white}
+.seago-assistant-identity span{font-size:10px;color:#e5f7fb;display:flex;align-items:center;gap:5px}
+.seago-assistant-identity i{width:7px;height:7px;border-radius:50%;background:#63f6bd;display:inline-block}
+.seago-assistant-close{width:36px;height:36px;border:0;border-radius:50%;color:white;background:rgba(255,255,255,.14);display:grid;place-items:center;cursor:pointer}
+.seago-assistant-safety{margin:0;padding:9px 14px;background:#f1fafc;border-bottom:1px solid #e2f0f3;font-size:10px;line-height:1.45;color:#647b8b}
+.seago-assistant-messages{flex:1;min-height:0;overflow-y:auto;padding:16px 12px 10px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#fff}
+.seago-assistant-message{display:flex;gap:7px;align-items:flex-start;max-width:100%}
+.seago-assistant-message--user{justify-content:flex-end}
+.seago-assistant-message-icon{width:24px;height:24px;border-radius:50%;background:#e8f4f8;color:#087ca3;display:grid;place-items:center;flex-shrink:0}
+.seago-assistant-message-content{min-width:0;max-width:90%;display:flex;flex-direction:column;gap:8px}
+.seago-assistant-message-content>p{margin:0;padding:12px 13px;border-radius:4px 15px 15px 15px;color:#26475a;background:#eff5f8;font-size:12px;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
+.seago-assistant-message--user .seago-assistant-message-content>p{background:#087f9d;border-radius:15px 15px 4px 15px;color:white}
+.seago-assistant-trip-results{display:grid;gap:7px}
+.seago-assistant-trip-card{width:100%;display:flex;align-items:center;gap:9px;padding:10px 8px;border:1px solid #dfeaf0;border-radius:12px;text-align:left;background:#fff;color:#123a55;cursor:pointer}
+.seago-assistant-trip-card>svg:last-child{flex-shrink:0;color:#16869d}
+.seago-assistant-trip-icon{width:32px;height:32px;display:grid;place-items:center;flex-shrink:0;border-radius:10px;background:#e9f5f8;color:#147e9c}
+.seago-assistant-trip-copy{min-width:0;display:flex;flex:1;flex-direction:column;gap:3px}
+.seago-assistant-trip-copy strong{font-size:11px;line-height:1.35;overflow-wrap:anywhere}
+.seago-assistant-trip-copy small{font-size:10px;color:#647d8b}
+.seago-assistant-trip-availability{display:flex;align-items:center;gap:4px}
+.seago-assistant-action{align-self:flex-start;display:flex;align-items:center;gap:7px;border:0;background:#e7f7fb;color:#066a88;padding:10px 13px;border-radius:11px;font-weight:800;font-size:11px;cursor:pointer}
+.seago-assistant-thinking{display:flex;align-items:center;gap:8px;color:#57798a;font-size:11px;padding:5px 9px}
+.seago-assistant-footer{flex:0 0 auto;padding:12px;background:#fff;border-top:1px solid #e1ecf1}
+.seago-assistant-suggestions{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.seago-assistant-suggestions button{border:1px solid #d6eaf1;background:#f3fafc;border-radius:99px;color:#126c88;padding:8px 10px;font-size:10px;font-weight:700;cursor:pointer}
+.seago-assistant-form{display:flex;align-items:center;gap:8px;width:100%;padding:5px 6px 5px 12px;border:1px solid #cfdfe7;border-radius:13px;background:#fff}
+.seago-assistant-form input{min-width:0;flex:1;height:36px;border:0;outline:0;font-size:16px;color:#163b52;background:transparent}
+.seago-assistant-form input::placeholder{color:#8fa3ae}
+.seago-assistant-form>button{width:36px;height:36px;border:0;border-radius:11px;background:#087f9d;color:#fff;display:grid;place-items:center;cursor:pointer}
+.seago-assistant-form>button:disabled{background:#c6d4da;cursor:not-allowed}
+.seago-assistant-disclaimer{display:block;text-align:center;margin-top:8px;color:#859aa6;font-size:9px;line-height:1.35}
+@media(max-width:370px){.seago-assistant-panel{right:8px;width:calc(100vw - 16px);border-radius:17px}.seago-assistant-header{padding:13px 12px}.seago-assistant-messages{padding:12px 8px}.seago-assistant-message-content{max-width:92%}}
+@media(min-width:700px){.seago-assistant-launcher{bottom:110px}.seago-assistant-panel{bottom:98px}}
+@media(prefers-reduced-motion:reduce){.seago-assistant-panel,.seago-assistant-launcher{scroll-behavior:auto;transition:none}}

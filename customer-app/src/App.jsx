@@ -4,6 +4,7 @@ import {
   Bell, LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
+import SeaGoAssistant from "./SeaGoAssistant.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
@@ -1578,10 +1579,17 @@ export default function App(){
 
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=(trip,{fromSearch=false}={})=>{if(!fromSearch)setSearchCriteria(null);setDetail(trip);setBooking(false);};
+  const assistantProps={trips:tripList,fetchDepartures:listDepartures,hasLiveApi:hasApi()&&!usingFallback&&!tripLoadError,
+    onOpenTrip:openTrip,onNavigate:setActive};
 
   if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
-  if(detail) return <DetailScreen trip={detail} searchCriteria={searchCriteria} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>;
+  if(detail) return <>
+    <DetailScreen trip={detail} searchCriteria={searchCriteria} onBack={()=>setDetail(null)}
+      favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite}
+      onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>
+    <SeaGoAssistant {...assistantProps}/>
+  </>;
 
   return <div className="app-shell">
     <main>
@@ -1599,6 +1607,7 @@ export default function App(){
       {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>} 
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
+    <SeaGoAssistant {...assistantProps}/>
     <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
 }

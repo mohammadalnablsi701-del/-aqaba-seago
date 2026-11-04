@@ -215,6 +215,10 @@ jobs:
         working-directory: customer-app
         run: node --test test/tripMedia.test.mjs
 
+      - name: Test assistant trip discovery and safe checkout guidance
+        working-directory: customer-app
+        run: node --test test/seagoAssistantEngine.test.mjs
+
       - name: Test Aqaba date search and booking selection
         working-directory: customer-app
         run: node --test test/departureSelection.test.mjs
