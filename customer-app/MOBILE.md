@@ -12,7 +12,12 @@ The customer app is prepared for native Android and iOS packaging with Capacitor
 
 ## Native assets
 
-The source artwork lives in `customer-app/assets/logo.svg`. The native workflows use `@capacitor/assets` to generate Android and iOS icon and splash resources from that source.
+The current icon artwork lives in `customer-app/assets/logo.svg`; splash artwork
+is independent in `assets/splash.svg`. The native workflows call
+`scripts/generate-native-assets.sh` using `rsvg-convert`, ImageMagick and Python 3.
+Use its `--icons-only` option to preserve splash resources during icon-only work.
+Final replacement artwork is pending; see the
+[launcher icon audit and integration plan](../docs/APP_LAUNCHER_ICONS.md).
 
 ## Android build pipeline
 
