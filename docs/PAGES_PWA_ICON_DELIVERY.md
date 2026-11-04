@@ -59,7 +59,7 @@ outside the built website. No unapproved proposal raster is wired into the apps.
 Each app has its own independent paths within its existing directory:
 
 - `<role>-favicon-a-v1.svg` and `<role>-favicon-a-v1-48.png`: SVG plus PNG browser fallback.
-- `<role>-apple-touch-icon-a-v1.png`: opaque RGB180 for Safari home-screen metadata.
+- `<role>-apple-touch-icon-a-v1.png`: opaque RGB180 for Provider/Admin Safari metadata; Customer keeps its RGB180 file for the existing notification icon, **without an explicit Apple Touch HTML link**. Real iPhone acceptance in [PR234](https://github.com/mohammadalnablsi701-del/-aqaba-seago/pull/234) found that re-adding such a link could regress Add to Home Screen. Customer Safari is therefore kept on the previously successful manifest-based `purpose: any` PNG path.
 - `<role>-icon-a-v1-{192,512}.png`: manifest purpose `any`.
 - `<role>-maskable-a-v1-{192,512}.png`: separately named manifest purpose `maskable`.
 - `<role>-manifest-a-v1.webmanifest`: active versioned manifest filename.
@@ -120,7 +120,7 @@ Helpers:
 | Customer/Provider SVG+PNG fidelity to approved originals | PASS, byte-identical |
 | Admin SVG geometry, PNG full decode/CRC/opacity and export fidelity | PASS |
 | Maskable marked-pixel radii for all 3 | 71.43 ≤76.80px at192;189.52 ≤204.80px at512 |
-| Favicon PNG48, Apple180, regular/maskable192/512 formats and dimensions | PASS for all 3 |
+| Favicon PNG48, Apple180 file (Customer notification; Provider/Admin Safari), regular/maskable192/512 formats and dimensions | PASS for all 3 |
 | Reject actual historical Customer/Admin corrupt512 and wrong dimensions | PASS |
 | Reject Provider-to-Customer favicon path and changed compatibility alias in merged artifact | PASS |
 | Chromium 155 persistent profiles, desktop and mobile viewport | All 6 page cases: PNG/SVG/Apple image decode PASS, no manifest or installability errors reported |
@@ -139,7 +139,7 @@ web-only commit belong in its PR, separately from PR238's earlier build results.
 ## Remaining acceptance and publication
 
 1. Review the final3-app artwork/export preview and web-only diff.
-2. Test fresh Add to Home Screen for all 3 apps on physical Android and iPhone
+2. Test fresh Add to Home Screen for all 3 apps on physical Android and iPhone (especially Customer Safari manifest-only icon path)
    Safari, plus existing-install icon refresh without clearing user data.
 3. Check round/maskable crops, labels and separate Provider/Admin scope/identity.
 4. Decide publication after reviewing these results; no merge or manual Pages
