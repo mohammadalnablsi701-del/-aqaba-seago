@@ -215,6 +215,10 @@ jobs:
         working-directory: customer-app
         run: node --test test/tripMedia.test.mjs
 
+      - name: Test hero video fallback, base URL and low-data policy
+        working-directory: customer-app
+        run: node --test test/heroVideoPolicy.test.mjs
+
       - name: Test Aqaba date search and booking selection
         working-directory: customer-app
         run: node --test test/departureSelection.test.mjs

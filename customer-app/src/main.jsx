@@ -7,6 +7,7 @@ import "./styles.css";
 import "./vessel-polish.css";
 import "./cancellation-ux.css";
 import "./customerVisualPolish.css";
+import "./heroVideo.css";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 import { enableCancellationUi } from "./cancellationUi.js";
 import { enableNotificationLogoutGuard } from "./notificationCredentialLifecycle.js";

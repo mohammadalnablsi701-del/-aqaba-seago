@@ -4,6 +4,7 @@ import {
   Bell, LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
+import HeroScene from "./HeroScene.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
@@ -201,41 +202,6 @@ function normalizeTrip(raw, index = 0) {
     raw,
     index
   };
-}
-
-function HeroScene() {
-  return (
-    <div className="hero-scene" aria-hidden="true">
-      <svg viewBox="0 0 900 520" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#dff4ff" />
-            <stop offset="1" stopColor="#f8fdff" />
-          </linearGradient>
-          <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#0288D1" />
-            <stop offset="1" stopColor="#00BCD4" />
-          </linearGradient>
-        </defs>
-        <rect width="900" height="520" fill="url(#sky)" />
-        <path d="M0 240 L110 164 L188 223 L292 132 L408 231 L500 150 L620 238 L718 159 L900 245 L900 330 L0 330Z" fill="#b27569" opacity=".9"/>
-        <path d="M0 270 L105 207 L190 251 L299 176 L415 258 L524 194 L642 264 L760 211 L900 275 L900 345 L0 345Z" fill="#c99681" opacity=".8"/>
-        <path d="M0 300 C170 278, 280 316, 445 295 C610 274, 720 314, 900 294 L900 520 L0 520Z" fill="url(#sea)" />
-        <path d="M0 350 C180 322, 340 374, 520 343 C660 320, 760 360, 900 338" fill="none" stroke="white" strokeWidth="8" opacity=".4"/>
-        <g transform="translate(485 285)">
-          <path d="M0 55 L210 55 L180 98 L35 98Z" fill="#f9fbff"/>
-          <path d="M42 15 L166 15 L188 54 L24 54Z" fill="#e7f5fb"/>
-          <path d="M72 0 L150 0 L169 15 L56 15Z" fill="#0B3D91"/>
-          <path d="M88 4 L95 48" stroke="#0B3D91" strokeWidth="6"/>
-          <path d="M106 4 L116 48" stroke="#0B3D91" strokeWidth="5"/>
-          <rect x="54" y="23" width="28" height="16" rx="4" fill="#5BA4C9"/>
-          <rect x="92" y="23" width="28" height="16" rx="4" fill="#5BA4C9"/>
-          <rect x="130" y="23" width="28" height="16" rx="4" fill="#5BA4C9"/>
-          <path d="M28 67 C76 82, 138 82, 195 67" fill="none" stroke="#0288D1" strokeWidth="7"/>
-        </g>
-      </svg>
-    </div>
-  );
 }
 
 function TripMedia({trip, large=false}){
