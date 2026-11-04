@@ -103,11 +103,33 @@ const AR = Object.freeze({
   "Cancelled":"ملغي","Expired":"منتهي","Refunded":"مسترد","Verified operator":"شركة معتمدة"
 });
 
+// Category names and new booking-detail labels, kept separate for safe expansion.
+const AR_EXTRAS = Object.freeze({
+  "Yacht":"يخت","Yacht Cruise":"رحلة يخت","Evening Yacht":"رحلة يخت مسائية",
+  "Coral + Yacht":"شعاب مرجانية ويخت","Boat Trip":"رحلة بحرية",
+  "Private Boat":"قارب خاص","Glass Bottom":"قارب زجاجي","Fishing":"صيد السمك",
+  "Private Event":"فعالية خاصة","Water Sports":"رياضات مائية",
+  "Semi Submarine":"شبه غواصة","Sea Experience":"تجربة بحرية",
+  "Trip prices":"أسعار الرحلة","Adult price (13+)":"سعر البالغ (13 سنة فأكثر)",
+  "Child price (6–12)":"سعر الطفل (6–12 سنة)",
+  "Adult with buffet":"البالغ مع البوفيه","Child with buffet":"الطفل مع البوفيه",
+  "Final total and available seats are verified at booking. Check children's eligibility with the operator.":"الإجمالي النهائي وتوفر المقاعد يظهران أثناء الحجز. تأكد من شروط أعمار الأطفال لدى شركة الرحلة.",
+  "Starting secure payment...":"جاري بدء الدفع الآمن...",
+  "Main menu":"القائمة الرئيسية","Vessel":"القارب أو اليخت",
+  "Customer name":"اسم العميل","Phone number":"رقم الهاتف",
+  "Booking created only after successful payment":"لا يُؤكد الحجز إلا بعد نجاح الدفع",
+  "QR ticket available immediately after confirmation":"تتوفر تذكرة QR فور التأكيد",
+  "LIVE PRICE SUMMARY":"ملخص السعر النهائي",
+  "No future departures are available yet.":"لا توجد مواعيد مستقبلية متاحة بعد.",
+  "Confirmed":"مؤكدة","View details":"التفاصيل","View experience":"عرض الرحلة",
+  "Next available":"الموعد الأقرب"
+});
+
 export function languageFromStorage(value) {
   return value==="ar"?"ar":"en";
 }
 export function tr(key, language="en") {
-  return language==="ar"?(AR[key]||key):key;
+  return language==="ar"?(AR[key]||AR_EXTRAS[key]||key):key;
 }
 export function localizedTripTitle(trip,language="en") {
   if(language==="ar"){
