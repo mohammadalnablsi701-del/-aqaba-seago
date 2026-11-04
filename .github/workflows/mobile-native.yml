@@ -252,7 +252,7 @@ jobs:
           p=Path('android/app/src/main/res/values/strings.xml')
           s=p.read_text()
           import re
-          s,count=re.subn(r'(<string name="app_name">)[^<]*(</string>)',r'\\1SeaGo STAGING\\2',s,count=1)
+          s,count=re.subn(r'(<string name="app_name">)[^<]*(</string>)',r'\1SeaGo STAGING\2',s,count=1)
           if count != 1 or '<string name="app_name">SeaGo STAGING</string>' not in s:
               raise SystemExit('Refusing to build unlabelled Staging package')
           p.write_text(s)
