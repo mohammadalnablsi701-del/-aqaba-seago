@@ -73,6 +73,36 @@
 }
 
 
+/* First-load hero copy entrance; keep the existing headline layout offset. */
+.hero-copy-enter--headline{display:block;transform-origin:left center}
+.hero-copy-phrase{white-space:nowrap}
+/* Keep the copy clear of the fixed search card when the subtitle wraps. */
+@media (max-width: 360px){
+  .hero__copy{padding-top:176px}
+}
+@media (min-width: 481px){
+  .hero__copy{padding-top:180px}
+}
+@media (prefers-reduced-motion: no-preference){
+  .hero__copy--enter .hero-copy-enter{
+    animation:hero-copy-fade-in 600ms ease-out backwards;
+  }
+  .hero__copy--enter .hero-copy-enter--kicker{animation-delay:150ms}
+  .hero__copy--enter .hero-copy-enter--headline{
+    animation-name:hero-copy-rise-in;
+    animation-delay:300ms;
+  }
+  .hero__copy--enter .hero-copy-enter--subtitle{animation-delay:500ms}
+  @keyframes hero-copy-fade-in{
+    from{opacity:0}
+    to{opacity:1}
+  }
+  @keyframes hero-copy-rise-in{
+    from{opacity:0;transform:translateY(12px) scale(.985)}
+    to{opacity:1;transform:translateY(0) scale(1)}
+  }
+}
+
 /* Tickets */
 .tickets-screen{padding-bottom:112px}
 .ticket-list{display:grid;gap:16px;padding:0 18px 28px}
