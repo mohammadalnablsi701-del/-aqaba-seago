@@ -211,6 +211,10 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Test Aqaba date search and booking selection
+        working-directory: customer-app
+        run: node --test test/departureSelection.test.mjs
+
       - name: Verify Customer source has no hardcoded deployed API
         working-directory: customer-app
         shell: bash
