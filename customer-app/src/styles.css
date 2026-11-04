@@ -564,3 +564,7 @@
 .ticket-used-banner small{font-size:9px;text-transform:none;letter-spacing:0;color:#64748b}
 .ticket-used-stamp{display:grid;place-items:center;gap:4px;min-width:88px;border:1px dashed #94a3b8;border-radius:14px;padding:12px;color:#475569;background:#f8fafc;font-weight:900;letter-spacing:.08em}
 .ticket-used-stamp span{font-size:11px}
+
+/* Direction A brand parity: the in-app mark is the approved Customer launcher icon. */
+.brand .brand__mark{display:block;flex-shrink:0;object-fit:contain;border-radius:15px;background:#FAF7F0;box-shadow:0 5px 16px rgba(7,31,51,.14)}
+.brand--compact .brand__mark{border-radius:11px}

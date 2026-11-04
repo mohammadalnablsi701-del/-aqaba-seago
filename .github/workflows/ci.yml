@@ -211,6 +211,10 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Test approved Customer in-app logo parity
+        working-directory: customer-app
+        run: node --test test/brandLogoParity.test.mjs
+
       - name: Test homepage hero asset path in Render and Pages
         working-directory: customer-app
         run: node --test test/heroAssetPath.test.mjs
