@@ -211,6 +211,10 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Test customer language and operator image source safety
+        working-directory: customer-app
+        run: node --test test/customerLocalization.test.mjs
+
       - name: Test Aqaba date search and booking selection
         working-directory: customer-app
         run: node --test test/departureSelection.test.mjs
