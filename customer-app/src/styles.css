@@ -48,7 +48,8 @@
 
 /* Approved Aqaba SeaGo photographic hero */
 .hero-scene{
-  background-image:url("/-aqaba-seago/aqaba-hero.jpg"),url("https://commons.wikimedia.org/wiki/Special:Redirect/file/Boat_at_Aqaba%27s_Al-Ghandour_Beach.jpg?width=1920");
+  /* Vite rewrites /public assets for Render (/) and GitHub Pages (/-aqaba-seago/). */
+  background-image:url("/aqaba-hero.jpg");
   background-size:cover;
   background-position:center 42%;
   background-repeat:no-repeat;

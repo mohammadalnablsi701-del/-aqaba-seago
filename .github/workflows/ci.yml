@@ -211,6 +211,10 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Test homepage hero asset path in Render and Pages
+        working-directory: customer-app
+        run: node --test test/heroAssetPath.test.mjs
+
       - name: Test operator photo URL safety
         working-directory: customer-app
         run: node --test test/tripMedia.test.mjs
