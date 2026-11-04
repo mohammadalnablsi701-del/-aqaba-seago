@@ -61,7 +61,7 @@ share master pixels because the delivered geometry already fits their safe circl
 | iOS | Every entry in `AppIcon.appiconset/Contents.json`; current Capacitor 8 template declares `AppIcon-512@2x.png`, universal 1024×1024, RGB without alpha | No native app |
 | PWA regular | `customer-icon-a-v1-{192,512}.png`, purpose `any` | `provider-icon-a-v1-{192,512}.png`, purpose `any` |
 | PWA maskable | `customer-maskable-a-v1-{192,512}.png`, purpose `maskable` | `provider-maskable-a-v1-{192,512}.png`, purpose `maskable` |
-| Apple touch | `customer-apple-touch-icon-a-v1.png`, 180×180 RGB | `provider-apple-touch-icon-a-v1.png`, 180×180 RGB |
+| Apple 180 RGB | `customer-apple-touch-icon-a-v1.png` retained for notifications, but not linked in HTML (manifest-only Safari install) | `provider-apple-touch-icon-a-v1.png` linked for Safari |
 | SVG favicon/fallback | `app-customer.svg` | `app-provider.svg` |
 
 The native 1024 iOS file and 432 adaptive foreground are byte-identical to their
@@ -78,6 +78,8 @@ drawables cannot override these references. Unexpected adaptive resource qualifi
 or existing monochrome definitions require review rather than silent overwriting.
 Monochrome art was intentionally omitted from the supplied package and the current
 template has no such reference, so none is invented.
+
+Customer Safari deliberately has **no explicit `apple-touch-icon` HTML link**, matching the successful manifest-only path in [PR #234](https://github.com/mohammadalnablsi701-del/-aqaba-seago/pull/234). Reintroducing the link previously caused `Cannot Add Page` on a real iPhone. Its RGB180 file remains the notification icon, while the manifest `purpose: any` PNG supplies the home-screen icon. Physical acceptance is still required for the new production Pages path. Provider retains its Apple Touch link.
 
 Both HTML files and manifests use `direction-a-v1` cache versions and new PNG
 filenames. Manifest names, start URLs, scope, display mode, background/theme metadata
