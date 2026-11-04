@@ -1,187 +1,165 @@
-# Launcher icon audit and preparation
+# Aqaba SeaGo launcher icons — Direction A
 
-Status: **awaiting final approved high-resolution artwork**. The requester confirmed
-that they will supply the final sources. This change prepares generation and review;
-it does not install or claim approval of a new Customer or Provider design.
-
-Audit baseline: `main`, `32717483c7ed8ea055301e02269c0e680907c318`.
-Working branch: `fix/launcher-icons-platform-integration`. Do not merge or release
-this preparation as a completed branding update.
+The final user-supplied **Aqaba-SeaGo-A-Icon-Package.zip** is integrated on
+`fix/launcher-icons-platform-integration`, in
+[PR #238](https://github.com/mohammadalnablsi701-del/-aqaba-seago/pull/238).
+No merge, deployment or store release is performed. Physical-device acceptance
+remains outstanding; builds and mask simulations do not replace it.
 
 ## Architecture discovered
 
-| Experience | Technology | Existing install surfaces |
+| Experience | Technology and location | Platforms actually present |
 | --- | --- | --- |
-| Customer, `customer-app/` | React 18, Vite 6, Capacitor 8 | Android, iOS and PWA |
-| Provider, `provider-app/` | React 19, Vite 8 | Separate PWA only |
+| Customer | React 18 / Vite 6 / Capacitor 8, `customer-app/` | Android, iOS, PWA |
+| Provider | React 19 / Vite 8, `provider-app/` | Separate PWA only |
 
-There are separate Customer and Provider web entry points, not one native app whose
-icon changes with the signed-in role. Only Customer has a Capacitor configuration:
-`appId: com.aqabaseago.app`, `appName: Aqaba SeaGo`, `webDir: dist`.
-Neither app is Expo/React Native. No flavors, separate native targets, alternate
-icons, Expo app config, or Provider native package were found on this baseline.
+There are two independent web applications. Only Customer has a native wrapper:
+`Aqaba SeaGo`, ID `com.aqabaseago.app`, `webDir: dist`. There are no Provider native
+targets, IDs, build flavors or role-based alternate icons. Customer native projects
+are generated and gitignored. Real native integration runs through
+`customer-app/scripts/generate-native-assets.sh` after `cap add`, before `cap sync`,
+in the existing Android/iOS workflows. Those release workflows are unchanged.
 
-Customer `android/` and `ios/` are generated, gitignored directories. The actual
-native integration point is `customer-app/scripts/generate-native-assets.sh`, called
-after `cap add` and before `cap sync` by `mobile-native.yml` (Android and iOS) and
-`mobile-release.yml` (Android). These workflows and the app identity are unchanged.
+Separate PWA manifests provide distinct install icons today. A native Provider
+launcher icon would require a separate Capacitor wrapper around its existing web
+app plus agreed identifiers/signing. The supplied Provider Android layers do not
+create that architecture; no unused Provider Android/iOS resources are added.
 
-The generated Android manifest references `@mipmap/ic_launcher` and
-`@mipmap/ic_launcher_round`. Adaptive XML lives in `mipmap-anydpi-v26/`.
-The installed Capacitor 8 iOS template has
-`Assets.xcassets/AppIcon.appiconset/Contents.json` with a universal 1024-square
-`AppIcon-512@2x.png`. Smaller entries, if required by a different reviewed catalog,
-are generated from their declared size and scale. `Info.plist`, project identity,
-permissions, Firebase, signing and certificates are not modified.
+## Approved source and fidelity
 
-Two PWA icons are possible now because each web app has its own HTML and manifest.
-A separate native Provider icon cannot be delivered today. The smallest future
-architecture addition would be a Capacitor wrapper around the existing Provider
-web app, with separately agreed package/bundle IDs and signing. That would need a
-separate task; this change creates no wrapper or invented Provider identifier.
+Supplied archive SHA-256:
+`12219a3031cb7fe85fa2851394471eca40c91c4cce8a6ee94c4bd2d7b8e65749`.
 
-## Source evidence and missing artwork
+All 30 entries in the supplied `SHA256SUMS.txt` were verified. The supplied
+`build_assets.py` was not executed. Eight self-contained SVGs contain editable
+geometry without raster embedding, fonts or external references. Independent
+SVG rendering comparisons against the supplied PNGs also matched after compositing.
 
-The current `main` sources are the older navy helm design:
-
-- Customer native: `customer-app/assets/logo.svg` (teal helm).
-- Customer web: `customer-app/public/app-customer.svg` (same mark).
-- Provider web: `provider-app/public/app-provider.svg` (gold helm).
-- Customer splash: `customer-app/assets/splash.svg`, independent of the icon.
-
-History also contains a newer light Customer / dark Provider nautical composition:
-`4f1119da37efda956d7464ae6401f8ad24b7b0dc`, documented in its
-`docs/BRANDING_IDENTITY.md` and merged to `staging` in PR #228. However,
-[PR #230](https://github.com/mohammadalnablsi701-del/-aqaba-seago/pull/230)
-records real-iPhone rejection of the simplified SVG-derived Customer artwork.
-Subsequent corrections include only small 180/192-pixel rasters, not a verified
-1024-pixel original suitable for native delivery. Those branches are not imported.
-No final high-resolution attachments were available during this audit.
-
-Required from the owner/designer for **each** experience:
-
-1. The exact final approved square icon: vector SVG or opaque PNG at least
-   1024×1024, without pre-rounded OS corners. No enlargement of the 180/192 exports.
-2. A separately approved opaque maskable composition with the complete essential
-   mark inside the central circle of diameter 80% of the canvas.
-3. For Customer Android, separate approved transparent foreground and opaque
-   background exports. Essential foreground content must fit Android's central
-   66dp-diameter safe circle on its 108dp canvas. The current wheel extraction is
-   explicitly limited to the old master and must be reviewed for replacement art.
-4. A separately approved monochrome mark only if themed icons are requested.
-   The existing template has no monochrome reference; none is invented here.
-
-Keep the approved source exports together with their approval/provenance and
-checksums. Do not redraw the design, flatten an unexpected transparent source onto
-an arbitrary color, or silently reuse the historic low-resolution PNGs.
-
-## Current output inventory and defects
-
-| Tracked surface | Current source/reference | Audit result |
+| Role | Exact approved design | Repository source |
 | --- | --- | --- |
-| Customer PWA 192 | `customer-icon-192.png?v=identity-v3` | Decodes, but raster differs from current SVG |
-| Customer PWA 512 | `customer-icon-512.png?v=identity-v3` | **Invalid IDAT CRC** |
-| Customer unused legacy raster | `icon-192.png` | **Malformed/truncated PNG**, no references found |
-| Customer Apple touch / push icon | `apple-touch-icon-v4.png` | Valid palette PNG, old design |
-| Customer favicon | `app-customer.svg?v=identity-v2` | Old design |
-| Provider manifest | `app-provider.svg?v=identity-v1` | SVG only; missing PNG 192/512 fallbacks |
-| Provider Apple touch | `apple-touch-icon.png?v=identity-v2` | Valid palette PNG, old design |
-| Provider favicon | `app-provider.svg?v=identity-v2` | Old design |
+| Customer | Ivory `#FAF7F0`, navy `#071F33` helm, turquoise `#00BFC8` wave | `customer-app/assets/logo.svg`, identical `public/app-customer.svg` |
+| Provider | Navy `#071F33`, gold `#E1B65B` shield-shaped helm | `provider-app/public/app-provider.svg` |
 
-The existing Customer manifest combines `any maskable` on the same raster entries;
-the final integration should separate those purposes. Existing query versions are
-inconsistent. Neither service worker has a fetch cache or CacheStorage handler;
-there is no icon service-worker cache to clear. Installed browser/OS metadata and
-previous native build resources can nevertheless retain old icons.
+Customer native source rasters and editable layers in `customer-app/assets/`:
 
-These tracked artworks and manifest references remain unchanged pending final
-sources. The known corrupted files are documented, not represented as repaired.
+- `icon-master-1024.png` — SHA-256 `2d55cb2824adc48e29dfdc421740737626103402329b4cdd3b57553f695d2bb4`.
+- `android-adaptive-foreground.svg` and `android-adaptive-foreground-432.png` — supplied transparent composition, unchanged.
+- `android-adaptive-background.svg` and `android-adaptive-background-432.png` — supplied opaque ivory background, unchanged.
 
-## Preparation implemented
+The source files and all ten public PNGs are copied byte-for-byte from the package.
+No redrawing, automatic tracing, adaptive layer padding, emblem rescaling or
+pre-rounded corners are introduced. This avoids the earlier fidelity failure
+documented in PR #230. The separately approved PWA maskable exports intentionally
+share master pixels because the delivered geometry already fits their safe circle.
 
-- Customer native generation now handles legacy/round icons, a transparent padded
-  adaptive foreground and separate navy background explicitly. It follows the iOS
-  catalog instead of repainting arbitrary PNG files and emits opaque RGB icons.
-  It refuses an unfamiliar adaptive master instead of assuming the old wheel's
-  geometry applies. Generated resources remain gitignored.
-- `--icons-only` permits isolated icon generation and preserves all splash files.
-  Default workflow invocations retain their existing splash generation, using the
-  same independent `splash.svg`. No splash artwork or reference is changed.
-- `scripts/prepare-pwa-icons.sh` accepts separate final regular and maskable inputs,
-  validates dimensions/opacity and creates review-only PNGs (180, 192 and 512) and
-  a candidate manifest outside the repository. It does not overwrite live files,
-  rewrite HTML, or claim visual approval of a maskable composition.
+## Integration and outputs
 
-Example once final sources are available:
+| Platform | Customer output | Provider output |
+| --- | --- | --- |
+| Android legacy and round | `mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher{,_round}.png`: 48, 72, 96, 144, 192 px | No native app |
+| Android adaptive | Transparent `ic_launcher_foreground.png`: 108, 162, 216, 324, 432 px; separate ivory background XML; both `mipmap-anydpi-v26/ic_launcher{,_round}.xml` references | No native app |
+| iOS | Every entry in `AppIcon.appiconset/Contents.json`; current Capacitor 8 template declares `AppIcon-512@2x.png`, universal 1024×1024, RGB without alpha | No native app |
+| PWA regular | `customer-icon-a-v1-{192,512}.png`, purpose `any` | `provider-icon-a-v1-{192,512}.png`, purpose `any` |
+| PWA maskable | `customer-maskable-a-v1-{192,512}.png`, purpose `maskable` | `provider-maskable-a-v1-{192,512}.png`, purpose `maskable` |
+| Apple touch | `customer-apple-touch-icon-a-v1.png`, 180×180 RGB | `provider-apple-touch-icon-a-v1.png`, 180×180 RGB |
+| SVG favicon/fallback | `app-customer.svg` | `app-provider.svg` |
+
+The native 1024 iOS file and 432 adaptive foreground are byte-identical to their
+supplied masters. Other native sizes are downsampled directly from those originals.
+Transparent density conversion uses Lanczos2: its antialiased pixels stay within
+the safe circle at mdpi; default Lanczos3 produced faint ringing outside the circle.
+This changes the sampling filter, not the approved geometry or composition.
+The generator checks actual alpha coverage at every density and fails on clipping.
+
+Android's existing manifest still references `@mipmap/ic_launcher` and
+`@mipmap/ic_launcher_round`. Both adaptive XMLs now reference only the approved
+foreground and separate ivory background. Old unreferenced Capacitor template
+drawables cannot override these references. Unexpected adaptive resource qualifiers
+or existing monochrome definitions require review rather than silent overwriting.
+Monochrome art was intentionally omitted from the supplied package and the current
+template has no such reference, so none is invented.
+
+Both HTML files and manifests use `direction-a-v1` cache versions and new PNG
+filenames. Manifest names, start URLs, scope, display mode, background/theme metadata
+and build bases are preserved. Customer `sw.js` changes only its notification icon
+path. Neither service worker has a fetch cache; no cache-clearing code is added.
+
+Removed stale PNGs: Customer `apple-touch-icon-v4.png`, `customer-icon-192.png`,
+`customer-icon-512.png`, `icon-192.png`; Provider `apple-touch-icon.png`.
+The old Customer 512 had an invalid IDAT CRC and unused legacy 192 was truncated.
+There are no remaining live references to those paths. Installed OS/browser icon
+metadata may still retain the previous image until refreshed or reinstalled.
+
+Splash artwork is independent (`assets/splash.svg`) and unchanged. `--icons-only`
+preserves splash files; existing default workflow calls retain the same splash
+generation. No splash reference depends on the replaced icon source.
+
+## Files changed
+
+- Approved Customer source SVG/PNG and adaptive layers under `customer-app/assets/`.
+- Customer native shell/Python generators and asset documentation / `MOBILE.md`.
+- Both `index.html` files, `public/manifest.webmanifest` files, public SVG/PNG icons,
+  and only the Customer notification icon path in `public/sw.js`.
+- `scripts/verify-launcher-icons.mjs`, `.github/workflows/launcher-icons.yml`:
+  read-only CI validation without dependencies or changes to deployment commands.
+- `scripts/prepare-pwa-icons.sh`: retained review-only tool; candidate output stays
+  outside the repository, and no legacy Apple filename is reintroduced.
+- This report and `docs/branding/launcher-before-after.png`.
+
+No package/dependency, app name/ID, Firebase, signing/certificate, permission,
+UI/business/backend, environment/production setting or database change is included.
+
+## Tests actually executed
+
+| Check | Result |
+| --- | --- |
+| Supplied archive checksums; 18 role PNGs CRC/full decode/dimensions/alpha | PASS |
+| Both PWA SVGs and ten PNGs byte-identical to supplied artwork | PASS |
+| PWA manifest/HTML/notification references; manifest metadata preservation | PASS |
+| Maskable marked-pixel radii at 192 / 512 | Both roles 71.43 ≤ 76.80 px / 189.52 ≤ 204.80 px |
+| Native generation on actual Capacitor 8 templates, 15 Android PNGs plus one iOS PNG | PASS |
+| Adaptive alpha radii for 108, 162, 216, 324, 432 layers | 31.82 ≤ 33; 47.50 ≤ 49.5; 62.95 ≤ 66; 94.50 ≤ 99; 125.51 ≤ 132 px |
+| iOS catalog mapping, 1024 RGB/no alpha, exact supplied bytes | PASS |
+| Android XML references and background SVG/PNG/XML consistency | PASS |
+| Icon rerun image hashes | PASS, deterministic |
+| All 14 existing splash PNGs preserved in icons-only and default modes | PASS, byte-identical |
+| `npm run build`, Customer and Provider | PASS, existing hero-path / bundle-size warnings only |
+| `cap sync android` and `cap sync ios` | PASS |
+| Node icon validator for both applications | PASS |
+| Validator rejects actual historical corrupted512, wrong dimensions and unexpected alpha | PASS |
+| Native rejection of non-square/transparent input and existing monochrome override | PASS |
+| Shell/Python/Node syntax and `git diff --check` | PASS |
+
+The new icon-integrity workflow repeats the PNG full decode/CRC, format, size,
+safe-zone and reference checks on PRs. The existing Mobile Native Build workflow
+provides Android debug APK, unsigned release AAB and unsigned iOS simulator checks.
+See PR #238 for the exact pushed commit and its CI evidence; earlier preparation-only
+CI results are not evidence for the final artwork revision.
+
+Reproduce locally (native directories must already exist):
 
 ```sh
-bash scripts/prepare-pwa-icons.sh customer /path/customer.svg /path/customer-maskable.svg
-bash scripts/prepare-pwa-icons.sh provider /path/provider.svg /path/provider-maskable.svg
+node scripts/verify-launcher-icons.mjs customer
+node scripts/verify-launcher-icons.mjs provider
 cd customer-app
 bash scripts/generate-native-assets.sh all --icons-only
 ```
 
-Native tools: Python 3, `rsvg-convert`, ImageMagick. Existing native Actions runners
-already supply Python and install the image tools. No dependency or lockfile change
-is required. Native generation currently uses the existing `assets/logo.svg`; it
-does **not** automatically accept unreviewed new artwork as a safe adaptive icon.
+## Preview and unverified items
 
-## Final integration checklist (blocked on artwork)
+![Before/after with simulated launcher masks](branding/launcher-before-after.png)
 
-1. Review the exact supplied sources and independent Customer/Provider identity.
-   Replace the relevant masters only after that review; keep native/web Customer
-   art consistent. Adapt the native foreground/background input to the final
-   approved layered exports rather than reusing the old wheel transformation.
-2. Generate full-quality, square, unrounded iOS RGB 1024 and every catalog entry;
-   Android legacy/round density sets and adaptive layers; PWA PNG192/512 and
-   separate maskable PNG192/512. Do not add native Provider assets.
-3. Integrate PWA candidates, using new consistent versioned filenames/references
-   across HTML, manifest and Customer push icon. Preserve manifest names,
-   start URL, scope, display mode and build base. Reconcile Safari metadata with
-   the real-device findings in PRs #230–234; do not assume a cache bump alone fixes
-   the reported installation failure. Remove the unused corrupted `icon-192.png`
-   and retire stale files after checking all references.
-4. Recreate native projects or clean old resource/build outputs; regenerate,
-   sync, validate XML/resource references, iOS catalog sizes and PNG full decode,
-   dimensions and alpha channels. Verify all final essential art against circle,
-   rounded-square and maskable launcher masks.
-5. Run unsigned Android and iOS build checks and physical Android/iPhone/PWA
-   installation/update checks on the exact candidate. Existing installed shortcuts
-   may need removal and reinstallation; never clear app data as an icon fix.
+The comparison uses the baseline `main` SVGs and integrated Direction A output.
+Masks are simulations, not device screenshots. No crop or distortion was observed
+in source geometry, measured bounds or these previews.
 
-## Verification and limits
+Linux here has no Android SDK or Xcode; no local native compilation is claimed.
+Remote build results are reported separately in the PR. Still unverified:
+physical Android circle/rounded-square/OEM launchers, actual iPhone/Safari Add to
+Home Screen and native installation/update behavior, old installed-icon cache
+refresh, signed APK/IPA/store distribution and Provider native delivery.
+The PWA preparation tool was not executed on macOS Bash 3.2.
 
-Checks actually executed in this environment with the **unchanged old artwork**:
-
-| Check | Result |
-| --- | --- |
-| Locked `npm ci` and `npm run build`, Customer and Provider | PASS; existing hero-path / bundle-size warnings |
-| Capacitor 8 `cap add android` and `cap add ios` | PASS; generated projects only, not compilation |
-| Native icon generation against those actual templates | PASS; 15 Android PNGs and one iOS 1024 PNG |
-| PNG dimensions, RGB/RGBA encoding and adaptive alpha bounds | PASS; foreground inside 30dp radius plus one antialiasing pixel |
-| Android manifest / adaptive XML references and iOS catalog mapping | PASS |
-| `--icons-only` splash preservation | PASS; all 14 splash PNG hashes unchanged |
-| Default splash rendering compared with previous method | PASS; byte-identical outputs |
-| Repeat native icon generation | PASS; identical image hashes |
-| PWA candidate preparation with old SVG and high-resolution PNG fixtures | PASS; both apps, PNG180/192/512 and separate maskable192/512 |
-| PWA candidate CRC, full decode, dimensions, RGB8, manifest metadata/references | PASS |
-| PWA rejection of low-resolution, non-square, transparent sources / repository output | PASS |
-| Native rejection of non-square/transparent sources and existing monochrome override | PASS |
-| Shell/Python syntax and `git diff --check` | PASS |
-
-The PWA fixtures exercise preparation; they are **not** newly approved regular or
-maskable artwork. Candidate generation does not establish visual approval.
-The audit's existing tracked PNG corruption findings remain unresolved until final
-sources can replace those files.
-
-See the PR for the current commit and any subsequent CI results. Web builds do not
-prove native compilation or correct installed home-screen appearance. Linux has no
-Xcode or Android SDK here; no local APK/AAB/IPA build or device test is claimed.
-Final design matching, final mask cropping, Provider native delivery, Safari
-installation behavior and final before/after previews remain unverified.
-The PWA tool uses syntax compatible with the default macOS Bash, but execution on
-macOS/Bash 3.2 was not available locally.
-
-No changes to UI, booking, payment, QR, check-in, backend API, app names/IDs,
-Firebase configuration, permissions, environments, production settings or databases
-are included. No deployment, release, merge or store upload is performed.
+Keep PR #238 unmerged pending review and physical-device acceptance. Refreshing an
+installed shortcut may require removing/re-adding that shortcut; never clear app
+data as an icon fix. No deployment or live cache mutation was performed.

@@ -95,8 +95,7 @@ for size in 192 512; do
   im "$stage/regular-master.png" -resize "${size}x${size}" -alpha off -depth 8 -strip "PNG24:$stage/$app-icon-$size.png"
   im "$stage/maskable-master.png" -resize "${size}x${size}" -alpha off -depth 8 -strip "PNG24:$stage/$app-maskable-$size.png"
 done
-touch_name=apple-touch-icon.png
-[[ "$app" != customer ]] || touch_name=apple-touch-icon-v4.png
+touch_name="$app-apple-touch-icon-candidate.png"
 im "$stage/regular-master.png" -resize 180x180 -alpha off -depth 8 -strip "PNG24:$stage/$touch_name"
 rm "$stage/regular-master.png" "$stage/maskable-master.png"
 python3 - "$ROOT_DIR/$app-app/public/manifest.webmanifest" "$stage/manifest.candidate.webmanifest" "$app" <<'PY'

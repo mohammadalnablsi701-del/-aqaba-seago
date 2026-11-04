@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Render the existing Customer SVG into generated Capacitor launcher resources.
+"""Integrate the approved Direction A Customer artwork into Capacitor resources.
 
-The adaptive foreground extraction intentionally accepts only the current master
-structure. A replacement design needs its own reviewed foreground/background
-exports; it must not silently inherit this wheel-specific safe-zone transform.
+The supplied PNGs are the pixel authority. Resize only to required density sizes;
+never redraw, extract, pad or transform the separately approved adaptive layers.
 """
 
 from decimal import Decimal, InvalidOperation
@@ -19,9 +18,10 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets/logo.svg"
-NAVY = "#071F33"
+MASTER = ROOT / "assets/icon-master-1024.png"
+FOREGROUND = ROOT / "assets/android-adaptive-foreground-432.png"
+BACKGROUND = ROOT / "assets/android-adaptive-background-432.png"
 SVG = "http://www.w3.org/2000/svg"
-ET.register_namespace("", SVG)
 
 
 def run(args):
@@ -39,65 +39,65 @@ def image_tools():
 def render(source, target, size, transparent=False, adaptive=False):
     target.parent.mkdir(parents=True, exist_ok=True)
     convert, identify = image_tools()
+    original = run(identify + ["-format", "%w %h %[opaque]", source]).split()
+    if original[0] != original[1] or size > int(original[0]):
+        raise ValueError(f"Square source at sufficient resolution required: {source}")
+    if not transparent and original[2].lower() != "true":
+        raise ValueError(f"Source artwork must be opaque; refusing to flatten: {source}")
     with tempfile.TemporaryDirectory(prefix="seago-icon-") as directory:
-        raster = Path(directory) / "render.png"
         output = Path(directory) / "output.png"
-        run(["rsvg-convert", "-w", size, "-h", size, source, "-o", raster])
-        if transparent:
-            run(convert + [raster, "-strip", f"PNG32:{output}"])
+        if original[:2] == [str(size), str(size)]:
+            shutil.copyfile(source, output)
         else:
-            if run(identify + ["-format", "%[opaque]", raster]).lower() != "true":
-                raise ValueError(f"Source artwork must be opaque; refusing to flatten: {source}")
-            run(convert + [raster, "-alpha", "off", "-strip", f"PNG24:{output}"])
+            options = [] if transparent else ["-alpha", "off"]
+            encoding = "PNG32" if transparent else "PNG24"
+            # Lanczos2 keeps transparent-edge ringing inside the supplied
+            # foreground's safe zone at mdpi, without changing its geometry.
+            filter_name = "Lanczos2" if transparent else "Lanczos"
+            run(convert + [source, "-filter", filter_name, "-resize", f"{size}x{size}"] +
+                options + ["-strip", f"{encoding}:{output}"])
         actual = run(identify + ["-format", "%w %h %[opaque]", output]).split()
         if actual[:2] != [str(size), str(size)]:
             raise ValueError(f"Wrong dimensions for {target}: {actual}")
+        if output.read_bytes()[25] != (6 if transparent else 2):
+            raise ValueError(f"Expected true-color {'RGBA' if transparent else 'RGB'} PNG: {target}")
         if not transparent and actual[2].lower() != "true":
             raise ValueError(f"Opaque icon required: {target}")
         if adaptive:
-            # Check actual alpha pixels, including antialiasing, rather than
-            # assuming future artwork still fits the current wheel's bounds.
+            # Measure actual alpha pixels against Android's guaranteed central
+            # 66/108 circle. Do not shrink the approved layer to make it pass.
             rgba = subprocess.check_output(convert + [str(output), "-depth", "8", "rgba:-"])
             visible = [index // 4 for index in range(3, len(rgba), 4) if rgba[index]]
             if not visible:
                 raise ValueError(f"Adaptive foreground is empty: {target}")
-            limit = 30 * size / 108 + 1  # one raster pixel for antialiasing
+            limit = 33 * size / 108
             if any(((pixel % size + 0.5 - size / 2) ** 2 +
                     (pixel // size + 0.5 - size / 2) ** 2) > limit ** 2
                    for pixel in visible):
-                raise ValueError(f"Adaptive foreground exceeds the 30dp safe radius: {target}")
+                raise ValueError(f"Adaptive foreground exceeds the 33dp safe radius: {target}")
         shutil.copyfile(output, target)
     print(f"Branded {target.relative_to(ROOT)} ({size}x{size})")
 
 
-def adaptive_source(directory):
-    tree = ET.parse(SOURCE)
-    root = tree.getroot()
-    if root.attrib.get("viewBox") != "0 0 1024 1024":
-        raise ValueError("Adaptive icon requires reviewed 1024-square SVG artwork")
+def background_color():
+    root = ET.parse(ROOT / "assets/android-adaptive-background.svg").getroot()
     rectangles = root.findall(f"{{{SVG}}}rect")
-    if len(rectangles) != 1 or rectangles[0].attrib != {
-        "width": "1024", "height": "1024", "fill": NAVY
-    }:
-        raise ValueError("Adaptive master needs a reviewed separate background")
-    root.remove(rectangles[0])
-    groups = root.findall(f"{{{SVG}}}g")
-    # This approved wheel has a 353.6-unit outer radius. At 0.8 scale it
-    # occupies <=30dp radius on the 108dp layer (inside Android's 33dp zone).
-    if len(groups) != 1 or groups[0].attrib.get("transform") != (
-        "translate(512 512) scale(3.4) translate(-128 -128)"
-    ):
-        raise ValueError("Replacement artwork needs a reviewed adaptive safe zone")
-    content = list(root)
-    for child in content:
-        root.remove(child)
-    wrapper = ET.SubElement(root, f"{{{SVG}}}g", {
-        "transform": "translate(512 512) scale(0.8) translate(-512 -512)"
-    })
-    wrapper.extend(content)
-    path = directory / "foreground.svg"
-    tree.write(path, encoding="utf-8", xml_declaration=True)
-    return path
+    if (root.attrib.get("viewBox") != "0 0 1024 1024" or len(rectangles) != 1 or
+            any(child.tag not in (f"{{{SVG}}}title", f"{{{SVG}}}rect") for child in root)):
+        raise ValueError("Adaptive background requires the approved solid SVG layer")
+    rectangle = rectangles[0]
+    color = rectangle.attrib.get("fill", "")
+    if (rectangle.attrib.get("width") != "1024" or rectangle.attrib.get("height") != "1024" or
+            not re.fullmatch(r"#[0-9A-Fa-f]{6}", color)):
+        raise ValueError("Unsupported adaptive background rectangle")
+    convert, identify = image_tools()
+    if run(identify + ["-format", "%w %h %[opaque]", BACKGROUND]).lower() != "432 432 true":
+        raise ValueError("Expected opaque approved 432x432 background PNG")
+    pixels = subprocess.check_output(convert + [str(BACKGROUND), "-depth", "8", "rgb:-"])
+    expected = bytes.fromhex(color[1:])
+    if pixels != expected * (432 * 432):
+        raise ValueError("Adaptive background SVG and supplied PNG colors differ")
+    return color
 
 
 def android():
@@ -114,23 +114,22 @@ def android():
             for element in ET.parse(path).iter()
         ):
             raise ValueError(f"Existing monochrome icon requires approved artwork review: {path}")
-    with tempfile.TemporaryDirectory(prefix="seago-adaptive-") as directory:
-        foreground = adaptive_source(Path(directory))
-        densities = [("mdpi", 48, 108), ("hdpi", 72, 162),
-                     ("xhdpi", 96, 216), ("xxhdpi", 144, 324),
-                     ("xxxhdpi", 192, 432)]
-        for density, legacy, layer in densities:
-            folder = res / f"mipmap-{density}"
-            render(SOURCE, folder / "ic_launcher.png", legacy)
-            render(SOURCE, folder / "ic_launcher_round.png", legacy)
-            render(foreground, folder / "ic_launcher_foreground.png", layer,
-                   transparent=True, adaptive=True)
+    color = background_color()
+    densities = [("mdpi", 48, 108), ("hdpi", 72, 162),
+                 ("xhdpi", 96, 216), ("xxhdpi", 144, 324),
+                 ("xxxhdpi", 192, 432)]
+    for density, legacy, layer in densities:
+        folder = res / f"mipmap-{density}"
+        render(MASTER, folder / "ic_launcher.png", legacy)
+        render(MASTER, folder / "ic_launcher_round.png", legacy)
+        render(FOREGROUND, folder / "ic_launcher_foreground.png", layer,
+               transparent=True, adaptive=True)
     background = res / "drawable/seago_launcher_background.xml"
     background.parent.mkdir(parents=True, exist_ok=True)
     background.write_text('<?xml version="1.0" encoding="utf-8"?>\n'
                           '<shape xmlns:android="http://schemas.android.com/apk/res/android" '
                           'android:shape="rectangle">\n'
-                          f'    <solid android:color="{NAVY}" />\n</shape>\n')
+                          f'    <solid android:color="{color}" />\n</shape>\n')
     adaptive = ('<?xml version="1.0" encoding="utf-8"?>\n'
                 '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
                 '    <background android:drawable="@drawable/seago_launcher_background" />\n'
@@ -172,7 +171,7 @@ def ios():
     if 1024 not in outputs.values():
         raise ValueError("AppIcon catalog must declare an opaque 1024x1024 icon")
     for filename, size in outputs.items():
-        render(SOURCE, icons / filename, size)
+        render(MASTER, icons / filename, size)
 
 
 if __name__ == "__main__":
