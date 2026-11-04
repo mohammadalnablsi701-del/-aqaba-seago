@@ -33,7 +33,7 @@ function PasswordRecoveryEntry(){
         button.type="button";
         button.className="auth-switch";
         button.dataset.seagoForgotPassword="1";
-        button.textContent="Forgot password?";
+        button.textContent=document.documentElement.lang==="ar"?"نسيت كلمة المرور؟":"Forgot password?";
         button.addEventListener("click",()=>{
           const url=new URL(window.location.href);
           url.searchParams.set("forgotPassword","1");
