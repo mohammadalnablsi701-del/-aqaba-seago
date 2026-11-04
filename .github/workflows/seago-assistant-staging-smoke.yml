@@ -1,0 +1,29 @@
+name: SeaGo Assistant Staging Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/src/SeaGoAssistant.jsx"
+      - "customer-app/src/seagoAssistantEngine.js"
+      - "customer-app/test/seagoAssistantEngine.test.mjs"
+      - "customer-app/scripts/seagoAssistantStagingSmoke.mjs"
+      - ".github/workflows/seago-assistant-staging-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify QA origin, live Staging CORS and public trip data (read-only)
+        run: node customer-app/scripts/seagoAssistantStagingSmoke.mjs

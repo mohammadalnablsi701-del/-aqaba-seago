@@ -24,11 +24,11 @@ test("never pretend a preview sample has real dates or prices",async()=>{
  assert.match(reply.text,/preview/i);
 });
 test("recommend matching real trips and keep actual adult price",async()=>{
- const reply=await answerSeaGoQuestion("sunset cruise for 2 people under 50 JOD",trips,{hasLiveApi:true,now});
+ const reply=await answerSeaGoQuestion("sunset cruise for 2 people under 50 JOD",trips,{hasLiveApi:true,now,listDepartures:async()=>rows});
  assert.equal(reply.cards.length,1);
  assert.equal(reply.cards[0].tripId,"a");
  assert.equal(reply.cards[0].price,20);
- assert.match(reply.text,/assume adults/i);
+ assert.match(reply.text,/adult base prices/i);
 });
 test("do not recommend a date without verified seats for all guests",async()=>{
  const reply=await answerSeaGoQuestion("sunset for 6 people on 2026-11-08",trips,{
@@ -75,6 +75,62 @@ test("invalid explicit date does not silently fall back to any day",async()=>{
 test("sunset cruises are not mixed with unrelated yacht tours",async()=>{
  const mixed=[...trips,{id:"c",apiId:"c",source:"api",title:"Daytime Yacht Cruise",category:"Yacht",price:10,
   liveInventory:{nextDepartureAt:"2026-11-07T10:00:00Z",nextAvailableSeats:10}}];
- const response=await answerSeaGoQuestion("sunset cruise",mixed,{hasLiveApi:true,now});
+ const response=await answerSeaGoQuestion("sunset cruise",mixed,{hasLiveApi:true,now,listDepartures:async()=>rows});
  assert.deepEqual(response.cards.map(c=>c.tripId),["a"]);
+});
+
+test("rechecks live departures: later departure can seat a group when the first cannot",async()=>{
+ let checked=0;
+ const reply=await answerSeaGoQuestion("sunset cruise for 2 people",trips,{
+   hasLiveApi:true,now,listDepartures:async()=>{checked++;return [
+    {startsAt:"2026-11-06T15:00:00Z",status:"scheduled",availableSeats:1},
+    {startsAt:"2026-11-08T15:00:00Z",status:"scheduled",availableSeats:4}
+   ];}});
+ assert.equal(checked,1);
+ assert.equal(reply.cards.length,1);
+ assert.equal(reply.cards[0].availableSeats,4);
+ assert.equal(reply.cards[0].availability,"2026-11-08T15:00:00Z");
+});
+test("calendar weekday requests do not silently show another day",async()=>{
+ for(const text of ["sunset cruise next Friday","boats this weekend","tickets next Monday"]){
+  const reply=await answerSeaGoQuestion(text,trips,{now,hasLiveApi:true,listDepartures:async()=>rows});
+  assert.equal(reply.cards.length,0);
+  assert.match(reply.text,/YYYY-MM-DD/);
+ }
+});
+test("mixed adult/child estimates use separate published prices and total seats",async()=>{
+ const query=parseAssistantRequest("Sunset cruise for 2 adults and 2 kids under 70 JD",now);
+ assert.equal(query.guests,4);assert.equal(query.adults,2);assert.equal(query.children,2);
+ let checked=0;
+ const reply=await answerSeaGoQuestion("sunset cruise for 2 adults and 2 kids under 70 JD",trips,{
+   now,hasLiveApi:true,listDepartures:async()=>{checked++;return rows;}});
+ assert.equal(checked,1);
+ assert.equal(reply.cards[0].availability,"2026-11-08T15:00:00Z");
+ assert.match(reply.text,/6–12/);
+});
+test("budget includes child pricing, not adult-only pricing",async()=>{
+ const reply=await answerSeaGoQuestion("sunset for 2 adults and 2 children under 65 JD",trips,{
+   now,hasLiveApi:true,listDepartures:async()=>rows});
+ assert.equal(reply.cards.length,0); // 2*20 + 2*15 = 70 JOD
+ assert.match(reply.text,/65 JOD/);
+});
+test("children without adult count require clarification, not invented ticket count",async()=>{
+ const reply=await answerSeaGoQuestion("sunset cruise for 3 children",trips,{now,hasLiveApi:true,listDepartures:async()=>rows});
+ assert.equal(reply.cards.length,0);
+ assert.match(reply.text,/How many adults and children/);
+});
+test("all API failures with cached home availability fail closed",async()=>{
+ const reply=await answerSeaGoQuestion("sunset cruise for 2 people",trips,{
+   now,hasLiveApi:true,listDepartures:async()=>{throw new Error("offline")}});
+ assert.equal(reply.cards[0].availability,"Availability not verified");
+ assert.match(reply.text,/couldn't verify all live departures/i);
+});
+test("dates do not include expired or sold-out seats",async()=>{
+ const reply=await answerSeaGoQuestion("sunset for 2 people on 2026-11-08",trips,{
+   now,hasLiveApi:true,listDepartures:async()=>[
+    {startsAt:"2026-11-08T15:00:00Z",status:"cancelled",availableSeats:20},
+    {startsAt:"2026-11-08T16:00:00Z",status:"scheduled",availableSeats:1},
+    {startsAt:"2026-11-08T17:00:00Z",status:"scheduled",availableSeats:0}
+   ]});
+ assert.equal(reply.cards[0].availability,"No matching departure confirmed");
 });
