@@ -337,6 +337,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Verify approved Provider in-app logo and boot fallback
+        working-directory: provider-app
+        run: node --test test/brandLogoParity.test.mjs
+
       - name: Configure Provider build environment
         shell: bash
         run: |
@@ -427,6 +431,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Verify approved Admin in-app logo and boot fallback
+        working-directory: admin-app
+        run: node --test test/brandLogoParity.test.mjs
 
       - name: Install Admin dependencies from lockfile
         working-directory: admin-app

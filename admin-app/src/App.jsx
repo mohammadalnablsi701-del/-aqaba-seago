@@ -8,7 +8,7 @@ import SettlementHistoryRow from"./SettlementHistoryRow.jsx";
 import CommissionEditor from"./CommissionEditor.jsx";
 import{createLatestRequestManager,createSectionRequestManager,isAbortError}from"./requestLifecycle.js";
 
-function AdminBrand({login=false}){return <div className={"admin-brand"+(login?" admin-brand-login":"")}><svg className="admin-brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#D8DEE6" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="10.5"/>{[0,45,90,135,180,225,270,315].map(a=><line key={a} x1="32" y1="5.5" x2="32" y2="14" transform={`rotate(${a} 32 32)`}/>)}<path d="M25 33c3-4 6 3 9 2 2-.5 3.5-2 5-3"/></g></svg><div className="admin-brand-copy"><b>SeaGo</b><span>AQABA · ADMIN</span></div></div>}
+function AdminBrand({login=false}){return <div className={"admin-brand"+(login?" admin-brand-login":"")}><img className="admin-brand-mark" src={`${import.meta.env.BASE_URL}app-admin.svg`} width={46} height={46} alt="SeaGo Admin logo" draggable={false}/><div className="admin-brand-copy"><b>SeaGo</b><span>AQABA · ADMIN</span></div></div>}
 
 function stored(){try{return JSON.parse(localStorage.getItem("seago_admin_auth")||"null")}catch{return null}}
 function ymd(date=new Date()){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");return `${y}-${m}-${d}`}

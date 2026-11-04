@@ -349,3 +349,6 @@ nav{
 .trip-card-actions{grid-template-columns:1fr 1fr}
 .duplicate-inline{margin-top:8px;border:0;background:transparent;color:#7a8b98;padding:4px 2px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:4px}
 .duplicate-inline:hover{color:#0a5f91}
+
+/* Approved Direction A in-app provider mark (same SVG as the PWA launcher). */
+.provider-brand .provider-brand-mark{display:block;width:48px;height:48px;flex:0 0 auto;object-fit:contain;border-radius:13px;background:#071F33;box-shadow:0 5px 13px rgba(7,31,51,.14)}

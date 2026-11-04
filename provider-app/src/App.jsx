@@ -98,7 +98,7 @@ const TRIP_TEMPLATES=[
   {id:"group",label:"Group Boat",category:"group_boat",durationMinutes:120,adultPrice:18,childPrice:12},
   {id:"private",label:"Private Boat",category:"private_boat",durationMinutes:120,adultPrice:60,childPrice:0}
 ];
-function ProviderBrand(){return <div className="brand provider-brand"><svg className="provider-brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#C6A46A" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="10.5"/>{[0,45,90,135,180,225,270,315].map(a=><line key={a} x1="32" y1="5.5" x2="32" y2="14" transform={`rotate(${a} 32 32)`}/>)}<path d="M25 33c3-4 6 3 9 2 2-.5 3.5-2 5-3"/></g></svg><div className="provider-brand-copy"><b>SeaGo</b><span>AQABA · PROVIDER</span></div></div>}
+function ProviderBrand(){return <div className="brand provider-brand"><img className="provider-brand-mark" src={`${import.meta.env.BASE_URL}app-provider.svg`} width={48} height={48} alt="SeaGo Provider logo" draggable={false}/><div className="provider-brand-copy"><b>SeaGo</b><span>AQABA · PROVIDER</span></div></div>}
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Amman",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
 function authStore(){try{return JSON.parse(localStorage.getItem("seago_provider_auth")||"null")}catch{return null}}
 function mediaUrl(x){return typeof x==="string"?x:(x?.url||"")}
