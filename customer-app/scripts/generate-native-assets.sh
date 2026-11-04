@@ -2,20 +2,26 @@
 set -euo pipefail
 
 platform="${1:-all}"
+icons_only="${2:-}"
 case "$platform" in
   all|android|ios) ;;
-  *) echo "Usage: $0 [all|android|ios]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [all|android|ios] [--icons-only]" >&2; exit 2 ;;
 esac
+[[ -z "$icons_only" || "$icons_only" == "--icons-only" ]] || { echo "Unknown option: $icons_only" >&2; exit 2; }
+(( $# <= 2 )) || { echo "Too many arguments" >&2; exit 2; }
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOGO_SVG="$ROOT_DIR/assets/logo.svg"
 SPLASH_SVG="$ROOT_DIR/assets/splash.svg"
 
-for file in "$LOGO_SVG" "$SPLASH_SVG"; do
+sources=("$LOGO_SVG")
+if [[ -z "$icons_only" ]]; then sources+=("$SPLASH_SVG"); fi
+for file in "${sources[@]}"; do
   [[ -s "$file" ]] || { echo "Missing required asset source: $file" >&2; exit 1; }
 done
 
 command -v rsvg-convert >/dev/null 2>&1 || { echo "rsvg-convert is required" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 1; }
 
 if command -v magick >/dev/null 2>&1; then
   identify_dims() { magick identify -format '%w %h' "$1"; }
@@ -46,14 +52,13 @@ render_android() {
   local res="$ROOT_DIR/android/app/src/main/res"
   [[ -d "$res" ]] || { echo "Android project not found at $res" >&2; exit 1; }
 
-  local icon_count=0 splash_count=0 file base
+  python3 "$ROOT_DIR/scripts/generate-native-icons.py" android
+  [[ "$icons_only" == "--icons-only" ]] && return 0
+
+  local splash_count=0 file base
   while IFS= read -r -d '' file; do
     base="$(basename "$file")"
     case "$base" in
-      ic_launcher*.png)
-        render_svg_like_target "$LOGO_SVG" "$file"
-        icon_count=$((icon_count + 1))
-        ;;
       splash*.png)
         render_svg_like_target "$SPLASH_SVG" "$file"
         splash_count=$((splash_count + 1))
@@ -61,9 +66,8 @@ render_android() {
     esac
   done < <(find "$res" -type f -name '*.png' -print0)
 
-  (( icon_count > 0 )) || { echo "No Android launcher PNG assets found" >&2; exit 1; }
   (( splash_count > 0 )) || { echo "No Android splash PNG assets found" >&2; exit 1; }
-  echo "Android branding complete: $icon_count launcher assets, $splash_count splash assets"
+  echo "Android splash branding complete: $splash_count splash assets"
 }
 
 render_ios() {
@@ -71,22 +75,18 @@ render_ios() {
   local icons="$assets/AppIcon.appiconset"
   local splash="$assets/Splash.imageset"
   [[ -d "$icons" ]] || { echo "iOS app icon set not found at $icons" >&2; exit 1; }
+  python3 "$ROOT_DIR/scripts/generate-native-icons.py" ios
+  [[ "$icons_only" == "--icons-only" ]] && return 0
   [[ -d "$splash" ]] || { echo "iOS splash set not found at $splash" >&2; exit 1; }
 
-  local icon_count=0 splash_count=0 file
-  while IFS= read -r -d '' file; do
-    render_svg_like_target "$LOGO_SVG" "$file"
-    icon_count=$((icon_count + 1))
-  done < <(find "$icons" -type f -name '*.png' -print0)
-
+  local splash_count=0 file
   while IFS= read -r -d '' file; do
     render_svg_like_target "$SPLASH_SVG" "$file"
     splash_count=$((splash_count + 1))
   done < <(find "$splash" -type f -name '*.png' -print0)
 
-  (( icon_count > 0 )) || { echo "No iOS app icon PNG assets found" >&2; exit 1; }
   (( splash_count > 0 )) || { echo "No iOS splash PNG assets found" >&2; exit 1; }
-  echo "iOS branding complete: $icon_count app icons, $splash_count splash assets"
+  echo "iOS splash branding complete: $splash_count splash assets"
 }
 
 case "$platform" in

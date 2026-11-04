@@ -1,0 +1,43 @@
+name: Launcher Icon Integrity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/assets/**"
+      - "customer-app/public/**"
+      - "customer-app/index.html"
+      - "customer-app/scripts/generate-native*.py"
+      - "customer-app/scripts/generate-native*.sh"
+      - "provider-app/public/**"
+      - "provider-app/index.html"
+      - "scripts/verify-launcher-icons.mjs"
+      - ".github/workflows/launcher-icons.yml"
+  push:
+    branches: [main]
+    paths:
+      - "customer-app/assets/**"
+      - "customer-app/public/**"
+      - "customer-app/index.html"
+      - "provider-app/public/**"
+      - "provider-app/index.html"
+      - "scripts/verify-launcher-icons.mjs"
+      - ".github/workflows/launcher-icons.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  icons:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify approved icon exports and references
+        run: |
+          node scripts/verify-launcher-icons.mjs customer
+          node scripts/verify-launcher-icons.mjs provider
