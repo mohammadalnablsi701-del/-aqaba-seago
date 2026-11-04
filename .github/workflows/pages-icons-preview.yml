@@ -1,0 +1,90 @@
+name: Pages Icon Preview QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "customer-app/public/**"
+      - "provider-app/public/**"
+      - "admin-app/public/**"
+      - "customer-app/index.html"
+      - "provider-app/index.html"
+      - "admin-app/index.html"
+      - "customer-app/vite.config.js"
+      - "provider-app/vite.config.js"
+      - "admin-app/vite.config.js"
+      - "scripts/verify-web-icons.mjs"
+      - "scripts/verify-pages-icon-paths.mjs"
+      - "scripts/assemble-pages-preview.mjs"
+      - ".github/workflows/pages-icons-preview.yml"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-icon-preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
+    steps:
+      - name: Checkout PR for validation
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            customer-app/package-lock.json
+            provider-app/package-lock.json
+            admin-app/package-lock.json
+
+      - name: Verify approved web icon sources
+        run: |
+          node scripts/verify-web-icons.mjs customer
+          node scripts/verify-web-icons.mjs provider
+          node scripts/verify-web-icons.mjs admin
+
+      - name: Install and build Customer with Pages base
+        working-directory: customer-app
+        run: |
+          npm ci --no-fund
+          npm run build -- --base="/-aqaba-seago/"
+          node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Pages PR artifact"
+
+      - name: Install and build Provider with Pages base
+        working-directory: provider-app
+        run: |
+          npm ci --no-fund
+          npm run build -- --base="/-aqaba-seago/provider/"
+          node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/provider/"
+
+      - name: Install and build Admin with Pages base
+        working-directory: admin-app
+        run: |
+          npm ci --no-fund
+          npm run build -- --base="/-aqaba-seago/admin/"
+          node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/admin/"
+
+      - name: Assemble final Pages preview tree
+        run: node scripts/assemble-pages-preview.mjs --out="$RUNNER_TEMP/pages-icon-preview"
+
+      - name: Check final artifact URLs over local HTTP
+        run: node scripts/verify-pages-icon-paths.mjs --dist="$RUNNER_TEMP/pages-icon-preview"
+
+      - name: Upload review artifact without deploying
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-icon-preview-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: ${{ runner.temp }}/pages-icon-preview
+          if-no-files-found: error
+          retention-days: 7
