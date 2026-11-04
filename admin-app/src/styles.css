@@ -411,3 +411,7 @@ main{
 .settlement-history-row>div:last-child{text-align:right}
 @media(max-width:1100px){.settlement-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.settlement-row{grid-template-columns:1fr 1fr 1fr}.settlement-company,.settlement-pay{grid-column:1/-1}.settlement-pay{justify-self:start}}
 @media(max-width:620px){.settlement-kpis{grid-template-columns:1fr}.settlement-row{grid-template-columns:1fr 1fr}.settlement-company,.settlement-pay{grid-column:1/-1}.settlement-history-row{flex-direction:column}.settlement-history-row>div:last-child{text-align:left}}
+
+/* Approved Direction A in-app admin mark; preserve larger login state. */
+.admin-brand .admin-brand-mark{display:block;flex:0 0 auto;object-fit:contain;padding:0;border-radius:13px;background:#071F33;box-shadow:0 5px 13px rgba(7,31,51,.14)}
+.admin-brand-login .admin-brand-mark{width:58px;height:58px;border-radius:16px}

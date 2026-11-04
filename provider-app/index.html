@@ -4,4 +4,13 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./provider-apple-touch-icon-a-v1.png?v=direction-a-v1" />
     <link rel="icon" type="image/png" sizes="48x48" href="./provider-favicon-a-v1-48.png?v=direction-a-v1" />
     <link rel="icon" sizes="any" type="image/svg+xml" href="./provider-favicon-a-v1.svg?v=direction-a-v1" />
-  </head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>
+  <style>
+  #seago-boot-recovery{box-sizing:border-box;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px 24px;background:#f4f8fb;color:#071f33;text-align:center;font-family:system-ui,-apple-system,sans-serif}
+  #root:not(:empty)+#seago-boot-recovery{display:none}
+  #seago-boot-recovery img{width:76px;height:76px;object-fit:contain;border-radius:18px;background:#071f33}
+  #seago-boot-recovery strong{font-size:22px;letter-spacing:-.5px}
+  #seago-boot-recovery p{margin:0;color:#547284;font-size:13px;line-height:1.5}
+  #seago-boot-recovery a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:14px;background:#0b3d91;color:#fff;font-size:13px;font-weight:700;text-decoration:none;animation:seago-boot-show .3s ease 5s both}
+  @keyframes seago-boot-show{from{opacity:0}to{opacity:1}}
+  @media(prefers-reduced-motion:reduce){#seago-boot-recovery a{animation:none}}
+</style></head><body><div id="root"></div><div id="seago-boot-recovery" role="status" aria-label="Opening SeaGo Provider"><img src="./app-provider.svg" alt="" width="76" height="76"/><strong>SeaGo Provider</strong><p>Opening SeaGo Provider…</p><a href="./?reload=provider-brand-a" aria-label="Reload SeaGo Provider if loading takes too long">Reload App</a></div><script type="module" src="/src/main.jsx"></script></body></html>
