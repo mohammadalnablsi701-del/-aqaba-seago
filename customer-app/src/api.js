@@ -132,7 +132,7 @@ export async function cancelBooking(bookingId, reason, token) {
   });
 }
 
-export const listNotifications=token=>request("/api/notifications",{token});
+export const listNotifications=(token,options={})=>request("/api/notifications",{...options,token});
 export const markNotificationRead=(id,token)=>request("/api/notifications/"+id+"/read",{method:"PATCH",token});
 export const markAllNotificationsRead=token=>request("/api/notifications/read-all",{method:"POST",token});
 

@@ -15,8 +15,10 @@
     "mobile:add:android": "cap add android && node scripts/configure-android-firebase.mjs",
     "mobile:add:ios": "cap add ios",
     "mobile:assets": "bash scripts/generate-native-assets.sh all",
+    "mobile:assets:splash": "bash scripts/generate-native-assets.sh all --splash-only",
     "mobile:open:android": "cap open android",
-    "mobile:open:ios": "cap open ios"
+    "mobile:open:ios": "cap open ios",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",

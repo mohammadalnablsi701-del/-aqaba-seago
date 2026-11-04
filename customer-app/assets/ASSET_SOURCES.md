@@ -1,14 +1,15 @@
 # Native asset sources
 
-Editable brand masters:
+Native launcher source (unchanged):
 
 - `logo.svg` — square SeaGo wheel mark for the app icon
-- `splash.svg` — centered SeaGo wheel on the navy launch background
+- `public/app-customer.svg` — the approved Direction A Customer artwork and the only source used for launch branding
 
-The mobile GitHub Actions workflow renders these SVG masters into the PNG source sizes required by `@capacitor/assets` before generating Android and iOS resources:
+The mobile GitHub Actions workflows invoke `scripts/generate-native-assets.sh` after Capacitor creates each native project. Existing launcher resources still render from `logo.svg`; this launch-screen change does not alter them.
 
-- `icon-only.png` — 1024×1024
-- `splash.png` — 2732×2732
+`scripts/native-launch-assets.mjs` embeds the approved SVG bytes intact in a navy SVG composition, then `rsvg-convert` rasterizes each splash PNG at its existing size. Portrait and landscape compositions keep the approved square artwork centered and undistorted. There is no separately drawn splash logo.
+
+Android's system splash uses a separate `seago_launch_icon` drawable generated from the same source, with enough inset to retain the full approved artwork inside the OS mask. This resource is used only by the launch theme; launcher icons and manifest icon references are unchanged. The iOS launch storyboard remains static, uses aspect-fit, and has a navy background.
 
 Brand colors:
 

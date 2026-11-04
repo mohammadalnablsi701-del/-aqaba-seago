@@ -12,7 +12,17 @@ The customer app is prepared for native Android and iOS packaging with Capacitor
 
 ## Native assets
 
-The source artwork lives in `customer-app/assets/logo.svg`. The native workflows use `@capacitor/assets` to generate Android and iOS icon and splash resources from that source.
+The existing launcher icon source remains `customer-app/assets/logo.svg`. Launch branding uses the approved `customer-app/public/app-customer.svg` without modifying its artwork. `scripts/generate-native-assets.sh` renders the native PNG resources after `cap add`; see `assets/ASSET_SOURCES.md`.
+
+For an existing native project, run `bash scripts/generate-native-assets.sh all --splash-only` (or replace `all` with `android`/`ios`) followed by `npx cap sync`. This updates only launch assets/themes and never writes launcher icon files. It requires `rsvg-convert` and ImageMagick `identify`.
+
+## Launch handoff and platform limits
+
+The WebView background and native launch background are navy. Capacitor's native splash auto-hides after 900ms as a safety fallback, so a JavaScript bundle failure can expose the static branded retry screen. During normal startup the app explicitly hides the native splash with no exit fade once the web artwork is decoded and the web launch surface is ready, then starts the 3000ms web sequence. The native launch is a short platform-controlled handoff, not a second timed animation.
+
+On Android 12 and later, the OS controls launch icon dimensions, masking, and the initial launch duration. A dedicated approved-artwork drawable and navy launch theme avoid displaying the former splash wheel without changing launcher icons. Android 12/12L third-party launchers have known OS splash-image limitations. System bars may follow OS edge-to-edge policies.
+
+iOS launch storyboards support only static content. The generated launch image is centered with aspect-fit on navy, with no storyboard animation. The animated sequence runs in the WebView. OS launch durations and the exact size match at the native/WebView boundary cannot be guaranteed across all devices. A native rebuild is required to pick up the launch resource/theme changes; a web-only update cannot change an already installed native launch screen.
 
 ## Android build pipeline
 
