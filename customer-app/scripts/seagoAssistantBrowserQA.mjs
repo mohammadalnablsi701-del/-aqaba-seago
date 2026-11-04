@@ -34,8 +34,11 @@ try {
  const editor=page.locator("#seago-assistant-input");
  await editor.fill("sunset cruise for 2 people on 2026-11-06");
  await page.getByRole("button",{name:"Send message"}).click();
- const testTrip=page.getByRole("button",{name:/View details for \[TEST\] Sea Breeze Pilot Cruise/i});
- await testTrip.waitFor({timeout:45000});
+ await page.locator(".seago-assistant-message--bot").last().waitFor({timeout:20000});
+ console.log("BROWSER ASSISTANT REPLY:",(await page.locator(".seago-assistant-message--bot").last().innerText()).slice(0,1200));
+ console.log("BROWSER API RESPONSES:",JSON.stringify(responses).slice(0,1500));
+ const testTrip=page.getByRole("button",{name:"View details for [TEST] Sea Breeze Pilot Cruise"});
+ await testTrip.waitFor({timeout:10000});
  const recommendation=await testTrip.innerText();
  assert.match(recommendation,/2026|Nov|JOD/);
  console.log("PASS Chat recognized sunset for 2 on 6 Nov and shows the available [TEST] Sea Breeze Pilot Cruise");

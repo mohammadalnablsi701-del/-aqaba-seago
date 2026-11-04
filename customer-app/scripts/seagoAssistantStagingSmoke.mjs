@@ -40,7 +40,7 @@ const trips=await res.json();
 assert.ok(Array.isArray(trips),"GET /api/trips must return an array");
 console.log(`PASS ${trips.length} published trips returned by Staging`);
 let checked=0,available=0;
-for(const trip of trips.slice(0,3)){
+for(const trip of trips){
  if(!trip._id) continue;
  const departures=await fetchWithDeadline(api+"/api/departures?"+new URLSearchParams({
    tripId:String(trip._id),limit:"30"
@@ -53,5 +53,9 @@ for(const trip of trips.slice(0,3)){
  available+=rows.filter(row=>row.status==="scheduled" && Number(row.availableSeats||0)>0 && new Date(row.startsAt)>new Date()).length;
 }
 console.log(`PASS ${checked} trip departure endpoints checked; ${available} future sellable departure rows observed`);
-if(available===0)console.log("INVENTORY NOTICE No future sellable departures sampled; checkout recommendation cannot be fully exercised with live data.");
+if(available===0)console.log("INVENTORY NOTICE No future sellable departures were found; checkout recommendation cannot be fully exercised.");
+if(trips.some(t=>String(t.titleEn||"").startsWith("[TEST]"))){
+ assert.ok(available>=1,"Staging test inventory should include one published future departure");
+ console.log("PASS Staging future [TEST] trip departure is available for booking acceptance");
+}
 console.log("RESULT Staging frontend, API, CORS and public read-only inventory contract passed");
