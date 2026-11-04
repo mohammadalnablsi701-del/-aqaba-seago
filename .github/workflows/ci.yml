@@ -219,6 +219,10 @@ jobs:
         working-directory: customer-app
         run: node --test test/tripMedia.test.mjs
 
+      - name: Test SeaGo premium chat design and mobile composer
+        working-directory: customer-app
+        run: node --test test/seagoAssistantDesign.test.mjs
+
       - name: Test assistant launcher placement and unclipped modal
         working-directory: customer-app
         run: node --test test/seagoAssistantLauncher.test.mjs
