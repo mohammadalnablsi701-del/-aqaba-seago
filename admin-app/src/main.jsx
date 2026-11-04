@@ -6,6 +6,8 @@ import"./styles.css";
 import"./sensitive-actions.css";
 import"./admin-activity.css";
 
+function LaunchReady(){React.useEffect(()=>{window.__seagoLaunchReady?.();},[]);return null;}
+
 async function ensureFreshAdmin(){
   try{
     const versionUrl=new URL("../version.json",window.location.href);
@@ -26,7 +28,7 @@ async function ensureFreshAdmin(){
       return;
     }
   }catch{}
-  createRoot(document.getElementById("root")).render(<><App/><AdminActivityPanel/></>);
+  createRoot(document.getElementById("root")).render(<><App/><AdminActivityPanel/><LaunchReady/></>);
 }
 
 ensureFreshAdmin();
