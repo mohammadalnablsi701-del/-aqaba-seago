@@ -35,9 +35,9 @@ try{
    }catch(e){console.log("NAVIGATION ERROR",String(e));}
    console.log("ERROR RESPONSES",JSON.stringify(responses));
    console.log("BROWSER ERRORS",JSON.stringify(events));
-   const recovered=await page.locator("#seago-boot-recovery").evaluate(el=>getComputedStyle(el).display);
-   console.log("RECOVERY WHILE APP RUNS",recovered);
    if(url.includes("customer-logo-qa")){
+     const recovered=await page.locator("#seago-boot-recovery").evaluate(el=>getComputedStyle(el).display);
+     console.log("RECOVERY WHILE APP RUNS",recovered);
      if(recovered!=="none")throw new Error("Fallback must hide when React is ready");
      const jsBlocked=await browser.newContext({viewport:{width:390,height:844},javaScriptEnabled:false});
      try{
