@@ -1,0 +1,178 @@
+{
+  "engine": "Chromium (Playwright persistent temporary profiles)",
+  "modes": [
+    "desktop",
+    "mobile viewport 390x844, touch, DPR3"
+  ],
+  "not_tested": [
+    "physical Android launcher installation/update",
+    "physical iPhone Safari Add to Home Screen",
+    "iOS WebKit engine",
+    "installed OS favicon/home-screen cache refresh"
+  ],
+  "external_requests": "Blocked by browser context routes; only local assembled artifact served",
+  "results": [
+    {
+      "app": "customer",
+      "mode": "desktop",
+      "decoded": [
+        {
+          "rel": "apple-touch-icon",
+          "url": "/-aqaba-seago/customer-apple-touch-icon-a-v1.png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/customer-favicon-a-v1-48.png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/customer-favicon-a-v1.svg",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "manifestURL": "http://127.0.0.1:41977/-aqaba-seago/customer-manifest-a-v1.webmanifest?v=direction-a-v1",
+      "manifestErrors": [],
+      "installabilityErrors": []
+    },
+    {
+      "app": "provider",
+      "mode": "desktop",
+      "decoded": [
+        {
+          "rel": "apple-touch-icon",
+          "url": "/-aqaba-seago/provider/provider-apple-touch-icon-a-v1.png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/provider/provider-favicon-a-v1-48.png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/provider/provider-favicon-a-v1.svg",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "manifestURL": "http://127.0.0.1:41977/-aqaba-seago/provider/provider-manifest-a-v1.webmanifest?v=direction-a-v1",
+      "manifestErrors": [],
+      "installabilityErrors": []
+    },
+    {
+      "app": "admin",
+      "mode": "desktop",
+      "decoded": [
+        {
+          "rel": "apple-touch-icon",
+          "url": "/-aqaba-seago/admin/admin-apple-touch-icon-a-v1.png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/admin/admin-favicon-a-v1-48.png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/admin/admin-favicon-a-v1.svg",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "manifestURL": "http://127.0.0.1:41977/-aqaba-seago/admin/admin-manifest-a-v1.webmanifest?v=direction-a-v1",
+      "manifestErrors": [],
+      "installabilityErrors": []
+    },
+    {
+      "app": "customer",
+      "mode": "mobile-viewport",
+      "decoded": [
+        {
+          "rel": "apple-touch-icon",
+          "url": "/-aqaba-seago/customer-apple-touch-icon-a-v1.png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/customer-favicon-a-v1-48.png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/customer-favicon-a-v1.svg",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "manifestURL": "http://127.0.0.1:41977/-aqaba-seago/customer-manifest-a-v1.webmanifest?v=direction-a-v1",
+      "manifestErrors": [],
+      "installabilityErrors": []
+    },
+    {
+      "app": "provider",
+      "mode": "mobile-viewport",
+      "decoded": [
+        {
+          "rel": "apple-touch-icon",
+          "url": "/-aqaba-seago/provider/provider-apple-touch-icon-a-v1.png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/provider/provider-favicon-a-v1-48.png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/provider/provider-favicon-a-v1.svg",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "manifestURL": "http://127.0.0.1:41977/-aqaba-seago/provider/provider-manifest-a-v1.webmanifest?v=direction-a-v1",
+      "manifestErrors": [],
+      "installabilityErrors": []
+    },
+    {
+      "app": "admin",
+      "mode": "mobile-viewport",
+      "decoded": [
+        {
+          "rel": "apple-touch-icon",
+          "url": "/-aqaba-seago/admin/admin-apple-touch-icon-a-v1.png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/admin/admin-favicon-a-v1-48.png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "rel": "icon",
+          "url": "/-aqaba-seago/admin/admin-favicon-a-v1.svg",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "manifestURL": "http://127.0.0.1:41977/-aqaba-seago/admin/admin-manifest-a-v1.webmanifest?v=direction-a-v1",
+      "manifestErrors": [],
+      "installabilityErrors": []
+    }
+  ]
+}

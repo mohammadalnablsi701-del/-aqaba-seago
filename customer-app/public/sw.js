@@ -23,7 +23,7 @@ self.addEventListener("push",event=>{
   const title=safeText(payload.title,"Aqaba SeaGo",80);
   const options={
     body:safeText(payload.body,"You have a new SeaGo update.",180),
-    icon:"./apple-touch-icon-v4.png",
+    icon:"./customer-apple-touch-icon-a-v1.png",
     badge:undefined,
     tag:data.notificationId||data.screen||"seago",
     data,

@@ -1,0 +1,255 @@
+{
+  "observed_at_utc": "2026-11-04T07:17:20.680936+00:00",
+  "main_commit": "32717483c7ed8ea055301e02269c0e680907c318",
+  "pr238_head": "a61c7244dd915c08df730614c9df3e52f9f26b63",
+  "pr238_merged": false,
+  "published_version": {
+    "commit": "60c0f9caa2e4a95d148ad2f410366907b9766859",
+    "builtAt": "2026-10-11T19:46:55Z"
+  },
+  "pages": [
+    {
+      "role": "customer",
+      "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/",
+      "http_status": 200,
+      "links": [
+        {
+          "rel": "manifest",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/manifest.webmanifest?v=identity-v2",
+          "status": 200,
+          "sha256": "1524bbde8660a4311f67256904cb5d75898d3e7bf2f4e5e91787ed39dce9f521",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:27 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-2c8\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "application/manifest+json; charset=utf-8"
+          },
+          "icons": [
+            {
+              "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/customer-icon-192.png?v=identity-v3",
+              "status": 200,
+              "sha256": "44e03c3192f306247feb347cabb2a2e828d09340ce61bb5d6e3b9bb1b4b8ab7c",
+              "declaration": {
+                "src": "./customer-icon-192.png?v=identity-v3",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable"
+              },
+              "decode": {
+                "valid": true,
+                "size": [
+                  192,
+                  192
+                ],
+                "mode": "RGB"
+              }
+            },
+            {
+              "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/customer-icon-512.png?v=identity-v3",
+              "status": 200,
+              "sha256": "22d9f12d470602e49c9bc4a56f5a988ec49a976004905c139ce62430bd97d6f1",
+              "declaration": {
+                "src": "./customer-icon-512.png?v=identity-v3",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+              },
+              "decode": {
+                "valid": false,
+                "error": "PNG CRC mismatch"
+              }
+            },
+            {
+              "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/app-customer.svg?v=identity-v2",
+              "status": 200,
+              "sha256": "683000517db0ee8975769b8be3a0106207fd27d59113563fd2109ce2cd319b32",
+              "declaration": {
+                "src": "./app-customer.svg?v=identity-v2",
+                "sizes": "any",
+                "type": "image/svg+xml",
+                "purpose": "any"
+              }
+            }
+          ]
+        },
+        {
+          "rel": "apple-touch-icon",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/apple-touch-icon-v4.png?v=identity-v2",
+          "status": 200,
+          "sha256": "ec34814ff146d83e6db7f96df2f20c16af3ec6a17de58c1700d0be9edebc6b52",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:30 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-8ab\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "image/png"
+          }
+        },
+        {
+          "rel": "icon",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/app-customer.svg?v=identity-v2",
+          "status": 200,
+          "sha256": "683000517db0ee8975769b8be3a0106207fd27d59113563fd2109ce2cd319b32",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:31 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-36c\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "image/svg+xml"
+          }
+        }
+      ]
+    },
+    {
+      "role": "provider",
+      "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/provider/",
+      "http_status": 200,
+      "links": [
+        {
+          "rel": "manifest",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/provider/manifest.webmanifest?v=identity-v2",
+          "status": 200,
+          "sha256": "d2bcc2ad1cb6159eb084d95ea3560bf2fca4b322c863cdb0bdb81b4f33a09f8a",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:32 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-19d\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "application/manifest+json; charset=utf-8"
+          },
+          "icons": [
+            {
+              "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/provider/app-provider.svg?v=identity-v1",
+              "status": 200,
+              "sha256": "ce452d82a4f8882777afe8bd54c11b5971e65cb61595f9903a9ec253a6808b8e",
+              "declaration": {
+                "src": "./app-provider.svg?v=identity-v1",
+                "sizes": "any",
+                "type": "image/svg+xml",
+                "purpose": "any maskable"
+              }
+            }
+          ]
+        },
+        {
+          "rel": "apple-touch-icon",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/provider/apple-touch-icon.png?v=identity-v2",
+          "status": 200,
+          "sha256": "932dc3526fb69e6fdd178f3c530e25f7ba2268434a15b0283142f1b9a52a5691",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:33 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-88e\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "image/png"
+          }
+        },
+        {
+          "rel": "icon",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/provider/app-provider.svg?v=identity-v2",
+          "status": 200,
+          "sha256": "ce452d82a4f8882777afe8bd54c11b5971e65cb61595f9903a9ec253a6808b8e",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:34 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-36c\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "image/svg+xml"
+          }
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/admin/",
+      "http_status": 200,
+      "links": [
+        {
+          "rel": "manifest",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/admin/manifest.webmanifest?v=identity-v1",
+          "status": 200,
+          "sha256": "a1d9966fa590ddb38157c90a4ca6694420b206e8543fc6ebb4b69ea92a5037e5",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:34 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-231\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "application/manifest+json; charset=utf-8"
+          },
+          "icons": [
+            {
+              "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/admin/app-admin-192.png?v=identity-v1",
+              "status": 200,
+              "sha256": "0f7ff107b57a3eef37393ebcba08019432c0590faf9d5a794f254bd213520468",
+              "declaration": {
+                "src": "./app-admin-192.png?v=identity-v1",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable"
+              },
+              "decode": {
+                "valid": true,
+                "size": [
+                  192,
+                  192
+                ],
+                "mode": "RGB"
+              }
+            },
+            {
+              "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/admin/app-admin-512.png?v=identity-v1",
+              "status": 200,
+              "sha256": "63a16cfecf448a1e1246cf4b306dd6c535aa4af14bdaf3a45a2e0a0856ea1a8d",
+              "declaration": {
+                "src": "./app-admin-512.png?v=identity-v1",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+              },
+              "decode": {
+                "valid": false,
+                "error": "PNG CRC mismatch"
+              }
+            }
+          ]
+        },
+        {
+          "rel": "apple-touch-icon",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/admin/app-admin-180.png?v=identity-v1",
+          "status": 200,
+          "sha256": "9bb882161ff53acd170872beccfa573db40b07f817319f4bf0a5a426bd76d58a",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:36 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-64c\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "image/png"
+          }
+        },
+        {
+          "rel": "icon",
+          "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/admin/app-admin.svg?v=identity-v1",
+          "status": 200,
+          "sha256": "ffcf6d7e51d6724bbf3aee9fe66b913186c4619554784194afa152ef41d42858",
+          "headers": {
+            "Date": "Wed, 04 Nov 2026 07:05:37 GMT",
+            "Last-Modified": "Sun, 11 Oct 2026 19:47:07 GMT",
+            "ETag": "\"6acbe7bb-369\"",
+            "Age": "0",
+            "Cache-Control": "max-age=600",
+            "Content-Type": "image/svg+xml"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,1 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><title>app-admin</title><rect width="1024" height="1024" fill="#071F33"/><g transform="translate(512 512) scale(3.4) translate(-128 -128)"><g fill="none" stroke="#D8DEE6" stroke-width="12" stroke-linecap="round"><path transform="rotate(0 128 128)" d="M128 30V82"/><path transform="rotate(45 128 128)" d="M128 30V82"/><path transform="rotate(90 128 128)" d="M128 30V82"/><path transform="rotate(135 128 128)" d="M128 30V82"/><path transform="rotate(180 128 128)" d="M128 30V82"/><path transform="rotate(225 128 128)" d="M128 30V82"/><path transform="rotate(270 128 128)" d="M128 30V82"/><path transform="rotate(315 128 128)" d="M128 30V82"/><circle cx="128" cy="128" r="70"/><circle cx="128" cy="128" r="43"/><path stroke-width="9" d="M99 132C110 110 132 149 157 125"/></g></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Aqaba SeaGo — Admin — Direction A</title>
+  <rect id="background" width="1024" height="1024" fill="#071F33"/>
+  <g id="emblem" transform="translate(512 512) scale(1.02)">
+    <g id="helm" fill="none" stroke="#FAF7F0" stroke-width="62" stroke-linecap="round" stroke-linejoin="round">
+      <path transform="rotate(0)" d="M0 -275V-340"/>
+      <path transform="rotate(45)" d="M0 -275V-340"/>
+      <path transform="rotate(90)" d="M0 -275V-340"/>
+      <path transform="rotate(135)" d="M0 -275V-340"/>
+      <path transform="rotate(180)" d="M0 -275V-340"/>
+      <path transform="rotate(225)" d="M0 -275V-340"/>
+      <path transform="rotate(270)" d="M0 -275V-340"/>
+      <path transform="rotate(315)" d="M0 -275V-340"/>
+      <circle r="250"/>
+    </g>
+    <g id="dashboard" fill="#00BFC8">
+      <rect x="-110" y="-110" width="100" height="100" rx="22"/>
+      <rect x="10" y="-110" width="100" height="100" rx="22"/>
+      <rect x="-110" y="10" width="100" height="100" rx="22"/>
+      <rect x="10" y="10" width="100" height="100" rx="22"/>
+    </g>
+  </g>
+</svg>
