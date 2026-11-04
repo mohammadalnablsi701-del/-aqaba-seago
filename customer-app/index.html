@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-seago-launch="pending">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -7,32 +7,147 @@
     <title>Aqaba SeaGo</title>
     <link rel="manifest" href="./customer-manifest-a-v1.webmanifest?v=direction-a-v1" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <link rel="icon" type="image/png" sizes="48x48" href="./customer-favicon-a-v1-48.png?v=direction-a-v1" />
     <link rel="icon" sizes="any" type="image/svg+xml" href="./customer-favicon-a-v1.svg?v=direction-a-v1" />
     <meta name="apple-mobile-web-app-title" content="Aqaba SeaGo" />
     <meta name="application-name" content="Aqaba SeaGo" />
-    <!-- Static boot recovery remains visible only until React mounts.
-         Prevents an empty screen when a mobile in-app browser blocks a JS bundle. -->
+    <!-- Critical launch styles are inline: recovery also works without the app bundle. -->
+    <link rel="preload" as="image" href="%BASE_URL%app-customer.svg" />
     <style>
-      #seago-boot-recovery{box-sizing:border-box;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px 24px;background:#eaf4f8;color:#071f33;text-align:center;font-family:system-ui,-apple-system,sans-serif}
-      #root:not(:empty)+#seago-boot-recovery{display:none}
-      #seago-boot-recovery img{width:76px;height:76px;border-radius:18px}
-      #seago-boot-recovery strong{font-size:22px;letter-spacing:-.5px}
-      #seago-boot-recovery p{margin:0;color:#547284;font-size:13px;line-height:1.5}
-      #seago-boot-recovery a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:14px;background:#0b3d91;color:#fff;font-size:13px;font-weight:700;text-decoration:none;animation:seago-boot-show .3s ease 5s both}
+      html,body{margin:0;background:#071F33}
+      html[data-seago-launch] body{overflow:hidden}
+      html[data-seago-launch] #root{visibility:hidden;pointer-events:none}
+      html[data-seago-launch="exiting"] #root{visibility:visible}
+      #seago-boot-recovery{box-sizing:border-box;position:fixed;inset:0;z-index:2147483647;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding: max(32px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));overflow:hidden;background:#071F33;color:#FAF7F0;text-align:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;isolation:isolate}
+      #seago-boot-recovery[hidden]{display:none}
+      .launch-brand{display:flex;flex-direction:column;align-items:center;width:100%;max-width:340px;transform:translateY(-12px)}
+      .launch-mark{display:block;width:124px;height:124px;margin-bottom:30px}
+      #seago-boot-recovery img{display:block;width:100%;height:100%;object-fit:contain;border-radius:28px;box-shadow:0 18px 54px #0003}
+      #seago-boot-recovery strong{font-size:clamp(26px,6.8vw,32px);font-weight:600;letter-spacing:-.8px;line-height:1.2}
+      #seago-boot-recovery p{margin:12px 0 0;color:#b7cbd5;font-size:13px;line-height:1.6;letter-spacing:.06em}
+      .launch-wave{width:164px;height:24px;margin-top:30px;overflow:hidden;color:#00BFC8}
+      .launch-wave svg{display:block;width:200px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+      .launch-recovery{position:absolute;bottom:max(32px,env(safe-area-inset-bottom));left:24px;right:24px;display:flex;flex-direction:column;align-items:center;gap:12px;animation:launch-recovery-show .2s ease 5s both}
+      #seago-boot-recovery .launch-status{font-size:12px;letter-spacing:.01em;margin:0;max-width:310px}
+      #seago-boot-recovery a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border:1px solid #365365;border-radius:14px;background:#102f43;color:#FAF7F0;font-size:13px;font-weight:600;text-decoration:none}
+      #seago-boot-recovery a:focus-visible{outline:2px solid #00BFC8;outline-offset:4px}
+      #seago-boot-recovery[data-pending]:not([data-started]):not([data-state="error"]) .launch-brand>*{opacity:0}
+      #seago-boot-recovery[data-started] img{animation:launch-logo 500ms cubic-bezier(.2,.7,.2,1) both}
+      #seago-boot-recovery[data-started] .launch-mark{animation:launch-settle 700ms ease-in-out 500ms both}
+      #seago-boot-recovery[data-started] strong{animation:launch-copy 600ms ease 500ms both}
+      #seago-boot-recovery[data-started] .launch-tagline{animation:launch-copy 600ms ease 1200ms both}
+      #seago-boot-recovery[data-started] .launch-wave{animation:seago-boot-show 500ms ease 1200ms both}
+      #seago-boot-recovery[data-started] .launch-wave svg{animation:launch-wave 1000ms ease-in-out 1200ms both}
+      #seago-boot-recovery[data-state="exiting"]{animation:launch-exit var(--launch-exit-duration,300ms) ease-in-out both;pointer-events:none}
+      #seago-boot-recovery[data-state="error"] .launch-recovery{animation:none}
+      #seago-boot-recovery[data-state="error"] .launch-brand *{animation:none}
+      @keyframes launch-recovery-show{from{opacity:0;visibility:hidden}to{opacity:1;visibility:visible}}
+      @keyframes launch-logo{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+      @keyframes launch-settle{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+      @keyframes launch-copy{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes launch-wave{from{transform:translateX(-28px)}to{transform:translateX(-8px)}}
+      @keyframes launch-exit{from{opacity:1}to{opacity:0}}
       @keyframes seago-boot-show{from{opacity:0}to{opacity:1}}
-      @media(prefers-reduced-motion:reduce){#seago-boot-recovery a{animation:none}}
+      @media(max-height:540px){.launch-brand{transform:none}.launch-mark{width:72px;height:72px;margin-bottom:12px}#seago-boot-recovery strong{font-size:26px}#seago-boot-recovery .launch-tagline{margin-top:8px}.launch-wave{height:16px;margin-top:12px}.launch-wave svg{height:16px}.launch-recovery{position:static;margin-top:12px;gap:4px}#seago-boot-recovery{overflow:auto;justify-content:safe center;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}}
+      @media(prefers-reduced-motion:reduce){#seago-boot-recovery *,#seago-boot-recovery[data-started] .launch-brand *{animation:none!important;transform:none!important}#seago-boot-recovery .launch-recovery{animation:launch-recovery-show 1ms step-end 5s both!important}#seago-boot-recovery[data-state="error"] .launch-recovery{animation:none!important}#seago-boot-recovery[data-state="exiting"]{animation:none;opacity:0}}
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" inert aria-hidden="true"></div>
     <div id="seago-boot-recovery" role="status" aria-label="Opening Aqaba SeaGo">
-      <img src="./app-customer.svg" alt="" width="76" height="76" />
-      <strong>Aqaba SeaGo</strong>
-      <p>Opening your Red Sea experience…</p>
-      <a href="./?reload=logo249" aria-label="Reload Aqaba SeaGo if loading is taking too long">Reload App</a>
+      <div class="launch-brand">
+        <span class="launch-mark"><img src="%BASE_URL%app-customer.svg" alt="Aqaba SeaGo logo" width="124" height="124" fetchpriority="high" /></span>
+        <strong>Aqaba SeaGo</strong>
+        <p class="launch-tagline">Your Red Sea Experience</p>
+        <div class="launch-wave" aria-hidden="true"><svg viewBox="0 0 200 24"><path d="M-10 12 Q10 2 30 12 T70 12 T110 12 T150 12 T190 12 T230 12" /></svg></div>
+      </div>
+      <div class="launch-recovery">
+        <p class="launch-status">Still opening SeaGo. If this takes too long, try reloading.</p>
+        <a href="" aria-label="Reload Aqaba SeaGo if loading is taking too long">Reload App</a>
+      </div>
     </div>
+    <script id="seago-splash-bootstrap">
+      // One launch surface, independent of bundle loading and React rerenders.
+      (() => {
+        const splash = document.getElementById("seago-boot-recovery");
+        const root = document.getElementById("root");
+        const page = document.documentElement;
+        const logo = splash.querySelector("img");
+        splash.querySelector("a").addEventListener("click", event => {
+          event.preventDefault();
+          window.location.reload();
+        });
+        splash.dataset.pending = "true";
+        const native = Boolean(window.Capacitor?.isNativePlatform?.());
+        let startedAt = null, ready = false, failed = false, finished = false;
+        let exitTimer, finishTimer, nativeReleased = !native;
+        const duration = 3000, exitDuration = 300;
+        const clear = () => { clearTimeout(exitTimer); clearTimeout(finishTimer); };
+        const finish = () => {
+          if (!ready || failed || finished) return;
+          finished = true;
+          splash.hidden = true;
+          page.removeAttribute("data-seago-launch");
+          root.removeAttribute("inert");
+          root.removeAttribute("aria-hidden");
+        };
+        const schedule = () => {
+          if (startedAt === null || !ready || failed || finished) return;
+          clear();
+          const elapsed = performance.now() - startedAt;
+          const remaining = Math.max(0, duration - elapsed);
+          if (!remaining) { finish(); return; }
+          exitTimer = setTimeout(() => {
+            if (failed) return;
+            splash.style.setProperty("--launch-exit-duration", Math.min(exitDuration, remaining) + "ms");
+            splash.dataset.state = "exiting";
+            page.dataset.seagoLaunch = "exiting";
+          }, Math.max(0, duration - exitDuration - elapsed));
+          finishTimer = setTimeout(finish, remaining);
+        };
+        const start = () => {
+          if (startedAt !== null || failed || !nativeReleased || document.visibilityState === "hidden") return;
+          // Start on a paint-ready frame, after native handoff and artwork decoding.
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (startedAt !== null || failed || document.visibilityState === "hidden") return;
+            startedAt = performance.now();
+            splash.dataset.started = "true";
+            schedule();
+          }));
+        };
+        const artworkLoaded = new Promise(resolve => {
+          if (logo.complete) resolve();
+          else { logo.addEventListener("load", resolve, {once:true}); logo.addEventListener("error", resolve, {once:true}); }
+        }).then(() => logo.decode?.().catch(() => {}));
+        // A stalled artwork request must not hold all branding or React forever.
+        const artworkReady = new Promise(resolve => {
+          const fallback = setTimeout(resolve, 2000);
+          artworkLoaded.then(() => { clearTimeout(fallback); resolve(); });
+        });
+        window.__seagoLaunch = {
+          artworkReady,
+          releaseNative() { nativeReleased = true; artworkReady.then(start); },
+          ready() { ready = true; artworkReady.then(start); schedule(); },
+          fail() {
+            clear(); failed = true; splash.hidden = false;
+            splash.dataset.state = "error"; page.dataset.seagoLaunch = "error";
+            splash.setAttribute("aria-label", "Aqaba SeaGo could not open");
+            root.setAttribute("inert", ""); root.setAttribute("aria-hidden", "true");
+            splash.querySelector(".launch-status").textContent = "SeaGo could not open. Please reload to try again.";
+          },
+          get startedAt() { return startedAt; }
+        };
+        artworkReady.then(start);
+        // Native auto-hide is bounded too: even a failed module must expose recovery.
+        if (native) setTimeout(() => window.__seagoLaunch.releaseNative(), 1100);
+        document.addEventListener("visibilitychange", () => artworkReady.then(start));
+        window.addEventListener("error", event => {
+          if (!ready && !finished && (event.error || event.target?.tagName === "SCRIPT")) window.__seagoLaunch.fail();
+        }, true);
+        window.addEventListener("unhandledrejection", () => { if (!ready && !finished) window.__seagoLaunch.fail(); });
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

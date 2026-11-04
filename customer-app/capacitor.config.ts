@@ -4,6 +4,7 @@ const config: CapacitorConfig = {
   appId: "com.aqabaseago.app",
   appName: "Aqaba SeaGo",
   webDir: "dist",
+  backgroundColor: "#071F33",
   server: {
     androidScheme: "https"
   },
@@ -11,8 +12,11 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 900,
       launchAutoHide: true,
-      launchFadeOutDuration: 250,
+      // React hides this once the approved web artwork is decoded. Auto-hide
+      // remains a bounded fallback so a failed JS bundle exposes boot recovery.
+      launchFadeOutDuration: 0,
       backgroundColor: "#071F33",
+      androidScaleType: "FIT_CENTER",
       showSpinner: false
     }
   }

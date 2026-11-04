@@ -2,16 +2,22 @@
 set -euo pipefail
 
 platform="${1:-all}"
+splash_only=false
+case "${2:-}" in
+  "") ;;
+  --splash-only) splash_only=true ;;
+  *) echo "Usage: $0 [all|android|ios] [--splash-only]" >&2; exit 2 ;;
+esac
 case "$platform" in
   all|android|ios) ;;
-  *) echo "Usage: $0 [all|android|ios]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [all|android|ios] [--splash-only]" >&2; exit 2 ;;
 esac
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOGO_SVG="$ROOT_DIR/assets/logo.svg"
-SPLASH_SVG="$ROOT_DIR/assets/splash.svg"
+CUSTOMER_LOGO_SVG="$ROOT_DIR/public/app-customer.svg"
 
-for file in "$LOGO_SVG" "$SPLASH_SVG"; do
+for file in "$LOGO_SVG" "$CUSTOMER_LOGO_SVG"; do
   [[ -s "$file" ]] || { echo "Missing required asset source: $file" >&2; exit 1; }
 done
 
@@ -42,6 +48,19 @@ render_svg_like_target() {
   echo "Branded $target (${width}x${height})"
 }
 
+render_splash_like_target() {
+  local target="$1"
+  local dims width height tmp
+  dims="$(identify_dims "$target")"
+  read -r width height <<<"$dims"
+  tmp="${target}.tmp"
+  node "$ROOT_DIR/scripts/native-launch-assets.mjs" render "$width" "$height" > "$tmp.svg"
+  rsvg-convert "$tmp.svg" -o "$tmp.png"
+  mv "$tmp.png" "$target"
+  rm "$tmp.svg"
+  echo "Branded launch $target (${width}x${height})"
+}
+
 render_android() {
   local res="$ROOT_DIR/android/app/src/main/res"
   [[ -d "$res" ]] || { echo "Android project not found at $res" >&2; exit 1; }
@@ -51,18 +70,29 @@ render_android() {
     base="$(basename "$file")"
     case "$base" in
       ic_launcher*.png)
+        [[ "$splash_only" == false ]] || continue
         render_svg_like_target "$LOGO_SVG" "$file"
         icon_count=$((icon_count + 1))
         ;;
       splash*.png)
-        render_svg_like_target "$SPLASH_SVG" "$file"
+        render_splash_like_target "$file"
         splash_count=$((splash_count + 1))
         ;;
     esac
   done < <(find "$res" -type f -name '*.png' -print0)
 
-  (( icon_count > 0 )) || { echo "No Android launcher PNG assets found" >&2; exit 1; }
+  if [[ "$splash_only" == false ]]; then
+    (( icon_count > 0 )) || { echo "No Android launcher PNG assets found" >&2; exit 1; }
+  fi
   (( splash_count > 0 )) || { echo "No Android splash PNG assets found" >&2; exit 1; }
+  # Android 12+ uses an OS-controlled icon rather than the full-screen splash.
+  # The OS safe circle has diameter 2/3 of the drawable. A square must fit by
+  # its diagonal: 0.46 < (2/3)/sqrt(2), preserving all four ivory corners.
+  mkdir -p "$res/drawable-nodpi"
+  node "$ROOT_DIR/scripts/native-launch-assets.mjs" render 1152 1152 0.46 > "$res/drawable-nodpi/seago_launch_icon.tmp.svg"
+  rsvg-convert "$res/drawable-nodpi/seago_launch_icon.tmp.svg" -o "$res/drawable-nodpi/seago_launch_icon.png"
+  rm "$res/drawable-nodpi/seago_launch_icon.tmp.svg"
+  node "$ROOT_DIR/scripts/native-launch-assets.mjs" android
   echo "Android branding complete: $icon_count launcher assets, $splash_count splash assets"
 }
 
@@ -70,22 +100,29 @@ render_ios() {
   local assets="$ROOT_DIR/ios/App/App/Assets.xcassets"
   local icons="$assets/AppIcon.appiconset"
   local splash="$assets/Splash.imageset"
-  [[ -d "$icons" ]] || { echo "iOS app icon set not found at $icons" >&2; exit 1; }
+  if [[ "$splash_only" == false ]]; then
+    [[ -d "$icons" ]] || { echo "iOS app icon set not found at $icons" >&2; exit 1; }
+  fi
   [[ -d "$splash" ]] || { echo "iOS splash set not found at $splash" >&2; exit 1; }
 
   local icon_count=0 splash_count=0 file
-  while IFS= read -r -d '' file; do
-    render_svg_like_target "$LOGO_SVG" "$file"
-    icon_count=$((icon_count + 1))
-  done < <(find "$icons" -type f -name '*.png' -print0)
+  if [[ "$splash_only" == false ]]; then
+    while IFS= read -r -d '' file; do
+      render_svg_like_target "$LOGO_SVG" "$file"
+      icon_count=$((icon_count + 1))
+    done < <(find "$icons" -type f -name '*.png' -print0)
+  fi
 
   while IFS= read -r -d '' file; do
-    render_svg_like_target "$SPLASH_SVG" "$file"
+    render_splash_like_target "$file"
     splash_count=$((splash_count + 1))
   done < <(find "$splash" -type f -name '*.png' -print0)
 
-  (( icon_count > 0 )) || { echo "No iOS app icon PNG assets found" >&2; exit 1; }
+  if [[ "$splash_only" == false ]]; then
+    (( icon_count > 0 )) || { echo "No iOS app icon PNG assets found" >&2; exit 1; }
+  fi
   (( splash_count > 0 )) || { echo "No iOS splash PNG assets found" >&2; exit 1; }
+  node "$ROOT_DIR/scripts/native-launch-assets.mjs" ios
   echo "iOS branding complete: $icon_count app icons, $splash_count splash assets"
 }
 
