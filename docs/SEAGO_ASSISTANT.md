@@ -15,6 +15,7 @@ This is a Customer-only pilot, not a general-purpose generative AI model. Its fr
 ## QA
 - Run `node --test test/seagoAssistantEngine.test.mjs` inside `customer-app`.
 - Verify iPhone Safari with 320–430px widths; Android Chrome; focus/escape; keyboard and safe areas; trip cards; real QA/staging API; no-sellable-departures message; login/ticket access; refund support links.
-- Do **not** use real customer transactions for acceptance. A stable Staging API and demo departures with real operator policies are needed to test bookable recommendations.
+- Do **not** use real customer transactions or create database inventory for acceptance. `scripts/seagoAssistantBrowserQA.mjs` defaults to deterministic in-browser trip, departure and quote fixtures; every API mutation is blocked. With `SEAGO_QA_MODE=live-trips`, only published Staging trips are fetched live, while departures and quotes remain isolated browser fixtures. Set `SEAGO_QA_URL` to test a local preview or the deployed Customer application.
+- Browser acceptance covers 390×844, 320×568 and 1280×900, navigation, authoritative quote rendering, authentication before payment, focus/Escape and a synthetic keyboard viewport resize. Chromium emulation does not establish physical iPhone Safari or OS keyboard behavior.
 - This PR does not touch the previously deferred cinematic video PR #246.
-- No auto merge, no production deployment and no payment-system changes.
+- Release requires Staging cleanup, current-head automated gates and browser acceptance before an authorized merge and deployment verification. No payment-system changes.

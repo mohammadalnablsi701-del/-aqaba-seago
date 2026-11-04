@@ -155,3 +155,28 @@ test("recommendation carries verified date and adult-child counts to booking",as
   date:"2026-11-08",guests:3,adults:2,children:1,departureId:"dep-a"
  });
 });
+
+test("unsupported group counts require support before checking or recommending seats",async()=>{
+ let checked=0;
+ for(const group of ["21 people","family of 21","99 guests","100 people","100 adults","2 adults and 19 children"]){
+  const reply=await answerSeaGoQuestion(`sunset cruise for ${group}`,trips,{
+   now,hasLiveApi:true,listDepartures:async()=>{checked++;return rows;}
+  });
+  assert.equal(reply.cards.length,0,group);
+  assert.equal(reply.action?.type,"support",group);
+  assert.match(reply.text,/confirm the number of adults and children/,group);
+ }
+ assert.equal(checked,0,"Unsupported groups must not trigger inventory recommendations");
+});
+
+test("twenty guests retain the same seat and adult counts through recommendation",async()=>{
+ const reply=await answerSeaGoQuestion("sunset cruise for 20 people",trips,{
+  now,hasLiveApi:true,listDepartures:async()=>[{
+   id:"group-dep",startsAt:"2026-11-08T15:00:00Z",status:"scheduled",availableSeats:20
+  }]
+ });
+ assert.equal(reply.cards.length,1);
+ assert.equal(reply.cards[0].criteria.guests,20);
+ assert.equal(reply.cards[0].criteria.adults,20);
+ assert.equal(reply.cards[0].criteria.children,0);
+});
