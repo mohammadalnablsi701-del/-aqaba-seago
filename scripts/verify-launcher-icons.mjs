@@ -102,8 +102,14 @@ export function verify(app) {
   const html = readFileSync(resolve(root, `${app}-app/index.html`), "utf8");
   const links = [...html.matchAll(/<link\b[^>]*>/g)].map(([tag]) => Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, key, value]) => [key, value])));
   const touch = links.find((link) => link.rel === "apple-touch-icon");
-  assert(touch && touch.sizes === "180x180", "Missing Apple touch icon");
-  readPng(local(touch.href), 180);
+  if (app === "customer") {
+    // Staging iPhone test PR #234: manifest-only icon avoids Cannot Add Page regression.
+    assert(!touch, "Customer must use manifest PNG for Safari Add to Home Screen");
+    readPng(resolve(publicDir, "customer-apple-touch-icon-a-v1.png"), 180);
+  } else {
+    assert(touch && touch.sizes === "180x180", "Missing Apple touch icon");
+    readPng(local(touch.href), 180);
+  }
   for (const icon of manifest.icons.filter((item) => item.type === "image/svg+xml")) assert(readFileSync(local(icon.src), "utf8").includes("<svg"));
   const favicon = links.find((link) => link.rel === "icon");
   assert(favicon && readFileSync(local(favicon.href), "utf8").includes("<svg"), "Missing SVG favicon");
@@ -118,7 +124,7 @@ export function verify(app) {
     assert(readFileSync(resolve(assets, "logo.svg")).equals(readFileSync(local(favicon.href))), "Customer native/web SVGs differ");
     const sw = readFileSync(resolve(publicDir, "sw.js"), "utf8");
     const pushIcon = sw.match(/icon:\s*"([^"]+)"/)?.[1];
-    assert.equal(local(pushIcon || ""), local(touch.href), "Stale Customer push icon");
+    assert.equal(local(pushIcon || ""), resolve(publicDir, "customer-apple-touch-icon-a-v1.png"), "Stale Customer push icon");
   }
   console.log(`${app}: launcher PNG decode/CRC, dimensions, alpha, safe zones and references PASS`);
 }
