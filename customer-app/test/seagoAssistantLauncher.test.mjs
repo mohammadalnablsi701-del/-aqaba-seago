@@ -30,7 +30,7 @@ test("assistant tickets and support navigation clear selected trip details",()=>
  const app=read("src/App.jsx");
  assert.match(app,/const navigateFromAssistant=target=>\{/);
  assert.match(app,/setDetail\(null\);[\s\S]*?setBooking\(false\);[\s\S]*?setActive\(target\);/);
- assert.match(app,/onOpenTrip:openTrip,onNavigate:navigateFromAssistant/);
+ assert.match(app,/onOpenTrip:openTripFromAssistant,onNavigate:navigateFromAssistant/);
 });
 
 test("chat preserves date and party composition through details into booking",()=>{
