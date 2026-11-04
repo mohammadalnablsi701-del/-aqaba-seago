@@ -1,0 +1,24 @@
+/* Hero video enhancement: keep the approved photo visible at first paint and on failure. */
+.hero-scene--media {
+  background-color: #0b4b7f;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center 36%;
+  isolation: isolate;
+}
+.hero-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 36%;
+  opacity: 0;
+  transition: opacity 420ms ease;
+  pointer-events: none;
+}
+.hero-video--playing { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-video { display: none !important; transition: none; }
+}
