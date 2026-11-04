@@ -264,7 +264,12 @@ function localDateInputValue(date=new Date()) {
   return aqabaDateKey(date);
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll, assistantProps }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll, assistantProps, heroEntranceSeen }) {
+  const [animateHero]=useState(()=>!heroEntranceSeen.current);
+  useEffect(()=>{
+    // Keep the entrance exclusive to the first Home mount in this app load.
+    heroEntranceSeen.current=true;
+  },[heroEntranceSeen]);
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -287,10 +292,10 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
             <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
           </div>
         </div>
-        <div className="hero__copy">
-          <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
-          <h1>Make Aqaba<br/>Unforgettable</h1>
-          <p>Your next Red Sea memory starts here.</p>
+        <div className={"hero__copy"+(animateHero?" hero__copy--enter":"")}>
+          <p className="eyebrow hero-copy-enter hero-copy-enter--kicker">SAIL • EXPLORE • DISCOVER</p>
+          <h1><span className="hero-copy-enter hero-copy-enter--headline">Discover Aqaba <span className="hero-copy-phrase">by Sea</span></span></h1>
+          <p className="hero-copy-enter hero-copy-enter--subtitle">Book unforgettable Red Sea trips in minutes.</p>
         </div>
         <div className="search-card">
           <label className="search-row search-row--control">
@@ -1429,6 +1434,7 @@ export default function App(){
   const [alertsUnread,setAlertsUnread]=useState(0);
   const historyReady=useRef(false);
   const restoringHistory=useRef(false);
+  const heroEntranceSeen=useRef(false);
 
   useEffect(()=>{
     const expired=()=>{
@@ -1612,7 +1618,7 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} assistantProps={assistantProps} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
+      {active==="home"&&<HomeScreen heroEntranceSeen={heroEntranceSeen} loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} assistantProps={assistantProps} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} allTrips={tripList} onSelectAvailableTrip={openTrip} onSelectTrip={trip=>openTrip(trip,{fromSearch:searchResults!==null})} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>} 
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>} 
