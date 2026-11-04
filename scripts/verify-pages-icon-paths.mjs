@@ -104,12 +104,24 @@ try {
     assert.equal(manifests.length, 1, `${app.role} needs exactly one manifest link`);
     const iconLinks = links.filter(link => link.rel?.split(/\s+/).some(rel => ["icon", "apple-touch-icon"].includes(rel)));
     assert.ok(iconLinks.some(link => link.rel.split(/\s+/).includes("icon")), `${app.role} favicon missing`);
-    assert.ok(iconLinks.some(link => link.rel.split(/\s+/).includes("apple-touch-icon")), `${app.role} Apple Touch icon missing`);
+    if (app.role === "customer") {
+      // PR #234 documented an iPhone install failure with an explicit Apple Touch link.
+      assert.ok(!iconLinks.some(link => link.rel.split(/\s+/).includes("apple-touch-icon")),
+        "Customer must install through manifest 'any' PNG instead of Apple Touch link");
+    } else {
+      assert.ok(iconLinks.some(link => link.rel.split(/\s+/).includes("apple-touch-icon")),
+        `${app.role} Apple Touch icon missing`);
+    }
     for (const link of iconLinks) {
       const url = new URL(link.href, htmlBase);
       const type = link.type || types[path.extname(url.pathname)];
       assert.ok(type?.startsWith("image/"), `Unsupported icon reference: ${url}`);
       assertPublicCopy(await get(url, app, type), url, app);
+    }
+    if (app.role === "customer") {
+      // Customer's RGB180 remains a notification asset even when Safari does not link it.
+      const notificationURL = new URL("./customer-apple-touch-icon-a-v1.png?v=direction-a-v1", pageURL);
+      assertPublicCopy(await get(notificationURL, app, "image/png"), notificationURL, app);
     }
     const manifestURL = new URL(manifests[0].href, htmlBase);
     const manifestBody = await get(manifestURL, app, "application/manifest+json");
