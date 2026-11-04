@@ -22,7 +22,7 @@ function PasswordRecoveryEntry(){
       document.querySelectorAll(".auth-panel").forEach(panel=>{
         const title=panel.querySelector(".auth-panel__head h2")?.textContent?.trim();
         const existing=panel.querySelector("[data-seago-forgot-password]");
-        if(title!=="Sign in to book"){
+        if(!["Sign in to book","سجّل الدخول للحجز"].includes(title)){
           existing?.remove();
           return;
         }
