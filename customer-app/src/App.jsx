@@ -11,6 +11,8 @@ import {
   loginCustomer, registerCustomer, listNotifications, markNotificationRead, markAllNotificationsRead, enablePushNotifications, pushNotificationStatus, sendTestPush, googleAuthConfig, googleSignIn, saveAccountPhone, createSupportRequest
 } from "./api.js";
 import { createQuoteRequestGate, formatServerMoney, pricingViewFromQuote, quoteMatchesSelection } from "./pricingTruth.js";
+import { aqabaDateKey, availableDepartures, selectInitialDeparture } from "./departureSelection.js";
+import { trustedTripImages } from "./tripMedia.js";
 import { createTicketsRefreshController } from "./ticketsRefresh.js";
 import { isNativeSeaGo, enableNativePush, nativePushPermission, syncNativePushAuth, resumeNativePush } from "./nativePush.js";
 import { sendNativeTestPush } from "./api.js";
@@ -175,7 +177,7 @@ function normalizeTrip(raw, index = 0) {
   return {
     id: raw._id,
     apiId: raw._id,
-    title: profile?.title || raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
+    title: profile?.title || raw.titleEn || "Aqaba Sea Experience",
     vesselName: String(raw.vesselName || "").trim(),
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
@@ -187,7 +189,7 @@ function normalizeTrip(raw, index = 0) {
     buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetDescription: String(raw.pricing?.buffetDescription || ""),
-    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : (Array.isArray(raw.images) ? raw.images.map(x=>typeof x==="string"?x:x?.url).filter(Boolean) : []),
+    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : trustedTripImages(raw.images),
     rating: null,
     reviews: null,
     category,
@@ -236,6 +238,21 @@ function HeroScene() {
   );
 }
 
+function TripMedia({trip, large=false}){
+  const src=trip?.images?.[0]||"";
+  const [failed,setFailed]=useState(false);
+  useEffect(()=>setFailed(false),[src]);
+  if(!src||failed){
+    return <div className="seago-photo-placeholder" role="img" aria-label="Trip photo unavailable">
+      <ShipWheel size={large?64:42} strokeWidth={1.25}/>
+      <span>Trip photos not yet provided</span>
+    </div>;
+  }
+  return <img className="seago-trip-photo" src={src}
+    alt={trip?.title?`Photo supplied for ${trip.title}`:"Photo supplied by the tour operator"}
+    loading={large?"eager":"lazy"} onError={()=>setFailed(true)}/>;
+}
+
 function ApiNotice({ usingFallback, apiError }) {
   if(apiError) return <div className="api-notice api-notice--error">SeaGo can’t load live experiences right now. Please try again shortly.</div>;
   if (!usingFallback) return null;
@@ -243,10 +260,7 @@ function ApiNotice({ usingFallback, apiError }) {
 }
 
 function localDateInputValue(date=new Date()) {
-  const y=date.getFullYear();
-  const m=String(date.getMonth()+1).padStart(2,"0");
-  const d=String(date.getDate()).padStart(2,"0");
-  return `${y}-${m}-${d}`;
+  return aqabaDateKey(date);
 }
 
 function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
@@ -307,6 +321,8 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
       </section>
 
       <ApiNotice usingFallback={usingFallback} apiError={apiError} />
+      {!loading&&!usingFallback&&!apiError&&tripList.length>0&&!tripList.some(trip=>trip.liveInventory?.nextDepartureAt)&&
+        <div className="api-notice" role="status">Trips are available to explore, but no future departures are scheduled yet. Booking will open once operators publish dates.</div>}
 
       <section className="home-trust-strip" aria-label="SeaGo booking benefits">
         <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
@@ -329,10 +345,10 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
   return (
     <article className="trip-card" onClick={() => onSelectTrip(trip)}>
-      <div className={"trip-card__visual trip-card__visual--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(4,34,55,.08),rgba(4,34,55,.18)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
+      <div className={"trip-card__visual trip-card__visual--"+trip.accent}>
+        <TripMedia trip={trip}/>
         <span className="trip-card__badge">{trip.category}</span>
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
-        {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>} 
       </div>
       <div className="trip-card__body">
         <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
@@ -348,15 +364,19 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
             ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
             : <><CalendarDays size={13}/><span>No departures available</span></>}
         </div>}
-        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">View experience <ChevronRight size={15}/></div>
+        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">{trip.apiId&&!trip.liveInventory?.nextDepartureAt?"View details":"View experience"} <ChevronRight size={15}/></div>
       </div>
     </article>
   );
 }
 
-function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
+function TripsScreen({ tripList, allTrips, onSelectTrip, onSelectAvailableTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
   const [filter,setFilter]=useState("All Trips");
   const [sort,setSort]=useState("recommended");
+  const nextAvailableTrip=useMemo(()=>[...(allTrips||[])]
+    .filter(trip=>trip.apiId&&trip.liveInventory?.nextDepartureAt&&Number(trip.liveInventory?.nextAvailableSeats||0)>0)
+    .sort((a,b)=>new Date(a.liveInventory.nextDepartureAt)-new Date(b.liveInventory.nextDepartureAt))[0]||null,[allTrips]);
+  const anyFutureDates=Boolean(nextAvailableTrip);
 
   const shown=useMemo(()=>{
     let rows=filter==="All Trips" ? [...tripList] : tripList.filter(t=>{
@@ -410,25 +430,48 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
           ? <div className="trip-grid trip-grid--premium">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
           : <div className="empty-state trips-empty">
               <div className="trips-empty__icon"><Search size={28}/></div>
-              <h2>No sea trips match this search</h2>
-              <p>Try another date or category. SeaGo will show only experiences that match your current search.</p>
+              <h2>{searchSummary?"No trips available for your search":"No trips in this category"}</h2>
+              <p>{searchSummary?(anyFutureDates?"Try a different date or party size, or check the next available experience below.":"There are no future departure dates published yet. You can still explore the available experiences."): "Try another category or see all experiences."}</p>
+              {searchSummary&&nextAvailableTrip&&<button type="button" className="secondary-button" onClick={()=>onSelectAvailableTrip(nextAvailableTrip)}>Next available: {nextAvailableTrip.title} · {formatDeparture(nextAvailableTrip.liveInventory.nextDepartureAt)}</button>}
               <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>Show all experiences</button>
             </div>}
     </div>
   );
 }
 
-function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
+function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, searchCriteria }) {
   const[departures,setDepartures]=useState([]);const[selectedDeparture,setSelectedDeparture]=useState(null);const[loadingDepartures,setLoadingDepartures]=useState(Boolean(trip?.apiId&&hasApi()));const[departureError,setDepartureError]=useState("");
-  useEffect(()=>{let ignore=false;if(!trip?.apiId||!hasApi()){setLoadingDepartures(false);return;}setLoadingDepartures(true);listDepartures(trip.apiId).then(rows=>{if(ignore)return;const liveRows=rows.filter(d=>d.status==="scheduled"&&Number(d.availableSeats||0)>0&&new Date(d.startsAt)>new Date()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));setDepartures(liveRows);setSelectedDeparture(liveRows[0]||null);setDepartureError("");}).catch(e=>{if(!ignore)setDepartureError(e.message)}).finally(()=>{if(!ignore)setLoadingDepartures(false)});return()=>{ignore=true}},[trip?.apiId]);
+  const [showAllDepartures,setShowAllDepartures]=useState(false);
+  useEffect(()=>{
+    let ignore=false;
+    setDepartures([]);
+    setSelectedDeparture(null);
+    setShowAllDepartures(false);
+    setDepartureError("");
+    if(!trip?.apiId||!hasApi()){setLoadingDepartures(false);return;}
+    setLoadingDepartures(true);
+    listDepartures(trip.apiId).then(rows=>{
+      if(ignore)return;
+      const eligible=availableDepartures(rows);
+      setDepartures(eligible);
+      setSelectedDeparture(selectInitialDeparture(eligible,searchCriteria));
+    }).catch(e=>{if(!ignore)setDepartureError(e.message)})
+      .finally(()=>{if(!ignore)setLoadingDepartures(false)});
+    return()=>{ignore=true};
+  },[trip?.apiId,searchCriteria?.date,searchCriteria?.guests,searchCriteria?.departureId]);
+  const visibleDepartures = showAllDepartures || departures.length<=6
+    ? departures
+    : selectedDeparture && !departures.slice(0,6).some(d=>String(d.id)===String(selectedDeparture.id))
+      ? [...departures.slice(0,5),selectedDeparture].sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt))
+      : departures.slice(0,6);
   if(!trip) return null;
   return (
     <div className="screen detail-screen">
-      <div className={"detail-hero detail-hero--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(3,31,51,.08),rgba(3,31,51,.34)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
+      <div className={"detail-hero detail-hero--"+trip.accent}>
+        <TripMedia trip={trip} large/>
         <button className="detail-back" onClick={onBack} aria-label="Back"><ChevronLeft/></button>
         <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)} aria-label="Save trip"><Heart fill={favourite?"currentColor":"none"}/></button>
         <BrandLogo compact/>
-        {!trip.images?.[0]&&<div className="detail-hero__fallback"><ShipWheel size={76} strokeWidth={1.15}/><span>{trip.category}</span></div>}
         <div className="detail-hero__badge"><CheckCircle2 size={14}/> Verified SeaGo experience</div>
       </div>
 
@@ -443,6 +486,17 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
           <div><small>Duration</small><strong>{trip.duration}</strong><span>{trip.departureLocation?.name || "Aqaba"}</span></div>
         </div>
 
+        {trip.apiId&&<section className="seago-price-details" aria-label="Trip prices">
+          <h2>Prices & options</h2>
+          <div className="seago-price-details__row"><span>Adult (13+)</span><strong>{trip.price} JOD</strong></div>
+          {Number.isFinite(Number(trip.childPrice))&&<div className="seago-price-details__row"><span>Child (6–12)</span><strong>{trip.childPrice} JOD</strong></div>}
+          {trip.buffetEnabled&&<>
+            <div className="seago-price-details__row"><span>Adult with buffet</span><strong>{trip.buffetAdultPrice} JOD</strong></div>
+            <div className="seago-price-details__row"><span>Child with buffet</span><strong>{trip.buffetChildPrice} JOD</strong></div>
+          </>}
+          <p className="seago-price-details__note">Final prices and available seats are confirmed during booking. Ask the operator about children under 6.</p>
+        </section>}
+
         <section className="detail-section">
           <span className="detail-section__label">ABOUT THIS EXPERIENCE</span>
           <p className="detail-description">{trip.description}</p>
@@ -453,7 +507,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
           <div><CheckCircle2 size={18}/><span><b>Flexible cancellation</b><small>100% refund 24+ hours before departure</small></span></div>
         </div>
 
-        {trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
+        {trip.images?.length>1&&<section className="seago-official-photos"><span>Photos provided by the tour operator</span><div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} loading="lazy" alt={`${trip.title} — operator image ${i+2}`} onError={e=>{e.currentTarget.hidden=true}}/>)}</div></section>}
 
         <section className="detail-section">
           <span className="detail-section__label">TRIP ESSENTIALS</span>
@@ -465,7 +519,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook }) {
           </div>
         </section>
 
-        <section className="detail-section live-departures-section"><span className="detail-section__label">UPCOMING DEPARTURES</span>{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{departures.slice(0,6).map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{formatDeparture(d.startsAt)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}</div>:<div className="no-departures">{departureError?"Live availability is temporarily unavailable.":"No future departures are available yet."}</div>}</section>
+        <section className="detail-section live-departures-section"><span className="detail-section__label">UPCOMING DEPARTURES</span>{searchCriteria?.date&&<p className="booking-search-context">Searched date: {new Date(searchCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {searchCriteria.guests||1} persons</p>}{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{searchCriteria?.date&&!selectedDeparture&&<div role="status" className="no-departures">Your searched departure is no longer available. Select a different date below; we will not change it automatically.</div>}{visibleDepartures.map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{formatDeparture(d.startsAt)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}{departures.length>6&&<button type="button" className="secondary-button" onClick={()=>setShowAllDepartures(v=>!v)}>{showAllDepartures?"Show fewer dates":"Show all available dates"}</button>}</div>:<div className="no-departures">{departureError?"Live availability is temporarily unavailable.":"No future departures are available yet."}</div>}</section>
 
         {trip.buffetEnabled&&<section className="buffet-info detail-card-section"><span>OPEN BUFFET OPTION</span><h2>Add a meal to your trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}
 
@@ -624,7 +678,13 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   const guests=adults+children;
   const [departures,setDepartures]=useState([]);
   const [selected,setSelected]=useState(null);
+  const [showAllBookingDates,setShowAllBookingDates]=useState(false);
   const seatLimit=selected?.availableSeats!=null?Number(selected.availableSeats):20;
+  const visibleBookingDates=showAllBookingDates||departures.length<=4
+    ? departures
+    : selected&&!departures.slice(0,4).some(d=>String(d.id)===String(selected.id))
+      ? [...departures.slice(0,3),selected].sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt))
+      : departures.slice(0,4);
   const [quote,setQuote]=useState(null);
   const [quoteLoading,setQuoteLoading]=useState(false);
   const [loading,setLoading]=useState(Boolean(trip.apiId && hasApi()));
@@ -646,17 +706,10 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     listDepartures(trip.apiId)
       .then(rows=>{
         if(ignore) return;
-        const eligible=rows.filter(x=>x.status==="scheduled"&&Number(x.availableSeats||0)>0&&new Date(x.startsAt)>new Date()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));
+        const eligible=availableDepartures(rows);
         setDepartures(eligible);
-        const wantedDepartureId=initialCriteria?.departureId || "";
-        const wantedDate=initialCriteria?.date || "";
-        const exact=eligible.find(x=>String(x.id)===String(wantedDepartureId)&&Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
-        const matching=eligible.find(x=>{
-          const depDate=localDateInputValue(new Date(x.startsAt));
-          return Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1) && (!wantedDate || depDate===wantedDate);
-        });
-        const first=exact || matching || eligible.find(x=>Number(x.availableSeats||0)>=Number(initialCriteria?.guests||1));
-        setSelected(first || null);
+        setShowAllBookingDates(false);
+        setSelected(selectInitialDeparture(eligible,initialCriteria));
       })
       .catch(err=>{ if(!ignore) setError(err.message); })
       .finally(()=>{ if(!ignore) setLoading(false); });
@@ -793,13 +846,15 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         <>
           <div className="departure-block">
             <span>1 · CHOOSE DEPARTURE</span>
-            {live && departures.length ? departures.slice(0,4).map(d=>(
+            {live && departures.length ? visibleBookingDates.map(d=>(
               <button key={d.id} className={selected?.id===d.id?"departure-option active":"departure-option"} onClick={()=>setSelected(d)} disabled={d.availableSeats<1}>
                 <CalendarDays size={17}/>
                 <div><b>{formatDeparture(d.startsAt)}</b><small>{d.availableSeats} seats available</small></div>
                 <CheckCircle2 size={17}/>
               </button>
             )) : live ? <div className="no-departures">No future departures are available yet.</div> : <div className="preview-departure"><CalendarDays size={18}/> Preview date · live dates appear after API deployment</div>}
+            {live&&departures.length>4&&<button type="button" className="secondary-button" onClick={()=>setShowAllBookingDates(v=>!v)}>{showAllBookingDates?"Show fewer dates":"Show all available dates"}</button>}
+            {live&&initialCriteria?.date&&!selected&&departures.length>0&&<div className="no-departures" role="status">The date you selected is no longer available. Choose another departure above before continuing.</div>}
           </div>
 
           <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · PERSONS & PACKAGE</div>
@@ -920,8 +975,8 @@ function TicketsScreen({ auth, onAuthenticated }) {
       <div className="ticket-card__details">
         <div style={{minWidth:0}}><small>Customer name</small><strong dir="auto" style={{overflowWrap:"anywhere"}}>{b.customer?.name || auth?.user?.name || "Not provided"}</strong></div>
         <div style={{minWidth:0}}><small>Phone number</small><strong dir="ltr" style={{overflowWrap:"anywhere"}}>{b.customer?.phone || auth?.user?.phoneNormalized || auth?.user?.phone || "Not provided"}</strong></div>
-        <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
-        <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
+        <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
+        <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{timeZone:"Asia/Amman",hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
         <div><small>Persons</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
@@ -1427,7 +1482,7 @@ export default function App(){
         const enriched=await Promise.all(normalized.map(async trip=>{
           try{
             const deps=await listDepartures(trip.apiId);
-            const available=deps.filter(d=>d.status==="scheduled"&&Number(d.availableSeats||0)>0&&new Date(d.startsAt)>new Date()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt));
+            const available=availableDepartures(deps);
             const next=available[0]||null;
             return {...trip,liveInventory:{
               upcomingCount:available.length,
@@ -1473,7 +1528,7 @@ export default function App(){
             const enoughSeats = Number(d.availableSeats||0) >= Number(guests||1);
             if (!live || !enoughSeats) return false;
             if (!date) return true;
-            const depDate = localDateInputValue(new Date(d.startsAt));
+            const depDate = aqabaDateKey(d.startsAt);
             return depDate === date;
           });
           return ok ? trip : null;
@@ -1522,16 +1577,16 @@ export default function App(){
   },[active]);
 
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
-  const openTrip=trip=>{setDetail(trip);setBooking(false);};
+  const openTrip=(trip,{fromSearch=false}={})=>{if(!fromSearch)setSearchCriteria(null);setDetail(trip);setBooking(false);};
 
   if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
-  if(detail) return <DetailScreen trip={detail} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>;
+  if(detail) return <DetailScreen trip={detail} searchCriteria={searchCriteria} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>;
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setActive("trips");}}/>}
-      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
+      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
+      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} allTrips={tripList} onSelectAvailableTrip={openTrip} onSelectTrip={trip=>openTrip(trip,{fromSearch:searchResults!==null})} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>} 
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>} 
       {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>} 
