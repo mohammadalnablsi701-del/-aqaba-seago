@@ -122,9 +122,10 @@ function formatDuration(minutes) {
 }
 
 function VesselName({ value, className }) {
+  const {t}=useCustomerLocale();
   const vesselName=String(value||"").trim();
   if(!vesselName)return null;
-  return <span className={className}>Vessel · {vesselName}</span>;
+  return <span className={className}>{t("Vessel")} · {vesselName}</span>;
 }
 
 function tripDisplayProfile(raw) {
@@ -301,21 +302,21 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
             <span className="search-row__icon"><Anchor size={18}/></span>
             <span><small>{t("Trip Type")}</small>
               <select value={tripType} onChange={e=>setTripType(e.target.value)}>
-                {categories.map(c=><option key={c} value={c}>{c}</option>)}
+                {categories.map(c=><option key={c} value={c}>{t(c)}</option>)}
               </select>
             </span>
             <ChevronRight size={18}/>
           </label>
           <label className="search-row search-row--control">
             <span className="search-row__icon"><CalendarDays size={18}/></span>
-            <span><small>Date</small>
+            <span><small>{t("Date")}</small>
               <input type="date" value={date} min={localDateInputValue()} onChange={e=>setDate(e.target.value)}/>
             </span>
             <ChevronRight size={18}/>
           </label>
           <div className="search-row search-row--control">
             <span className="search-row__icon"><UsersRound size={18}/></span>
-            <span><small>Persons</small><strong>{guests} {t(guests===1?"Person":"Persons")}</strong></span>
+            <span><small>{t("Persons")}</small><strong>{guests} {t(guests===1?"Person":"Persons")}</strong></span>
             <div className="guest-stepper">
               <button type="button" onClick={()=>setGuests(Math.max(1,guests-1))}>−</button>
               <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
@@ -360,7 +361,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
       </div>
       <div className="trip-card__body">
-        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
+        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> {t("Verified operator")}</span><small>Aqaba</small></div>
         <h3>{localizedTripTitle(trip,language)}</h3>
         <p>{trip.providerName || trip.subtitle}</p>
         <div className="trip-card__facts">
@@ -880,7 +881,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small><T>Calculated by SeaGo</T></small></div>{quoteReady?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {formatServerMoney(pricingView.adultUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.adultSubtotal,pricingView.currency)}</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {formatServerMoney(pricingView.childUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.childSubtotal,pricingView.currency)}</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{currentQuote.mealPlan==="with_buffet"?"Open buffet":"No buffet"}</b></div>}<div><span>Service fee</span><b><T>Included</T></b></div><hr/><div className="price-box__total"><span>Total</span><strong>{formatServerMoney(pricingView.grossAmount,pricingView.currency)}</strong></div></>:<div className="live-price-loading"><LoaderCircle className={quoteLoading?"spin":""} size={16}/><span>{quoteLoading?"Updating price...":selected?"Current price unavailable. Try again.":"Choose a departure to see the live price"}</span></div>}</div>
+          <div className="price-box"><div className="price-box__heading"><span>{t("LIVE PRICE SUMMARY")}</span><small><T>Calculated by SeaGo</T></small></div>{quoteReady?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {formatServerMoney(pricingView.adultUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.adultSubtotal,pricingView.currency)}</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {formatServerMoney(pricingView.childUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.childSubtotal,pricingView.currency)}</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{currentQuote.mealPlan==="with_buffet"?"Open buffet":"No buffet"}</b></div>}<div><span>Service fee</span><b><T>Included</T></b></div><hr/><div className="price-box__total"><span>Total</span><strong>{formatServerMoney(pricingView.grossAmount,pricingView.currency)}</strong></div></>:<div className="live-price-loading"><LoaderCircle className={quoteLoading?"spin":""} size={16}/><span>{quoteLoading?"Updating price...":selected?"Current price unavailable. Try again.":"Choose a departure to see the live price"}</span></div>}</div>
           <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quoteReady)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}>{submitting?<><LoaderCircle className="spin" size={18}/> {t("Starting secure payment...")}</>:<>{t("Continue to secure payment")} <ChevronRight size={18}/></>}</button>
           <div className="cancellation-policy-note"><b>Cancellation policy</b><span><T>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</T></span></div><p className="booking-note"><T>You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</T></p>
         </>
