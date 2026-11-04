@@ -1,0 +1,27 @@
+.hero__actions{display:flex;align-items:center;gap:8px}
+.seago-language-switch{min-height:38px;padding:6px 10px;border:1px solid #d7e8ef;border-radius:12px;background:#fff;color:#0b3d91;font-size:12px;font-weight:800;white-space:nowrap}
+.seago-language-switch:focus-visible{outline:3px solid #00bcd4;outline-offset:3px}
+.detail-language-toggle{position:absolute;top:25px;right:66px;z-index:5}
+.seago-trip-photo{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+.detail-hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,31,51,.04),rgba(3,31,51,.27));pointer-events:none}
+.detail-hero>.brand,.detail-hero>.detail-back,.detail-hero>.detail-heart,.detail-hero>.detail-language-toggle,.detail-hero>.detail-hero__badge{z-index:3}
+.seago-photo-placeholder{width:100%;height:100%;min-height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:26px 18px;text-align:center;color:white}
+.seago-photo-placeholder small{font-size:11px;line-height:1.5;max-width:265px;background:rgba(5,39,72,.25);border-radius:9px;padding:5px 9px;color:white}
+.trip-card__visual .seago-photo-placeholder{position:relative;z-index:1}
+.seago-photo-gallery>span{font-size:11px;font-weight:800;color:#007e9b}
+.seago-photo-gallery img[hidden]{display:none}
+.seago-price-details{margin:14px 0;padding:14px 16px;border:1px solid #e3edf3;border-radius:18px;background:#f7fbfd}
+.seago-price-details h2{font-size:15px;margin:0 0 9px;color:#0b3d91}
+.seago-price-details__row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:12px}
+.seago-price-details__row strong{white-space:nowrap;color:#0b3d91}
+.seago-price-details__note{font-size:11px;line-height:1.5;color:#61748a;margin:8px 0 0}
+html[dir=rtl] .app-shell,html[dir=rtl] .detail-screen,html[dir=rtl] .booking-screen{direction:rtl}
+html[dir=rtl] .search-row,html[dir=rtl] .hero__copy,html[dir=rtl] .trip-card,html[dir=rtl] .detail-body,html[dir=rtl] .booking-screen,html[dir=rtl] .side-menu{text-align:right}
+html[dir=rtl] .detail-back{left:auto;right:18px}
+html[dir=rtl] .detail-heart{right:auto;left:18px}
+html[dir=rtl] .detail-language-toggle{right:auto;left:66px}
+html[dir=rtl] .trip-card__badge{left:auto;right:12px}
+html[dir=rtl] .heart-button{right:auto;left:12px}
+html[dir=rtl] .detail-hero__badge{left:auto;right:18px}
+html[dir=rtl] .trip-card__price strong,html[dir=rtl] .seago-price-details__row strong{direction:ltr;unicode-bidi:isolate}
+@media(max-width:360px){.seago-language-switch{min-width:53px;padding:5px 7px;font-size:11px}}
