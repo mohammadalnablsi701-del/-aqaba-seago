@@ -193,3 +193,94 @@ jobs:
           path: customer-app/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
           if-no-files-found: error
           retention-days: 14
+
+  android-staging-device-qa:
+    name: Android STAGING device QA APK
+    # Explicitly build against isolated staging on the PR; never publish it.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VITE_NATIVE_PUSH_ENABLED: "false"
+      VITE_API_BASE_URL: https://aqaba-seago-api-staging.onrender.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies
+        working-directory: customer-app
+        run: npm ci --no-fund
+
+      - name: Build isolated STAGING Android web assets
+        working-directory: customer-app
+        run: npm run build -- --base=./
+
+      - name: Verify STAGING only and local root base
+        working-directory: customer-app
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="Android STAGING test APK"
+
+      - name: Create Android project
+        working-directory: customer-app
+        run: npx cap add android
+
+      - name: Inject Firebase bridge with push disabled
+        working-directory: customer-app
+        env:
+          FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_CONFIG_BASE64 }}
+        run: node scripts/configure-android-firebase.mjs
+
+      - name: Mark launcher label as STAGING
+        working-directory: customer-app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/src/main/res/values/strings.xml')
+          s=p.read_text()
+          import re
+          s,count=re.subn(r'(<string name="app_name">)[^<]*(</string>)',r'\\1SeaGo STAGING\\2',s,count=1)
+          if count != 1 or '<string name="app_name">SeaGo STAGING</string>' not in s:
+              raise SystemExit('Refusing to build unlabelled Staging package')
+          p.write_text(s)
+          PY
+
+      - name: Install native image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick librsvg2-bin
+
+      - name: Generate approved launch and launcher assets
+        working-directory: customer-app
+        run: bash scripts/generate-native-assets.sh android
+
+      - name: Sync Android and verify Staging bundle
+        working-directory: customer-app
+        run: |
+          npx cap sync android
+          node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api-staging.onrender.com" --forbidden="https://aqaba-seago-api.onrender.com" --base="./" --label="Android STAGING synced"
+
+      - name: Build debug STAGING APK
+        working-directory: customer-app/android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload isolated STAGING QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aqaba-SeaGo-STAGING-device-qa-debug
+          path: customer-app/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
