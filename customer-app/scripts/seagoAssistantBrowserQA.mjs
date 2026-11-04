@@ -16,6 +16,8 @@ try {
  });
  const page=await context.newPage();
  page.on("pageerror",error=>pageErrors.push(String(error.message)));
+ page.on("requestfailed",request=>console.log("REQUEST FAILED",request.url(),request.failure()?.errorText));
+ page.on("request",request=>{if(request.url().startsWith(origin+"/api/"))console.log("API REQUEST",request.method(),new URL(request.url()).pathname);});
  page.on("console",m=>{if(m.type()==="error")console.log("BROWSER CONSOLE:",m.text().slice(0,300));});
  console.log("BROWSER QA: Mobile viewport 390×844, timezone Asia/Amman, Chromium touch emulation; NOT physical iPhone Safari.");
  const responses=[];
@@ -24,6 +26,8 @@ try {
  await page.getByRole("button",{name:"Open SeaGo Assistant"}).waitFor({timeout:60000});
  await page.getByRole("button",{name:"Open SeaGo Assistant"}).first().click();
  await page.getByRole("heading",{name:"SeaGo Assistant"}).waitFor();
+ await page.locator('.seago-assistant-panel[data-trips-loading="false"]').waitFor({timeout:65000});
+ console.log("BROWSER Trip data finished initial loading");
  await page.locator(".seago-assistant-shortcut-grid button").first().waitFor();
  assert.equal(await page.locator(".seago-assistant-shortcut-grid button").count(),4,"Should show four accessible welcome choices");
  const bounds=await page.locator(".seago-assistant-panel").boundingBox();

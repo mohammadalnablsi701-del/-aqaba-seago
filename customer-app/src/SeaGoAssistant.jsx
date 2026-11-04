@@ -15,7 +15,7 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Amman",weekday:"short",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}).format(date);
 }
 
-export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onOpenTrip, onNavigate, placement="floating" }) {
+export default function SeaGoAssistant({ trips, fetchDepartures, loadingTrips=false, hasLiveApi, onOpenTrip, onNavigate, placement="floating" }) {
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState("");
   const [messages,setMessages]=useState([GREETING]);
@@ -79,6 +79,15 @@ export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onO
     count.current++;
     const key=count.current;
     setDraft("");
+    if(loadingTrips){
+      setMessages(rows=>[...rows,
+        {id:`user-${key}`,who:"user",text:content},
+        {id:`assistant-${key}`,who:"assistant",
+          text:"SeaGo is still loading the latest trip information. Please try that question again in a moment.",
+          cards:[],action:null}
+      ]);
+      return;
+    }
     setBusy(true);
     setMessages(rows=>[...rows,{id:`user-${key}`,who:"user",text:content}]);
     try {
@@ -124,7 +133,7 @@ export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onO
       </button>}
       {open&&createPortal(<>
         <button type="button" className="seago-assistant-backdrop" aria-label="Close SeaGo Assistant" onClick={close}/>
-        <section ref={dialog} className="seago-assistant-panel" role="dialog" aria-modal="true" aria-labelledby="seago-assistant-title"
+        <section ref={dialog} className="seago-assistant-panel" role="dialog" aria-modal="true" aria-labelledby="seago-assistant-title" data-trips-loading={loadingTrips?"true":"false"}
           style={keyboardLayout?{bottom:`${keyboardLayout.bottom}px`,height:`min(650px, ${keyboardLayout.height}px)`}:undefined}>
           <header className="seago-assistant-header">
             <span className="seago-assistant-avatar"><Bot size={23}/></span>
@@ -173,7 +182,7 @@ export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onO
                 <button type="button" className="seago-assistant-help-link" onClick={()=>void send(ASSISTANT_STARTERS[4])} disabled={busy}>
                   <LifeBuoy size={18}/> Questions about cancellations? <ChevronRight size={16}/>
                 </button>
-                <p className="seago-assistant-live-note"><Compass size={14}/> {hasLiveApi?"Recommendations use published SeaGo trips and confirmed departures.":"Live trip information is currently unavailable. I can still explain how SeaGo works."}</p>
+                <p className="seago-assistant-live-note"><Compass size={14}/> {loadingTrips?"Connecting to SeaGo trips…":hasLiveApi?"Recommendations use published SeaGo trips and confirmed departures.":"Live trip information is currently unavailable. I can still explain how SeaGo works."}</p>
               </div>
             ) : (
               <div className="seago-assistant-thread">
