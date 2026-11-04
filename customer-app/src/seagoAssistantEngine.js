@@ -13,14 +13,16 @@ export const ASSISTANT_STARTERS = Object.freeze([
 export function parseAssistantRequest(raw, now = new Date()) {
   const message = String(raw || "").trim().slice(0, MAX_INPUT);
   const lower = message.toLowerCase();
+  const family = lower.match(/\b(?:family|group|party)\s+of\s+(\d{1,2})\b/);
   const people = lower.match(/\b(\d{1,2})\s*(?:people|persons|guests|travellers|travelers|travel tickets)\b/);
   const adultCount = lower.match(/\b(\d{1,2})\s*adults?\b/);
   const childCount = lower.match(/\b(\d{1,2})\s*(?:children|kids|child)\b/);
   const hasGroupDetails = Boolean(adultCount || childCount);
-  const adults = adultCount ? Number(adultCount[1]) : (hasGroupDetails ? 0 : Number(people?.[1] || 1));
+  const adults = adultCount ? Number(adultCount[1]) : (hasGroupDetails ? 0 : Number(people?.[1] || family?.[1] || 1));
   const children = childCount ? Number(childCount[1]) : 0;
   const guests = Math.min(20, Math.max(1, adults + children));
-  const unsupportedGroup = hasGroupDetails && (!adultCount || adults < 1 || adults + children > 20);
+  const underSix = children>0 && /\b(?:under|below|younger than)\s*(?:6|six)\b/.test(lower);
+  const unsupportedGroup = (hasGroupDetails && (!adultCount || adults < 1 || adults + children > 20)) || underSix;
   const money = lower.match(/\b(?:under|below|less than|up to|max(?:imum)?|budget(?: of)?|within)\s*(?:jod|jd|\$)?\s*(\d{1,4}(?:\.\d{1,2})?)\s*(?:jod|jd)?\b/)
     || lower.match(/\b(\d{1,4}(?:\.\d{1,2})?)\s*(?:jod|jd)\b/);
   const maxBudget = money ? Number(money[1]) : null;
@@ -92,7 +94,7 @@ export async function answerSeaGoQuestion(raw, trips, { listDepartures, now = ne
   if(!q.message) return reply("Tell me what kind of Red Sea experience you're looking for.");
   if(q.invalidDate) return reply("That date does not appear valid. Please use YYYY-MM-DD so I can check the correct departure.");
   if(q.unsupportedDate) return reply("Please share your preferred departure date in YYYY-MM-DD format. I won't assume which weekday or weekend you meant.");
-  if(q.unsupportedGroup) return reply("How many adults and children aged 6–12 are travelling? At least one adult is required for this estimate, and groups over 20 need operator support.",[],{type:"support",label:"Contact Support"});
+  if(q.unsupportedGroup) return reply("Please confirm the number of adults and children aged 6–12. Children under 6 and groups over 20 need confirmation from the operator before pricing.",[],{type:"support",label:"Contact Support"});
   if(q.kind==="greeting") return reply("Welcome aboard! Tell me what type of trip you prefer, your budget, or how many people are going.");
   if(q.kind==="tickets") return reply(
     "Your confirmed QR ticket appears in My Tickets after successful payment. For privacy, open your tickets while signed in to check your own booking. I can't access private bookings from this chat.",

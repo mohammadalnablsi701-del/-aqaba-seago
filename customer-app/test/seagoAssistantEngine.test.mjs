@@ -134,3 +134,15 @@ test("dates do not include expired or sold-out seats",async()=>{
    ]});
  assert.equal(reply.cards[0].availability,"No matching departure confirmed");
 });
+
+test("family-of-four is four seats, not one default adult",()=>{
+ const p=parseAssistantRequest("We are a family of 4 looking for a boat",now);
+ assert.equal(p.guests,4);
+ assert.equal(p.adults,4);
+});
+test("under-six child requests do not accidentally apply 6–12 child fares",async()=>{
+ const ans=await answerSeaGoQuestion("2 adults and 1 child under 6 on a sunset cruise",trips,{
+   hasLiveApi:true,now,listDepartures:async()=>rows});
+ assert.equal(ans.cards.length,0);
+ assert.match(ans.text,/under 6/);
+});

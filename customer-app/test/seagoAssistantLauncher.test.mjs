@@ -25,3 +25,10 @@ test("compact button has accessible name, icon, and full-screen un-clipped dialo
   assert.match(css, /\.hero__top-actions\{display:flex/);
   assert.match(css, /width:50px;height:50px/);
 });
+
+test("assistant tickets and support navigation clear selected trip details",()=>{
+ const app=read("src/App.jsx");
+ assert.match(app,/const navigateFromAssistant=target=>\{/);
+ assert.match(app,/setDetail\(null\);[\s\S]*?setBooking\(false\);[\s\S]*?setActive\(target\);/);
+ assert.match(app,/onOpenTrip:openTrip,onNavigate:navigateFromAssistant/);
+});

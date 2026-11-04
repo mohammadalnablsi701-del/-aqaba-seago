@@ -1582,8 +1582,18 @@ export default function App(){
 
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=(trip,{fromSearch=false}={})=>{if(!fromSearch)setSearchCriteria(null);setDetail(trip);setBooking(false);};
+  // Chat navigation must clear a selected trip: DetailScreen otherwise wins
+  // over the requested My Tickets / Support screen.
+  const navigateFromAssistant=target=>{
+    setDetail(null);
+    setBooking(false);
+    setMenuOpen(false);
+    setSearchCriteria(null);
+    setSearchResults(null);
+    setActive(target);
+  };
   const assistantProps={trips:tripList,fetchDepartures:listDepartures,hasLiveApi:hasApi()&&!usingFallback&&!tripLoadError,
-    onOpenTrip:openTrip,onNavigate:setActive};
+    onOpenTrip:openTrip,onNavigate:navigateFromAssistant};
 
   if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
