@@ -305,6 +305,8 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
       </section>
 
       <ApiNotice usingFallback={usingFallback} apiError={apiError} />
+      {!loading&&!usingFallback&&!apiError&&tripList.length>0&&!tripList.some(trip=>trip.liveInventory?.nextDepartureAt)&&
+        <div className="api-notice" role="status">Trips are available to explore, but no future departures are scheduled yet. Booking will open once operators publish dates.</div>}
 
       <section className="home-trust-strip" aria-label="SeaGo booking benefits">
         <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
@@ -346,15 +348,19 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
             ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
             : <><CalendarDays size={13}/><span>No departures available</span></>}
         </div>}
-        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">View experience <ChevronRight size={15}/></div>
+        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">{trip.apiId&&!trip.liveInventory?.nextDepartureAt?"View details":"View experience"} <ChevronRight size={15}/></div>
       </div>
     </article>
   );
 }
 
-function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
+function TripsScreen({ tripList, allTrips, onSelectTrip, onSelectAvailableTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
   const [filter,setFilter]=useState("All Trips");
   const [sort,setSort]=useState("recommended");
+  const nextAvailableTrip=useMemo(()=>[...(allTrips||[])]
+    .filter(trip=>trip.apiId&&trip.liveInventory?.nextDepartureAt&&Number(trip.liveInventory?.nextAvailableSeats||0)>0)
+    .sort((a,b)=>new Date(a.liveInventory.nextDepartureAt)-new Date(b.liveInventory.nextDepartureAt))[0]||null,[allTrips]);
+  const anyFutureDates=Boolean(nextAvailableTrip);
 
   const shown=useMemo(()=>{
     let rows=filter==="All Trips" ? [...tripList] : tripList.filter(t=>{
@@ -408,8 +414,9 @@ function TripsScreen({ tripList, onSelectTrip, favourites, toggleFavourite, load
           ? <div className="trip-grid trip-grid--premium">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
           : <div className="empty-state trips-empty">
               <div className="trips-empty__icon"><Search size={28}/></div>
-              <h2>No sea trips match this search</h2>
-              <p>Try another date or category. SeaGo will show only experiences that match your current search.</p>
+              <h2>{searchSummary?"No trips available for your search":"No trips in this category"}</h2>
+              <p>{searchSummary?(anyFutureDates?"Try a different date or party size, or check the next available experience below.":"There are no future departure dates published yet. You can still explore the available experiences."): "Try another category or see all experiences."}</p>
+              {searchSummary&&nextAvailableTrip&&<button type="button" className="secondary-button" onClick={()=>onSelectAvailableTrip(nextAvailableTrip)}>Next available: {nextAvailableTrip.title} · {formatDeparture(nextAvailableTrip.liveInventory.nextDepartureAt)}</button>}
               <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>Show all experiences</button>
             </div>}
     </div>
@@ -1552,7 +1559,7 @@ export default function App(){
   return <div className="app-shell">
     <main>
       {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
-      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} onSelectTrip={trip=>openTrip(trip,{fromSearch:searchResults!==null})} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
+      {active==="trips"&&<TripsScreen tripList={searchResults??tripList} allTrips={tripList} onSelectAvailableTrip={openTrip} onSelectTrip={trip=>openTrip(trip,{fromSearch:searchResults!==null})} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>} 
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>} 
       {active==="notifications"&&<NotificationsScreen auth={auth} onUnreadChange={setAlertsUnread} onAuthenticated={saveAuth}/>} 
