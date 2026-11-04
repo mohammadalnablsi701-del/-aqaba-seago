@@ -211,9 +211,25 @@ jobs:
         working-directory: customer-app
         run: npm ci --no-fund
 
+      - name: Test homepage hero asset path in Render and Pages
+        working-directory: customer-app
+        run: node --test test/heroAssetPath.test.mjs
+
       - name: Test operator photo URL safety
         working-directory: customer-app
         run: node --test test/tripMedia.test.mjs
+
+      - name: Test SeaGo premium chat design and mobile composer
+        working-directory: customer-app
+        run: node --test test/seagoAssistantDesign.test.mjs
+
+      - name: Test assistant launcher placement and unclipped modal
+        working-directory: customer-app
+        run: node --test test/seagoAssistantLauncher.test.mjs
+
+      - name: Test assistant trip discovery and safe checkout guidance
+        working-directory: customer-app
+        run: node --test test/seagoAssistantEngine.test.mjs
 
       - name: Test Aqaba date search and booking selection
         working-directory: customer-app

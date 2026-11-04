@@ -124,7 +124,9 @@ jobs:
   ios-simulator:
     name: iOS simulator build
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.build_ios }}
-    runs-on: macos-26
+    # The arm64 pool can fail before acquisition; keep the same macOS/Xcode
+    # simulator gate on GitHub's supported Intel runner pool.
+    runs-on: macos-26-intel
     timeout-minutes: 35
     steps:
       - name: Checkout

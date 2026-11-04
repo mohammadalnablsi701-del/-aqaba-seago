@@ -4,6 +4,7 @@ import {
   Bell, LoaderCircle, MapPin, Search, ShipWheel, Sparkles, Star, Ticket, UserRound, UsersRound
 } from "lucide-react";
 import BrandLogo from "./BrandLogo.jsx";
+import SeaGoAssistant from "./SeaGoAssistant.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { categories, trips as fallbackTrips } from "./data.js";
 import {
@@ -263,7 +264,7 @@ function localDateInputValue(date=new Date()) {
   return aqabaDateKey(date);
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll, assistantProps }) {
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -281,7 +282,10 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
         <HeroScene />
         <div className="hero__top">
           <BrandLogo />
-          <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
+          <div className="hero__top-actions">
+            <SeaGoAssistant {...assistantProps} placement="header"/>
+            <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
+          </div>
         </div>
         <div className="hero__copy">
           <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
@@ -672,8 +676,8 @@ function formatDeparture(value) {
 }
 
 function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria }) {
-  const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
-  const [children,setChildren]=useState(0);
+  const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.adults??initialCriteria?.guests??2)));
+  const [children,setChildren]=useState(()=>Math.max(0,Number(initialCriteria?.children??0)));
   const [mealPlan,setMealPlan]=useState("without_buffet");
   const guests=adults+children;
   const [departures,setDepartures]=useState([]);
@@ -1578,14 +1582,37 @@ export default function App(){
 
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=(trip,{fromSearch=false}={})=>{if(!fromSearch)setSearchCriteria(null);setDetail(trip);setBooking(false);};
+  const openTripFromAssistant=(trip,criteria)=>{
+    setSearchCriteria(criteria?{tripType:"All Trips",date:criteria.date,guests:criteria.guests,
+      adults:criteria.adults,children:criteria.children,departureId:criteria.departureId||null}:null);
+    setDetail(trip);
+    setBooking(false);
+  };
+  // Chat navigation must clear a selected trip: DetailScreen otherwise wins
+  // over the requested My Tickets / Support screen.
+  const navigateFromAssistant=target=>{
+    setDetail(null);
+    setBooking(false);
+    setMenuOpen(false);
+    setSearchCriteria(null);
+    setSearchResults(null);
+    setActive(target);
+  };
+  const assistantProps={trips:tripList,fetchDepartures:listDepartures,loadingTrips,hasLiveApi:hasApi()&&!usingFallback&&!tripLoadError,
+    onOpenTrip:openTripFromAssistant,onNavigate:navigateFromAssistant};
 
   if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
-  if(detail) return <DetailScreen trip={detail} searchCriteria={searchCriteria} onBack={()=>setDetail(null)} favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite} onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>;
+  if(detail) return <>
+    <DetailScreen trip={detail} searchCriteria={searchCriteria} onBack={()=>setDetail(null)}
+      favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite}
+      onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:aqabaDateKey(dep.startsAt)}));setBooking(true)}}/>
+    <SeaGoAssistant {...assistantProps}/>
+  </>;
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
+      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} assistantProps={assistantProps} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} allTrips={tripList} onSelectAvailableTrip={openTrip} onSelectTrip={trip=>openTrip(trip,{fromSearch:searchResults!==null})} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>} 
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>} 
@@ -1599,6 +1626,7 @@ export default function App(){
       {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>} 
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
+    {active!=="home"&&<SeaGoAssistant {...assistantProps} placement="floating"/>}
     <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
 }
