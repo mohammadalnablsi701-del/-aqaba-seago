@@ -122,10 +122,11 @@ function formatDuration(minutes) {
 }
 
 function VesselName({ value, className }) {
-  const {t}=useCustomerLocale();
+  const {language}=useCustomerLocale();
   const vesselName=String(value||"").trim();
   if(!vesselName)return null;
-  return <span className={className}>{t("Vessel")} · {vesselName}</span>;
+  if(language==="ar")return <span className={className}>القارب · {vesselName}</span>;
+  return <span className={className}>Vessel · {vesselName}</span>;
 }
 
 function tripDisplayProfile(raw) {
