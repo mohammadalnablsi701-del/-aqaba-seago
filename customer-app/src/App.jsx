@@ -12,6 +12,7 @@ import {
 } from "./api.js";
 import { createQuoteRequestGate, formatServerMoney, pricingViewFromQuote, quoteMatchesSelection } from "./pricingTruth.js";
 import { aqabaDateKey, availableDepartures, selectInitialDeparture } from "./departureSelection.js";
+import { CUSTOMER_LANGUAGE_KEY, languageFromStorage, tr, localizedTripTitle, localizedTripCategory, localizedTripDuration, localizedDepartureDate, verifiedTripImages } from "./customerLocalization.js";
 import { createTicketsRefreshController } from "./ticketsRefresh.js";
 import { isNativeSeaGo, enableNativePush, nativePushPermission, syncNativePushAuth, resumeNativePush } from "./nativePush.js";
 import { sendNativeTestPush } from "./api.js";
@@ -188,7 +189,7 @@ function normalizeTrip(raw, index = 0) {
     buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetDescription: String(raw.pricing?.buffetDescription || ""),
-    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : (Array.isArray(raw.images) ? raw.images.map(x=>typeof x==="string"?x:x?.url).filter(Boolean) : []),
+    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : verifiedTripImages(raw.images),
     rating: null,
     reviews: null,
     category,
@@ -237,10 +238,32 @@ function HeroScene() {
   );
 }
 
+const LocaleContext=React.createContext({language:"en",setLanguage:()=>{},t:value=>value});
+function useCustomerLocale(){return React.useContext(LocaleContext);}
+function LanguageSwitch(){
+  const {language,setLanguage}=useCustomerLocale();
+  return <button type="button" className="seago-language-switch" lang={language==="ar"?"en":"ar"} aria-label={language==="ar"?"Switch to English":"التبديل إلى العربية"} onClick={()=>setLanguage(lang=>lang==="ar"?"en":"ar")}>{language==="ar"?"English":"العربية"}</button>;
+}
+function T({children}){
+  const {language}=useCustomerLocale();
+  return tr(String(children),language);
+}
+// Display only official photos supplied by the operator; gracefully disclose missing media.
+function TripMedia({trip,large=false}){
+  const {language,t}=useCustomerLocale();
+  const src=trip?.images?.[0]||"";
+  const [broken,setBroken]=useState(false);
+  useEffect(()=>setBroken(false),[src]);
+  return src&&!broken
+    ? <img className="seago-trip-photo" src={src} alt={localizedTripTitle(trip,language)} loading={large?"eager":"lazy"} onError={()=>setBroken(true)}/>
+    : <div className="seago-photo-placeholder"><ShipWheel size={large?64:40} strokeWidth={1.3}/><small>{t("Photo not yet provided")}</small></div>;
+}
+
 function ApiNotice({ usingFallback, apiError }) {
-  if(apiError) return <div className="api-notice api-notice--error">SeaGo can’t load live experiences right now. Please try again shortly.</div>;
+  const {t}=useCustomerLocale();
+  if(apiError) return <div className="api-notice api-notice--error">{t("SeaGo can’t load live experiences right now. Please try again shortly.")}</div>;
   if (!usingFallback) return null;
-  return <div className="api-notice">Preview mode · sample trips are shown because no live API is configured.</div>;
+  return <div className="api-notice">{t("Preview mode · sample trips are shown because no live API is configured.")}</div>;
 }
 
 function localDateInputValue(date=new Date()) {
@@ -248,6 +271,7 @@ function localDateInputValue(date=new Date()) {
 }
 
 function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
+  const {language,t}=useCustomerLocale();
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -265,17 +289,17 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
         <HeroScene />
         <div className="hero__top">
           <BrandLogo />
-          <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
+          <div className="hero__actions"><LanguageSwitch/><button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button></div>
         </div>
         <div className="hero__copy">
           <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
-          <h1>Make Aqaba<br/>Unforgettable</h1>
-          <p>Your next Red Sea memory starts here.</p>
+          <h1>{language==="ar"?t("Make Aqaba Unforgettable"):<>Make Aqaba<br/>Unforgettable</>}</h1>
+          <p>{t("Your next Red Sea memory starts here.")}</p>
         </div>
         <div className="search-card">
           <label className="search-row search-row--control">
             <span className="search-row__icon"><Anchor size={18}/></span>
-            <span><small>Trip Type</small>
+            <span><small>{t("Trip Type")}</small>
               <select value={tripType} onChange={e=>setTripType(e.target.value)}>
                 {categories.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
@@ -291,7 +315,7 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           </label>
           <div className="search-row search-row--control">
             <span className="search-row__icon"><UsersRound size={18}/></span>
-            <span><small>Persons</small><strong>{guests} {guests===1?"Person":"Persons"}</strong></span>
+            <span><small>Persons</small><strong>{guests} {t(guests===1?"Person":"Persons")}</strong></span>
             <div className="guest-stepper">
               <button type="button" onClick={()=>setGuests(Math.max(1,guests-1))}>−</button>
               <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
@@ -299,24 +323,24 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           </div>
           <button className="primary-button" onClick={submitSearch} disabled={searching||loading}>
             {(searching||loading)?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>} 
-            {loading?"Loading trips...":searching?"Searching...":"Search Trips"} {!loading&&<ChevronRight size={18}/>} 
+            {t(loading?"Loading trips...":searching?"Searching...":"Search Trips")} {!loading&&<ChevronRight size={18}/>} 
           </button>
         </div>
       </section>
 
       <ApiNotice usingFallback={usingFallback} apiError={apiError} />
       {!loading&&!usingFallback&&!apiError&&tripList.length>0&&!tripList.some(trip=>trip.liveInventory?.nextDepartureAt)&&
-        <div className="api-notice" role="status">Trips are available to explore, but no future departures are scheduled yet. Booking will open once operators publish dates.</div>}
+        <div className="api-notice" role="status">{t("Trips are available to explore, but no future departures are scheduled yet. Booking will open once operators publish dates.")}</div>}
 
       <section className="home-trust-strip" aria-label="SeaGo booking benefits">
-        <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
-        <div><CheckCircle2 size={16}/><span><b>Clear pricing</b><small>No hidden fees</small></span></div>
-        <div><Ticket size={16}/><span><b>Instant ticket</b><small>After payment</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>{t("Verified operators")}</b><small>{t("Approved SeaGo partners")}</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>{t("Clear pricing")}</b><small>{t("No hidden fees")}</small></span></div>
+        <div><Ticket size={16}/><span><b>{t("Instant ticket")}</b><small>{t("After payment")}</small></span></div>
       </section>
 
       <section className="content-section">
-        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2><p>Trusted trips picked for an easy day on the Red Sea.</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
-        {loading?<LoadingState label="Loading sea experiences..."/>:<div className="trip-strip">
+        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>{t("Popular Sea Experiences")}</h2><p>{t("Trusted trips picked for an easy day on the Red Sea.")}</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
+        {loading?<LoadingState label={t("Loading sea experiences...")}/>:<div className="trip-strip">
           {tripList.map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
           ))}
@@ -327,28 +351,29 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 }
 
 function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
+  const {language,t}=useCustomerLocale();
   return (
     <article className="trip-card" onClick={() => onSelectTrip(trip)}>
-      <div className={"trip-card__visual trip-card__visual--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(4,34,55,.08),rgba(4,34,55,.18)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
-        <span className="trip-card__badge">{trip.category}</span>
+      <div className={"trip-card__visual trip-card__visual--"+trip.accent}>
+        <TripMedia trip={trip}/>
+        <span className="trip-card__badge">{localizedTripCategory(trip.category,language)}</span>
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
-        {!trip.images?.[0]&&<ShipWheel size={46} strokeWidth={1.5}/>} 
       </div>
       <div className="trip-card__body">
         <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
-        <h3>{trip.title}</h3>
+        <h3>{localizedTripTitle(trip,language)}</h3>
         <p>{trip.providerName || trip.subtitle}</p>
         <div className="trip-card__facts">
-          <span><CalendarDays size={14}/>{trip.duration}</span>
-          <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
+          <span><CalendarDays size={14}/>{localizedTripDuration(trip,language)}</span>
+          <span><MapPin size={14}/>{trip.departureLocation?.name || t("Aqaba")}</span>
           <VesselName value={trip.vesselName} className="seago-vessel-card"/>
         </div>
         {trip.apiId&&<div className={"trip-live-status "+(trip.liveInventory?.nextDepartureAt?"available":"unavailable")}>
           {trip.liveInventory?.nextDepartureAt
-            ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
-            : <><CalendarDays size={13}/><span>No departures available</span></>}
+            ? <><Clock size={13}/><span>{t("Next")} {localizedDepartureDate(trip.liveInventory.nextDepartureAt,language)} · {trip.liveInventory.nextAvailableSeats} {t("seats")}</span></>
+            : <><CalendarDays size={13}/><span>{t("No departures available")}</span></>}
         </div>}
-        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">{trip.apiId&&!trip.liveInventory?.nextDepartureAt?"View details":"View experience"} <ChevronRight size={15}/></div>
+        <div className="trip-card__price"><span>{t("From")}</span><strong dir="ltr">{trip.price} JOD</strong><small>{t("per adult")}</small></div><div className="trip-card__cta">{t(trip.apiId&&!trip.liveInventory?.nextDepartureAt?"View details":"View experience")} <ChevronRight size={15}/></div>
       </div>
     </article>
   );
@@ -1366,7 +1391,7 @@ function readStoredAuth() {
   catch { return null; }
 }
 
-export default function App(){
+function CustomerApp(){
   const [active,setActive]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
     if(params.get("open")==="notifications") return "notifications";
@@ -1574,4 +1599,18 @@ export default function App(){
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
     <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
+}
+
+export default function App(){
+  const [language,setLanguage]=useState(()=>{
+    try{return languageFromStorage(localStorage.getItem(CUSTOMER_LANGUAGE_KEY));}
+    catch{return "en";}
+  });
+  useEffect(()=>{
+    document.documentElement.lang=language;
+    document.documentElement.dir=language==="ar"?"rtl":"ltr";
+    try{localStorage.setItem(CUSTOMER_LANGUAGE_KEY,language);}catch{}
+  },[language]);
+  const value=useMemo(()=>({language,setLanguage,t:key=>tr(key,language)}),[language]);
+  return <LocaleContext.Provider value={value}><CustomerApp/></LocaleContext.Provider>;
 }
