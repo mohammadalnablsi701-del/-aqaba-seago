@@ -380,6 +380,7 @@ function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
 }
 
 function TripsScreen({ tripList, allTrips, onSelectTrip, onSelectAvailableTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
+  const {language,t}=useCustomerLocale();
   const [filter,setFilter]=useState("All Trips");
   const [sort,setSort]=useState("recommended");
   const nextAvailableTrip=useMemo(()=>[...(allTrips||[])]
