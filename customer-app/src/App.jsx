@@ -412,44 +412,45 @@ function TripsScreen({ tripList, allTrips, onSelectTrip, onSelectAvailableTrip, 
       <header className="standard-header trips-header">
         <BrandLogo compact/>
         <div>
-          <span>{searchSummary||"DISCOVER AQABA"}</span>
-          <h1>Sea Experiences</h1>
-          <p>Verified Red Sea trips, clear pricing and live availability.</p>
+          <span>{searchSummary||t("Explore Aqaba")}</span>
+          <h1>{t("Sea Experiences")}</h1>
+          <p>{t("Verified Red Sea trips, clear pricing and live availability.")}</p>
         </div>
       </header>
 
       <section className="trips-toolbar">
         <div className="category-row category-row--premium">
-          {categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{c}</button>)}
+          {categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{t(c)}</button>)}
         </div>
         <div className="sort-row">
-          <div><span>{shown.length}</span><small>{shown.length===1?"experience":"experiences"}</small></div>
-          <label>Sort
+          <div><span>{shown.length}</span><small>{t(shown.length===1?"experience":"experiences")}</small></div>
+          <label>{t("Sort")}
             <select value={sort} onChange={e=>setSort(e.target.value)}>
-              <option value="recommended">Recommended</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="duration">Shortest first</option>
+              <option value="recommended">{t("Recommended")}</option>
+              <option value="price-low">{t("Price: Low to High")}</option>
+              <option value="price-high">{t("Price: High to Low")}</option>
+              <option value="duration">{t("Shortest first")}</option>
             </select>
           </label>
         </div>
       </section>
 
-      {loading ? <LoadingState label="Finding the best sea experiences..."/> :
+      {loading ? <LoadingState label={t("Finding the best sea experiences...")}/> :
         shown.length
           ? <div className="trip-grid trip-grid--premium">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
           : <div className="empty-state trips-empty">
               <div className="trips-empty__icon"><Search size={28}/></div>
-              <h2>{searchSummary?"No trips available for your search":"No trips in this category"}</h2>
-              <p>{searchSummary?(anyFutureDates?"Try a different date or party size, or check the next available experience below.":"There are no future departure dates published yet. You can still explore the available experiences."): "Try another category or see all experiences."}</p>
-              {searchSummary&&nextAvailableTrip&&<button type="button" className="secondary-button" onClick={()=>onSelectAvailableTrip(nextAvailableTrip)}>Next available: {nextAvailableTrip.title} · {formatDeparture(nextAvailableTrip.liveInventory.nextDepartureAt)}</button>}
-              <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>Show all experiences</button>
+              <h2>{t(searchSummary?"No trips available for your search":"No trips in this category")}</h2>
+              <p>{t(searchSummary?(anyFutureDates?"Try a different date or party size, or check the next available experience below.":"There are no future departure dates published yet. You can still explore the available experiences."): "Try another category or see all experiences.")}</p>
+              {searchSummary&&nextAvailableTrip&&<button type="button" className="secondary-button" onClick={()=>onSelectAvailableTrip(nextAvailableTrip)}>{t("Next available")}: {localizedTripTitle(nextAvailableTrip,language)} · {localizedDepartureDate(nextAvailableTrip.liveInventory.nextDepartureAt,language)}</button>}
+              <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>{t("Show all experiences")}</button>
             </div>}
     </div>
   );
 }
 
 function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, searchCriteria }) {
+  const {language,t}=useCustomerLocale();
   const[departures,setDepartures]=useState([]);const[selectedDeparture,setSelectedDeparture]=useState(null);const[loadingDepartures,setLoadingDepartures]=useState(Boolean(trip?.apiId&&hasApi()));const[departureError,setDepartureError]=useState("");
   const [showAllDepartures,setShowAllDepartures]=useState(false);
   useEffect(()=>{
@@ -477,28 +478,38 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, search
   if(!trip) return null;
   return (
     <div className="screen detail-screen">
-      <div className={"detail-hero detail-hero--"+trip.accent} style={trip.images?.[0]?{backgroundImage:`linear-gradient(rgba(3,31,51,.08),rgba(3,31,51,.34)),url("${trip.images[0]}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined}>
+      <div className={"detail-hero detail-hero--"+trip.accent}>
+        <TripMedia trip={trip} large/>
         <button className="detail-back" onClick={onBack} aria-label="Back"><ChevronLeft/></button>
         <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)} aria-label="Save trip"><Heart fill={favourite?"currentColor":"none"}/></button>
         <BrandLogo compact/>
-        {!trip.images?.[0]&&<div className="detail-hero__fallback"><ShipWheel size={76} strokeWidth={1.15}/><span>{trip.category}</span></div>}
+        <div className="detail-language-toggle"><LanguageSwitch/></div>
         <div className="detail-hero__badge"><CheckCircle2 size={14}/> Verified SeaGo experience</div>
       </div>
 
       <div className="detail-body">
-        <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
-        <h1>{trip.title}</h1>
+        <div className="detail-kicker">{localizedTripCategory(trip.category,language)} · {t("Aqaba, Jordan")}</div>
+        <h1>{localizedTripTitle(trip,language)}</h1>
         <VesselName value={trip.vesselName} className="seago-vessel-detail"/>
         <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified operator <span>{trip.providerName || "Approved SeaGo partner"}</span></div>
 
         <div className="detail-price-summary">
-          <div><small>From</small><strong>{trip.price} JOD</strong><span>per adult</span></div>
-          <div><small>Duration</small><strong>{trip.duration}</strong><span>{trip.departureLocation?.name || "Aqaba"}</span></div>
+          <div><small>{t("From")}</small><strong dir="ltr">{trip.price} JOD</strong><span>{t("per adult")}</span></div>
+          <div><small>{t("Duration")}</small><strong>{localizedTripDuration(trip,language)}</strong><span>{trip.departureLocation?.name || t("Aqaba")}</span></div>
         </div>
 
+        <section className="seago-price-details" aria-label={t("Trip prices")}>
+          <h2>{t("Trip prices")}</h2>
+          <div className="seago-price-details__row"><span>{t("Adult price (13+)")}</span><strong dir="ltr">{trip.price} JOD</strong></div>
+          <div className="seago-price-details__row"><span>{t("Child price (6–12)")}</span><strong dir="ltr">{trip.childPrice} JOD</strong></div>
+          {trip.buffetEnabled&&<div className="seago-price-details__row"><span>{t("Adult with buffet")}</span><strong dir="ltr">{trip.buffetAdultPrice} JOD</strong></div>}
+          {trip.buffetEnabled&&<div className="seago-price-details__row"><span>{t("Child with buffet")}</span><strong dir="ltr">{trip.buffetChildPrice} JOD</strong></div>}
+          <p className="seago-price-details__note">{t("Final total and available seats are verified at booking. Check children's eligibility with the operator.")}</p>
+        </section>
+
         <section className="detail-section">
-          <span className="detail-section__label">ABOUT THIS EXPERIENCE</span>
-          <p className="detail-description">{trip.description}</p>
+          <span className="detail-section__label">{t("ABOUT THIS EXPERIENCE")}</span>
+          <p className="detail-description">{language==="ar"?"هذه الرحلة مقدّمة من "+(trip.providerName||"إحدى شركات الرحلات")+" في العقبة. راجع معلومات المغادرة والأسعار قبل الحجز.":trip.description}</p>
         </section>
 
         <div className="detail-confidence">
@@ -506,23 +517,23 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, search
           <div><CheckCircle2 size={18}/><span><b>Flexible cancellation</b><small>100% refund 24+ hours before departure</small></span></div>
         </div>
 
-        {trip.images?.length>1&&<div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} alt={`${trip.title} ${i+2}`}/>)}</div>}
+        {trip.images?.length>1&&<section className="detail-card-section seago-photo-gallery"><span>{t("Official trip photos")}</span><div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} loading="lazy" alt={localizedTripTitle(trip,language)+" · "+(i+2)} onError={e=>{e.currentTarget.hidden=true}}/>)}</div></section>}
 
         <section className="detail-section">
-          <span className="detail-section__label">TRIP ESSENTIALS</span>
+          <span className="detail-section__label">{t("TRIP ESSENTIALS")}</span>
           <div className="feature-grid">
-            <div><Anchor/><span><small>Experience</small><b>{trip.experienceLabel||trip.category}</b></span></div>
-            <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
-            <div><UsersRound/><span><small>Availability</small><b>{trip.liveInventory?.nextDepartureAt?`${trip.liveInventory.nextAvailableSeats} seats next trip`:"No live departure"}</b></span></div>
-            <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
+            <div><Anchor/><span><small>{t("Experience")}</small><b>{localizedTripCategory(trip.experienceLabel||trip.category,language)}</b></span></div>
+            <div><CalendarDays/><span><small>{t("Duration")}</small><b>{localizedTripDuration(trip,language)}</b></span></div>
+            <div><UsersRound/><span><small>{t("Availability")}</small><b>{trip.liveInventory?.nextDepartureAt?`${trip.liveInventory.nextAvailableSeats} ${t("seats")}`:t("No live departure")}</b></span></div>
+            <div><MapPin/><span><small>{t("Departure")}</small><b>{trip.departureLocation?.name || t("Aqaba")}</b></span></div>
           </div>
         </section>
 
-        <section className="detail-section live-departures-section"><span className="detail-section__label">UPCOMING DEPARTURES</span>{searchCriteria?.date&&<p className="booking-search-context">Searched date: {new Date(searchCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {searchCriteria.guests||1} persons</p>}{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{searchCriteria?.date&&!selectedDeparture&&<div role="status" className="no-departures">Your searched departure is no longer available. Select a different date below; we will not change it automatically.</div>}{visibleDepartures.map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{formatDeparture(d.startsAt)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}{departures.length>6&&<button type="button" className="secondary-button" onClick={()=>setShowAllDepartures(v=>!v)}>{showAllDepartures?"Show fewer dates":"Show all available dates"}</button>}</div>:<div className="no-departures">{departureError?"Live availability is temporarily unavailable.":"No future departures are available yet."}</div>}</section>
+        <section className="detail-section live-departures-section"><span className="detail-section__label">{t("UPCOMING DEPARTURES")}</span>{searchCriteria?.date&&<p className="booking-search-context">{t("Searched date")}: {new Date(searchCriteria.date+"T12:00:00").toLocaleDateString(language==="ar"?"ar-JO":"en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {searchCriteria.guests||1} persons</p>}{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{searchCriteria?.date&&!selectedDeparture&&<div role="status" className="no-departures">{t("Your searched departure is no longer available. Select a different date below; we will not change it automatically.")}</div>}{visibleDepartures.map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{localizedDepartureDate(d.startsAt,language)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}{departures.length>6&&<button type="button" className="secondary-button" onClick={()=>setShowAllDepartures(v=>!v)}>{t(showAllDepartures?"Show fewer dates":"Show all available dates")}</button>}</div>:<div className="no-departures">{t(departureError?"Live availability is temporarily unavailable.":"No future departures are available yet.")}</div>}</section>
 
         {trip.buffetEnabled&&<section className="buffet-info detail-card-section"><span>OPEN BUFFET OPTION</span><h2>Add a meal to your trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}
 
-        {trip.departureLocation?.name&&<section className="departure-location detail-card-section"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps <ChevronRight size={15}/></a>}</section>}
+        {trip.departureLocation?.name&&<section className="departure-location detail-card-section"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">{t("Open in Maps")} <ChevronRight size={15}/></a>}</section>}
 
         <section className="included detail-card-section">
           <span>CANCELLATION POLICY</span>
@@ -537,7 +548,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, search
 
       <div className="sticky-booking">
         <div><small>From</small><strong>{trip.price} JOD</strong><span>/ adult</span></div>
-        <button className="primary-button" disabled={Boolean(trip.apiId&&!selectedDeparture)} onClick={()=>onBook(selectedDeparture)}>{trip.apiId&&!selectedDeparture?"No departures available":"Continue with selected time"} <ChevronRight size={18}/></button>
+        <button className="primary-button" disabled={Boolean(trip.apiId&&!selectedDeparture)} onClick={()=>onBook(selectedDeparture)}>{t(trip.apiId&&!selectedDeparture?"No departures available":"Continue with selected time")} <ChevronRight size={18}/></button>
       </div>
     </div>
   );
