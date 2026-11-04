@@ -1,4 +1,5 @@
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
+import { execFileSync } from "node:child_process";
 
 const locations=[
   "https://aqaba-seago-customer-logo-qa.onrender.com/",
@@ -37,3 +38,29 @@ try{
    await context.close();
  }
 }finally{await browser.close();}
+
+console.log("=== WebKit (Safari engine) diagnostic, mobile viewport");
+try {
+  execFileSync("npx",["playwright","install","webkit"],{
+    cwd:process.cwd()+"/customer-app",stdio:"pipe",timeout:120000
+  });
+  const safari=await webkit.launch({headless:true});
+  try {
+    const context=await safari.newContext({
+      viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true,
+      userAgent:"Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1"
+    });
+    const page=await context.newPage(),errors=[];
+    page.on("pageerror",e=>errors.push("PAGE ERROR: "+e.message));
+    page.on("requestfailed",r=>errors.push("FAILED: "+r.url()+" "+r.failure()?.errorText));
+    const res=await page.goto("https://aqaba-seago-customer-logo-qa.onrender.com/",{waitUntil:"domcontentloaded",timeout:30000});
+    await page.waitForTimeout(4500);
+    const facts=await page.evaluate(()=>({
+      text:document.body.innerText.slice(0,350),
+      root:document.getElementById("root")?.children.length,
+      logoLoaded:document.querySelector(".brand__mark")?.naturalWidth>0
+    }));
+    console.log("WEBKIT STATUS",res?.status(),"DOM",JSON.stringify(facts),"ERRORS",JSON.stringify(errors));
+    await context.close();
+  }finally{await safari.close();}
+}catch(e){console.log("WEBKIT DIAGNOSTIC UNAVAILABLE",String(e).slice(0,1500));}
