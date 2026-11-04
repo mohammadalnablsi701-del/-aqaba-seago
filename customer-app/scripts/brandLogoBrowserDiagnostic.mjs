@@ -35,6 +35,20 @@ try{
    }catch(e){console.log("NAVIGATION ERROR",String(e));}
    console.log("ERROR RESPONSES",JSON.stringify(responses));
    console.log("BROWSER ERRORS",JSON.stringify(events));
+   const recovered=await page.locator("#seago-boot-recovery").evaluate(el=>getComputedStyle(el).display);
+   console.log("RECOVERY WHILE APP RUNS",recovered);
+   if(url.includes("customer-logo-qa")){
+     if(recovered!=="none")throw new Error("Fallback must hide when React is ready");
+     const jsBlocked=await browser.newContext({viewport:{width:390,height:844},javaScriptEnabled:false});
+     try{
+       const noJsPage=await jsBlocked.newPage();
+       const staticResponse=await noJsPage.goto(url,{waitUntil:"domcontentloaded",timeout:30000});
+       const recovery=await noJsPage.locator("#seago-boot-recovery").isVisible();
+       const retry=await noJsPage.getByRole("link",{name:"Reload Aqaba SeaGo if loading is taking too long"}).count();
+       console.log("NO-JS RECOVERY",JSON.stringify({status:staticResponse?.status(),recovery,retry}));
+       if(!recovery||retry!==1)throw new Error("Static boot recovery did not appear with JavaScript disabled");
+     }finally{await jsBlocked.close();}
+   }
    await context.close();
  }
 }finally{await browser.close();}

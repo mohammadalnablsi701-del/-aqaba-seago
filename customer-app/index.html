@@ -12,9 +12,27 @@
     <link rel="icon" sizes="any" type="image/svg+xml" href="./customer-favicon-a-v1.svg?v=direction-a-v1" />
     <meta name="apple-mobile-web-app-title" content="Aqaba SeaGo" />
     <meta name="application-name" content="Aqaba SeaGo" />
+    <!-- Static boot recovery remains visible only until React mounts.
+         Prevents an empty screen when a mobile in-app browser blocks a JS bundle. -->
+    <style>
+      #seago-boot-recovery{box-sizing:border-box;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px 24px;background:#eaf4f8;color:#071f33;text-align:center;font-family:system-ui,-apple-system,sans-serif}
+      #root:not(:empty)+#seago-boot-recovery{display:none}
+      #seago-boot-recovery img{width:76px;height:76px;border-radius:18px}
+      #seago-boot-recovery strong{font-size:22px;letter-spacing:-.5px}
+      #seago-boot-recovery p{margin:0;color:#547284;font-size:13px;line-height:1.5}
+      #seago-boot-recovery a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:14px;background:#0b3d91;color:#fff;font-size:13px;font-weight:700;text-decoration:none;animation:seago-boot-show .3s ease 5s both}
+      @keyframes seago-boot-show{from{opacity:0}to{opacity:1}}
+      @media(prefers-reduced-motion:reduce){#seago-boot-recovery a{animation:none}}
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="seago-boot-recovery" role="status" aria-label="Opening Aqaba SeaGo">
+      <img src="./app-customer.svg" alt="" width="76" height="76" />
+      <strong>Aqaba SeaGo</strong>
+      <p>Opening your Red Sea experience…</p>
+      <a href="./?reload=logo249" aria-label="Reload Aqaba SeaGo if loading is taking too long">Reload App</a>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
