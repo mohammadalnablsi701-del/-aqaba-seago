@@ -146,3 +146,12 @@ test("under-six child requests do not accidentally apply 6–12 child fares",asy
  assert.equal(ans.cards.length,0);
  assert.match(ans.text,/under 6/);
 });
+
+test("recommendation carries verified date and adult-child counts to booking",async()=>{
+ const response=await answerSeaGoQuestion("sunset for 2 adults and 1 child on 2026-11-08",trips,{
+  now,hasLiveApi:true,listDepartures:async()=>[{id:"dep-a",startsAt:"2026-11-08T15:00:00Z",status:"scheduled",availableSeats:5}]
+ });
+ assert.deepEqual(response.cards[0].criteria,{
+  date:"2026-11-08",guests:3,adults:2,children:1,departureId:"dep-a"
+ });
+});

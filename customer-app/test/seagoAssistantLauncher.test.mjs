@@ -32,3 +32,13 @@ test("assistant tickets and support navigation clear selected trip details",()=>
  assert.match(app,/setDetail\(null\);[\s\S]*?setBooking\(false\);[\s\S]*?setActive\(target\);/);
  assert.match(app,/onOpenTrip:openTrip,onNavigate:navigateFromAssistant/);
 });
+
+test("chat preserves date and party composition through details into booking",()=>{
+ const app=read("src/App.jsx");
+ const jsx=read("src/SeaGoAssistant.jsx");
+ assert.ok(app.includes("const openTripFromAssistant=(trip,criteria)=>"));
+ assert.ok(app.includes("onOpenTrip:openTripFromAssistant"));
+ assert.ok(app.includes("initialCriteria?.adults??initialCriteria?.guests??2"));
+ assert.ok(app.includes("initialCriteria?.children??0"));
+ assert.ok(jsx.includes("onOpenTrip?.(trip,card?.criteria||null)"));
+});

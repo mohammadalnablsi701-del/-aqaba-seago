@@ -57,8 +57,10 @@ try {
  await page.getByRole("heading",{name:"Choose your trip details"}).waitFor({timeout:20000});
  const quote=page.locator(".price-box");
  await quote.getByText("Total",{exact:true}).waitFor({timeout:35000});
- assert.match(await quote.innerText(),/1.00|1 JOD|JOD 1|1\.000/);
- console.log("PASS Chat recommendation -> same trip detail -> scheduled seat -> booking Step 1 -> live price quote");
+ assert.match(await quote.innerText(),/2[.]00|2 JOD|JOD 2|2[.]000/);
+ const adultStep=page.locator(".booking-form--guests label").filter({hasText:"Adults"}).locator(".stepper b");
+ assert.equal((await adultStep.innerText()).trim(),"2","Chat requested two adults must persist to booking");
+ console.log("PASS Chat recommendation -> same trip detail -> booking with 2 adults -> live price quote");
 
  await page.getByRole("button",{name:"Continue to secure payment"}).click();
  const auth=page.getByText(/Sign in|Create account|Continue with Google/i).first();

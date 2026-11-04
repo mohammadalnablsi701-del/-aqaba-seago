@@ -109,11 +109,11 @@ export default function SeaGoAssistant({ trips, fetchDepartures, loadingTrips=fa
     } finally {if(mounted.current)setBusy(false);}
   }
 
-  function openTripById(id) {
-    const trip=(trips||[]).find(item=>String(item.id)===String(id));
+  function openTripById(card) {
+    const trip=(trips||[]).find(item=>String(item.id)===String(card?.tripId));
     if(!trip||!trip.apiId)return;
     close();
-    onOpenTrip?.(trip);
+    onOpenTrip?.(trip,card?.criteria||null);
   }
   function followAction(action) {
     const destinations=["tickets","support","trips"];
@@ -194,7 +194,7 @@ export default function SeaGoAssistant({ trips, fetchDepartures, loadingTrips=fa
                     <p>{message.text}</p>
                     {message.cards?.length>0&&<div className="seago-assistant-trip-results">
                       {message.cards.map(card=><button key={card.tripId} type="button" className="seago-assistant-trip-card"
-                        onClick={()=>openTripById(card.tripId)} aria-label={`View details for ${card.title}`}>
+                        onClick={()=>openTripById(card)} aria-label={`View details for ${card.title}`}>
                         <span className="seago-assistant-trip-icon"><Ship size={20}/></span>
                         <span className="seago-assistant-trip-copy">
                           <strong>{card.title}</strong>

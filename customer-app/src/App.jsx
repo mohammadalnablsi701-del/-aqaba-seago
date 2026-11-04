@@ -676,8 +676,8 @@ function formatDeparture(value) {
 }
 
 function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria }) {
-  const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
-  const [children,setChildren]=useState(0);
+  const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.adults??initialCriteria?.guests??2)));
+  const [children,setChildren]=useState(()=>Math.max(0,Number(initialCriteria?.children??0)));
   const [mealPlan,setMealPlan]=useState("without_buffet");
   const guests=adults+children;
   const [departures,setDepartures]=useState([]);
@@ -1582,6 +1582,12 @@ export default function App(){
 
   const toggleFavourite=id=>setFavourites(x=>{const next=x.includes(id)?x.filter(v=>v!==id):[...x,id];localStorage.setItem("seago_favourites",JSON.stringify(next));return next;});
   const openTrip=(trip,{fromSearch=false}={})=>{if(!fromSearch)setSearchCriteria(null);setDetail(trip);setBooking(false);};
+  const openTripFromAssistant=(trip,criteria)=>{
+    setSearchCriteria(criteria?{tripType:"All Trips",date:criteria.date,guests:criteria.guests,
+      adults:criteria.adults,children:criteria.children,departureId:criteria.departureId||null}:null);
+    setDetail(trip);
+    setBooking(false);
+  };
   // Chat navigation must clear a selected trip: DetailScreen otherwise wins
   // over the requested My Tickets / Support screen.
   const navigateFromAssistant=target=>{
@@ -1593,14 +1599,14 @@ export default function App(){
     setActive(target);
   };
   const assistantProps={trips:tripList,fetchDepartures:listDepartures,loadingTrips,hasLiveApi:hasApi()&&!usingFallback&&!tripLoadError,
-    onOpenTrip:openTrip,onNavigate:navigateFromAssistant};
+    onOpenTrip:openTripFromAssistant,onNavigate:navigateFromAssistant};
 
   if(paymentReturn) return <PaymentReturnScreen auth={auth} onViewTicket={viewPaidTicket} onReturnHome={()=>{setPaymentReturn(false);setActive("home");const url=new URL(window.location.href);url.searchParams.delete("payment");url.searchParams.delete("paymentId");window.history.replaceState({},"",url.pathname+(url.search?url.search:""));}}/>;
   if(booking&&detail) return <BookingScreen trip={detail} auth={auth} onAuthenticated={saveAuth} onBack={()=>setBooking(false)} initialCriteria={searchCriteria}/>;
   if(detail) return <>
     <DetailScreen trip={detail} searchCriteria={searchCriteria} onBack={()=>setDetail(null)}
       favourite={favourites.includes(detail.id)} toggleFavourite={toggleFavourite}
-      onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:localDateInputValue(new Date(dep.startsAt))}));setBooking(true)}}/>
+      onBook={dep=>{if(dep)setSearchCriteria(v=>({...v,departureId:dep.id,date:aqabaDateKey(dep.startsAt)}));setBooking(true)}}/>
     <SeaGoAssistant {...assistantProps}/>
   </>;
 

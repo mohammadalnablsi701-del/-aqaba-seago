@@ -170,7 +170,9 @@ export async function answerSeaGoQuestion(raw, trips, { listDepartures, now = ne
   verified.sort((a,b)=>new Date(a.departure.startsAt)-new Date(b.departure.startsAt));
   const picked=verified.slice(0,3).map(({trip,departure})=>({
     tripId:String(trip.id),title:trip.title,category:trip.category,price:Number(trip.price),
-    availability:departure.startsAt,availableSeats:Number(departure.availableSeats||0)
+    availability:departure.startsAt,availableSeats:Number(departure.availableSeats||0),
+    criteria:{date:q.date||aqabaDateKey(departure.startsAt),guests:q.guests,
+      adults:q.adults,children:q.children,departureId:departure.id?String(departure.id):null}
   }));
   const count=q.guests;
   const budgetNote=q.maxBudget!==null?` under your ${q.maxBudget} JOD estimated base budget`:"";
