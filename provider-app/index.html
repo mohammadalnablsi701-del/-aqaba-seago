@@ -1,16 +1,71 @@
-<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/><title>Aqaba SeaGo Provider</title><meta name="theme-color" content="#071F33"/>    <link rel="manifest" href="./provider-manifest-a-v1.webmanifest?v=direction-a-v1" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" sizes="180x180" href="./provider-apple-touch-icon-a-v1.png?v=direction-a-v1" />
-    <link rel="icon" type="image/png" sizes="48x48" href="./provider-favicon-a-v1-48.png?v=direction-a-v1" />
-    <link rel="icon" sizes="any" type="image/svg+xml" href="./provider-favicon-a-v1.svg?v=direction-a-v1" />
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Aqaba SeaGo Provider</title><meta name="theme-color" content="#071F33"/>
+  <link rel="manifest" href="./provider-manifest-a-v1.webmanifest?v=direction-a-v1"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="./provider-apple-touch-icon-a-v1.png?v=direction-a-v1"/>
+  <link rel="icon" type="image/png" sizes="48x48" href="./provider-favicon-a-v1-48.png?v=direction-a-v1"/>
+  <link rel="icon" sizes="any" type="image/svg+xml" href="./provider-favicon-a-v1.svg?v=direction-a-v1"/>
   <style>
-  #seago-boot-recovery{box-sizing:border-box;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px 24px;background:#f4f8fb;color:#071f33;text-align:center;font-family:system-ui,-apple-system,sans-serif}
-  #root:not(:empty)+#seago-boot-recovery{display:none}
-  #seago-boot-recovery img{width:76px;height:76px;object-fit:contain;border-radius:18px;background:#071f33}
-  #seago-boot-recovery strong{font-size:22px;letter-spacing:-.5px}
-  #seago-boot-recovery p{margin:0;color:#547284;font-size:13px;line-height:1.5}
-  #seago-boot-recovery a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:14px;background:#0b3d91;color:#fff;font-size:13px;font-weight:700;text-decoration:none;animation:seago-boot-show .3s ease 5s both}
-  @keyframes seago-boot-show{from{opacity:0}to{opacity:1}}
-  @media(prefers-reduced-motion:reduce){#seago-boot-recovery a{animation:none}}
-</style></head><body><div id="root"></div><div id="seago-boot-recovery" role="status" aria-label="Opening SeaGo Provider"><img src="./app-provider.svg" alt="" width="76" height="76"/><strong>SeaGo Provider</strong><p>Opening SeaGo Provider…</p><a href="./?reload=provider-brand-a" aria-label="Reload SeaGo Provider if loading takes too long">Reload App</a></div><script type="module" src="/src/main.jsx"></script></body></html>
+  html,body{margin:0;min-height:100%;background:#071F33}
+  #seago-boot-recovery{box-sizing:border-box;position:fixed;inset:0;z-index:2147483647;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;overflow:hidden;padding:calc(32px + env(safe-area-inset-top,0px)) 24px calc(32px + env(safe-area-inset-bottom,0px));background:radial-gradient(ellipse at 50% 44%,#103650 0%,#071F33 70%);color:#fff;text-align:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  #seago-boot-recovery[hidden]{display:none!important}
+  #seago-boot-recovery img{position:relative;z-index:1;display:block;width:clamp(100px,29vw,150px);height:auto;aspect-ratio:1;object-fit:contain;border-radius:22%;box-shadow:0 16px 48px #0003}
+  #seago-boot-recovery strong{position:relative;z-index:1;margin-top:10px;font-size:clamp(24px,5vw,34px);font-weight:750;letter-spacing:-.7px}
+  #seago-boot-recovery p{position:relative;z-index:1;margin:0;color:#b9d5de;font-size:clamp(13px,3.5vw,15px);line-height:1.5;max-width:320px}
+  #seago-boot-recovery .seago-launch-wave{position:absolute;bottom:-68px;left:50%;width:min(680px,155vw);height:190px;border:1px solid #E1B65B77;border-radius:50%;transform:translateX(-50%) rotate(-3deg);opacity:.42;pointer-events:none}
+  #seago-boot-recovery .seago-launch-wave::after{content:"";position:absolute;inset:20px -40px -26px;border:1px solid #00BFC855;border-radius:50%}
+  #seago-boot-recovery a{position:absolute;z-index:2;bottom:calc(22px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:14px;background:#fff;color:#071F33;font-size:14px;font-weight:700;text-decoration:none;visibility:hidden;animation:seago-retry-show .01s steps(1,end) 5s forwards}
+  #seago-boot-recovery.is-animating img{animation:seago-logo-enter 650ms cubic-bezier(.2,.7,.2,1) both}
+  #seago-boot-recovery.is-animating strong{animation:seago-copy-enter 600ms ease 500ms both}
+  #seago-boot-recovery.is-animating p{animation:seago-copy-enter 600ms ease 950ms both}
+  #seago-boot-recovery.is-animating .seago-launch-wave{animation:seago-wave 2200ms ease-in-out 650ms both}
+  #seago-boot-recovery.is-exiting{animation:seago-launch-exit 300ms ease-in forwards}
+  @keyframes seago-logo-enter{from{opacity:0;transform:scale(.85) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  @keyframes seago-copy-enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes seago-wave{from{opacity:0;transform:translateX(-50%) translateY(24px) rotate(-3deg)}to{opacity:.42;transform:translateX(-50%) translateY(0) rotate(-3deg)}}
+  @keyframes seago-launch-exit{to{opacity:0;visibility:hidden}}
+  @keyframes seago-retry-show{to{visibility:visible}}
+  @media(max-height:430px){#seago-boot-recovery{gap:6px;padding:8px 24px}#seago-boot-recovery img{width:min(22vh,90px)}#seago-boot-recovery strong{margin-top:0;font-size:22px}#seago-boot-recovery .seago-launch-wave{display:none}#seago-boot-recovery a{bottom:8px}}
+  @media(prefers-reduced-motion:reduce){#seago-boot-recovery.is-animating img,#seago-boot-recovery.is-animating strong,#seago-boot-recovery.is-animating p,#seago-boot-recovery.is-animating .seago-launch-wave,#seago-boot-recovery.is-exiting{animation:none!important;opacity:1!important;transform:none}#seago-boot-recovery .seago-launch-wave{display:none}}
+ </style>
+</head><body>
+<div id="root"></div><div id="seago-boot-recovery" role="status" aria-label="Opening SeaGo Provider">
+  <img src="./app-provider.svg" alt="" width="150" height="150"/>
+  <strong>SeaGo Provider</strong><p>Your marine operations, ready to go</p><div class="seago-launch-wave" aria-hidden="true"></div>
+  <a href="./?reload=provider-launch" aria-label="Reload SeaGo Provider if loading takes too long">Reload App</a>
+</div>
+<script id="seago-launch-controller">(function(){
+ const root=document.getElementById("root"),splash=document.getElementById("seago-boot-recovery");
+ if(!root||!splash)return;
+ root.setAttribute("inert","");
+ root.setAttribute("aria-hidden","true");
+ let ready=false,started=false,elapsed=false,exiting=false,finished=false;
+ function finish(){
+  if(finished)return;finished=true;
+  root.removeAttribute("inert");
+  root.removeAttribute("aria-hidden");
+  splash.hidden=true;
+ }
+ function maybeExit(){
+  if(!ready||!elapsed||exiting)return;
+  exiting=true;splash.classList.add("is-exiting");
+  window.setTimeout(finish,300);
+ }
+ function start(){
+  if(started)return;
+  started=true;splash.classList.add("is-animating");
+  window.setTimeout(function(){elapsed=true;maybeExit();},2700);
+ }
+ window.__seagoLaunchReady=function(){ready=true;maybeExit();};
+ function schedule(){window.requestAnimationFrame(function(){window.requestAnimationFrame(start);});}
+ if(document.visibilityState==="hidden"){
+  document.addEventListener("visibilitychange",function onVisible(){
+   if(document.visibilityState!=="hidden"){document.removeEventListener("visibilitychange",onVisible);schedule();}
+  });
+ }else schedule();
+})();</script>
+<script type="module" src="/src/main.jsx"></script>
+</body></html>
