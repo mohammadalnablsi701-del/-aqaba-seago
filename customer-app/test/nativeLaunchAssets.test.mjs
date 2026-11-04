@@ -73,9 +73,9 @@ test("launcher icon updates and animated native splash remain independent", () =
   const script = readFileSync(new URL("../scripts/generate-native-assets.sh", import.meta.url), "utf8");
   assert.match(script, /--icons-only/);
   assert.match(script, /--splash-only/);
-  assert.match(script, /generate-native-icons\\.py.*android/);
-  assert.match(script, /generate-native-icons\\.py.*ios/);
-  assert.match(script, /native-launch-assets\\.mjs.*render/);
+  assert.match(script, /generate-native-icons\.py.*android/);
+  assert.match(script, /generate-native-icons\.py.*ios/);
+  assert.match(script, /native-launch-assets\.mjs.*render/);
   const launcher = readFileSync(new URL("../assets/logo.svg", import.meta.url));
   const approved = readFileSync(new URL("../public/app-customer.svg", import.meta.url));
   assert.deepEqual(launcher, approved, "Native launcher source must match approved web logo");
