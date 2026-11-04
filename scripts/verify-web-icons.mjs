@@ -106,8 +106,14 @@ export function verify(app) {
     safeCircle(pixels, size, background, size * (purpose === "maskable" ? 0.4 : 0.5));
   }
   const touch = links.find((link) => link.rel === "apple-touch-icon");
-  assert(touch && touch.sizes === "180x180", "Missing Apple touch icon");
-  readPng(local(touch.href), 180);
+  if (app === "customer") {
+    // Real iPhone acceptance in PR #234 required the manifest-only Add to Home Screen path.
+    assert(!touch, "Customer must not reintroduce the Apple Touch link rejected on iPhone");
+    readPng(resolve(publicDir, "customer-apple-touch-icon-a-v1.png"), 180);
+  } else {
+    assert(touch && touch.sizes === "180x180", "Missing Apple touch icon");
+    readPng(local(touch.href), 180);
+  }
   for (const icon of manifest.icons.filter((item) => item.type === "image/svg+xml")) assert(readFileSync(local(icon.src), "utf8").includes("<svg"));
   const favicons = links.filter((link) => link.rel === "icon");
   const svg = favicons.find((link) => link.type === "image/svg+xml");
@@ -118,7 +124,7 @@ export function verify(app) {
   if (app === "customer") {
     const sw = readFileSync(resolve(publicDir, "sw.js"), "utf8");
     const pushIcon = sw.match(/icon:\s*"([^"]+)"/)?.[1];
-    assert.equal(local(pushIcon || ""), local(touch.href), "Stale Customer push icon");
+    assert.equal(local(pushIcon || ""), resolve(publicDir, "customer-apple-touch-icon-a-v1.png"), "Stale Customer push icon");
   }
   console.log(`${app}: launcher PNG decode/CRC, dimensions, alpha, safe zones and references PASS`);
 }
