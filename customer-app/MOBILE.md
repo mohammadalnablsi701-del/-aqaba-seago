@@ -12,9 +12,11 @@ The customer app is prepared for native Android and iOS packaging with Capacitor
 
 ## Native assets
 
-The existing launcher icon source remains `customer-app/assets/logo.svg`. Launch branding uses the approved `customer-app/public/app-customer.svg` without modifying its artwork. `scripts/generate-native-assets.sh` renders the native PNG resources after `cap add`; see `assets/ASSET_SOURCES.md`.
+The approved Direction A source `customer-app/public/app-customer.svg` is mirrored exactly at `assets/logo.svg`. The supplied PNG masters (`assets/icon-master-1024.png`, `assets/android-adaptive-foreground-432.png`, `assets/android-adaptive-background-432.png`) provide the physical native launcher pixels. `scripts/generate-native-icons.py` generates the density-specific Android adaptive/legacy icons and iOS AppIcon catalog, keeping their source safe circles intact.
 
-For an existing native project, run `bash scripts/generate-native-assets.sh all --splash-only` (or replace `all` with `android`/`ios`) followed by `npx cap sync`. This updates only launch assets/themes and never writes launcher icon files. It requires `rsvg-convert` and ImageMagick `identify`.
+The animated launch **remains independently implemented** by `scripts/native-launch-assets.mjs`. Do not revert to the deleted `assets/splash.svg` or change the launch timing while integrating launcher icons. `bash scripts/generate-native-assets.sh all` generates both, `--splash-only` changes only launch resources, and `--icons-only` changes only launcher resources. Existing native project assets require a rebuild and sync.
+
+All native Android/iOS Capacitor web bundles must use `npm run build -- --base=./`; GitHub Pages continues using `/-aqaba-seago/`. The build verifier now rejects mismatched JS/CSS URL bases in addition to checking file presence. iOS remains an unsigned simulator build unless developer signing is provided. Do not use the Production API debug APK for test bookings or check-ins; use a separately isolated Staging test build and test accounts.
 
 ## Launch handoff and platform limits
 

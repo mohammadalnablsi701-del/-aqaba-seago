@@ -3,11 +3,14 @@ set -euo pipefail
 
 platform="${1:-all}"
 splash_only=false
+icons_only=false
 case "${2:-}" in
   "") ;;
   --splash-only) splash_only=true ;;
-  *) echo "Usage: $0 [all|android|ios] [--splash-only]" >&2; exit 2 ;;
+  --icons-only) icons_only=true ;;
+  *) echo "Usage: $0 [all|android|ios] [--splash-only|--icons-only]" >&2; exit 2 ;;
 esac
+(( $# <= 2 )) || { echo "Too many arguments" >&2; exit 2; }
 case "$platform" in
   all|android|ios) ;;
   *) echo "Usage: $0 [all|android|ios] [--splash-only]" >&2; exit 2 ;;
@@ -65,25 +68,21 @@ render_android() {
   local res="$ROOT_DIR/android/app/src/main/res"
   [[ -d "$res" ]] || { echo "Android project not found at $res" >&2; exit 1; }
 
-  local icon_count=0 splash_count=0 file base
+  local splash_count=0 file base
+  if [[ "$splash_only" == false ]]; then
+    python3 "$ROOT_DIR/scripts/generate-native-icons.py" android
+  fi
+  [[ "$icons_only" == false ]] || return 0
+
   while IFS= read -r -d '' file; do
     base="$(basename "$file")"
     case "$base" in
-      ic_launcher*.png)
-        [[ "$splash_only" == false ]] || continue
-        render_svg_like_target "$LOGO_SVG" "$file"
-        icon_count=$((icon_count + 1))
-        ;;
       splash*.png)
         render_splash_like_target "$file"
         splash_count=$((splash_count + 1))
         ;;
     esac
   done < <(find "$res" -type f -name '*.png' -print0)
-
-  if [[ "$splash_only" == false ]]; then
-    (( icon_count > 0 )) || { echo "No Android launcher PNG assets found" >&2; exit 1; }
-  fi
   (( splash_count > 0 )) || { echo "No Android splash PNG assets found" >&2; exit 1; }
   # Android 12+ uses an OS-controlled icon rather than the full-screen splash.
   # The OS safe circle has diameter 2/3 of the drawable. A square must fit by
@@ -93,7 +92,7 @@ render_android() {
   rsvg-convert "$res/drawable-nodpi/seago_launch_icon.tmp.svg" -o "$res/drawable-nodpi/seago_launch_icon.png"
   rm "$res/drawable-nodpi/seago_launch_icon.tmp.svg"
   node "$ROOT_DIR/scripts/native-launch-assets.mjs" android
-  echo "Android branding complete: $icon_count launcher assets, $splash_count splash assets"
+  echo "Android branding complete: approved launcher icons, $splash_count splash assets"
 }
 
 render_ios() {
@@ -105,25 +104,19 @@ render_ios() {
   fi
   [[ -d "$splash" ]] || { echo "iOS splash set not found at $splash" >&2; exit 1; }
 
-  local icon_count=0 splash_count=0 file
+  local splash_count=0 file
   if [[ "$splash_only" == false ]]; then
-    while IFS= read -r -d '' file; do
-      render_svg_like_target "$LOGO_SVG" "$file"
-      icon_count=$((icon_count + 1))
-    done < <(find "$icons" -type f -name '*.png' -print0)
+    python3 "$ROOT_DIR/scripts/generate-native-icons.py" ios
   fi
+  [[ "$icons_only" == false ]] || return 0
 
   while IFS= read -r -d '' file; do
     render_splash_like_target "$file"
     splash_count=$((splash_count + 1))
   done < <(find "$splash" -type f -name '*.png' -print0)
-
-  if [[ "$splash_only" == false ]]; then
-    (( icon_count > 0 )) || { echo "No iOS app icon PNG assets found" >&2; exit 1; }
-  fi
   (( splash_count > 0 )) || { echo "No iOS splash PNG assets found" >&2; exit 1; }
   node "$ROOT_DIR/scripts/native-launch-assets.mjs" ios
-  echo "iOS branding complete: $icon_count app icons, $splash_count splash assets"
+  echo "iOS branding complete: approved launcher icons, $splash_count splash assets"
 }
 
 case "$platform" in

@@ -40,10 +40,16 @@ const base = expectedBase.endsWith("/") ? expectedBase : `${expectedBase}/`;
 const assetRefs = [...indexHtml.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css))["']/g)].map((m) => m[1]);
 if (!assetRefs.length) fail("no JS/CSS assets referenced by index.html");
 for (const ref of assetRefs) {
-  let relative = ref;
-  if (relative.startsWith(base)) relative = relative.slice(base.length);
-  else if (relative.startsWith("/")) relative = relative.slice(1);
-  relative = relative.replace(/^\.\//, "").split(/[?#]/, 1)[0];
+  // A file can exist inside dist while its emitted URL is still broken
+  // in Capacitor's https://localhost/ root. Reject incorrect bases.
+  if (base === "./" && !(ref.startsWith("./") || ref.startsWith("assets/"))) {
+    fail(`native artifact must use a relative JS/CSS reference: ${ref}`);
+  }
+  if (base !== "./" && !ref.startsWith(base)) {
+    fail(`JS/CSS asset reference does not start with required base ${base}: ${ref}`);
+  }
+  const relative = (base === "./" ? ref : ref.slice(base.length))
+    .replace(/^\.\//, "").split(/[?#]/, 1)[0];
   const target = path.join(distDir, relative);
   if (!fs.existsSync(target)) fail(`referenced asset is missing: ${ref}`);
 }
