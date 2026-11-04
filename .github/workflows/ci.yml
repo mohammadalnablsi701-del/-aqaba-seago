@@ -219,6 +219,10 @@ jobs:
         working-directory: customer-app
         run: node --test test/tripMedia.test.mjs
 
+      - name: Test assistant launcher placement and unclipped modal
+        working-directory: customer-app
+        run: node --test test/seagoAssistantLauncher.test.mjs
+
       - name: Test assistant trip discovery and safe checkout guidance
         working-directory: customer-app
         run: node --test test/seagoAssistantEngine.test.mjs

@@ -264,7 +264,7 @@ function localDateInputValue(date=new Date()) {
   return aqabaDateKey(date);
 }
 
-function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
+function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll, assistantProps }) {
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -282,7 +282,10 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
         <HeroScene />
         <div className="hero__top">
           <BrandLogo />
-          <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
+          <div className="hero__top-actions">
+            <SeaGoAssistant {...assistantProps} placement="header"/>
+            <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
+          </div>
         </div>
         <div className="hero__copy">
           <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
@@ -1593,7 +1596,7 @@ export default function App(){
 
   return <div className="app-shell">
     <main>
-      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
+      {active==="home"&&<HomeScreen loading={loadingTrips} tripList={tripList} onSelectTrip={openTrip} favourites={favourites} toggleFavourite={toggleFavourite} usingFallback={usingFallback} apiError={tripLoadError} onSearch={runHomeSearch} onOpenMenu={()=>setMenuOpen(true)} assistantProps={assistantProps} onSeeAll={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);setActive("trips");}}/>}
       {active==="trips"&&<TripsScreen tripList={searchResults??tripList} allTrips={tripList} onSelectAvailableTrip={openTrip} onSelectTrip={trip=>openTrip(trip,{fromSearch:searchResults!==null})} favourites={favourites} toggleFavourite={toggleFavourite} loading={loadingTrips} searchSummary={searchSummary} onClearSearch={()=>{setSearchResults(null);setSearchSummary("");setSearchCriteria(null);}}/>}
       {active==="tickets"&&<TicketsScreen auth={auth} onAuthenticated={saveAuth}/>} 
       {active==="favourites"&&<FavouritesScreen favourites={favourites} tripList={tripList} onSelectTrip={openTrip} toggleFavourite={toggleFavourite}/>} 
@@ -1607,7 +1610,7 @@ export default function App(){
       {active==="terms"&&<TermsScreen onBack={()=>setActive("policies")}/>} 
     </main>
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
-    <SeaGoAssistant {...assistantProps}/>
+    {active!=="home"&&<SeaGoAssistant {...assistantProps} placement="floating"/>}
     <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
 }

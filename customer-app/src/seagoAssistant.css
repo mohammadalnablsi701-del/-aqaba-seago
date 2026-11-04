@@ -1,5 +1,14 @@
 /* Isolated Customer guide UI, English only. Respects safe areas on iPhone. */
-.seago-assistant-launcher{position:fixed;z-index:60;right:max(14px,calc((100vw - 430px)/2 + 14px));bottom:calc(92px + env(safe-area-inset-bottom,0px));height:48px;display:flex;align-items:center;gap:8px;border:0;border-radius:100px;padding:0 17px;background:linear-gradient(135deg,#0c4e90,#087f9d);color:#fff;font-size:12px;font-weight:800;letter-spacing:.01em;box-shadow:0 12px 28px rgba(2,44,81,.28);cursor:pointer}
+/* The home launcher is inside the hero header so it never covers search controls.
+   Other screens use a compact icon-only floating trigger above the bottom tab bar. */
+.hero__top-actions{display:flex;align-items:center;gap:10px}
+.seago-assistant-launcher{display:grid;place-items:center;flex-shrink:0;border:1px solid rgba(255,255,255,.45);padding:0;width:50px;height:50px;border-radius:17px;background:linear-gradient(135deg,#0b3d91,#0789a2);color:#fff;box-shadow:0 9px 23px rgba(3,49,88,.22);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.seago-assistant-launcher--header{position:relative;z-index:6;width:42px;height:42px;border:1px solid rgba(11,61,145,.1);border-radius:14px;background:rgba(255,255,255,.94);color:#0b3d91;box-shadow:0 8px 22px rgba(4,37,74,.1)}
+.seago-assistant-launcher--floating{position:fixed;z-index:60;right:max(16px,calc((100vw - 430px)/2 + 16px));bottom:calc(89px + env(safe-area-inset-bottom,0px))}
+.seago-assistant-launcher__status{position:absolute;right:8px;top:8px;width:7px;height:7px;background:#20c997;border:1.5px solid #fff;border-radius:50%}
+.seago-assistant-launcher--header .seago-assistant-launcher__status{right:6px;top:6px;border-color:#fff}
+@media(hover:hover){.seago-assistant-launcher:hover{filter:brightness(1.05);transform:translateY(-1px)}}
+.seago-assistant-launcher:active{transform:scale(.96)}
 .seago-assistant-launcher:hover{filter:brightness(1.08)}.seago-assistant-launcher:focus-visible,.seago-assistant-panel button:focus-visible,.seago-assistant-panel input:focus-visible{outline:3px solid #15c4db;outline-offset:2px}
 .seago-assistant-backdrop{position:fixed;inset:0;z-index:70;background:rgba(4,26,42,.38);border:0;width:100%;height:100%;cursor:default}
 .seago-assistant-panel{position:fixed;z-index:71;right:max(12px,calc((100vw - 430px)/2 + 12px));bottom:calc(88px + env(safe-area-inset-bottom,0px));height:min(630px,calc(100dvh - 119px - env(safe-area-inset-bottom,0px)));width:min(390px,calc(100vw - 24px));display:flex;flex-direction:column;overflow:hidden;min-height:300px;border:1px solid #d3e4ea;border-radius:22px;background:#fff;box-shadow:0 24px 65px rgba(0,30,64,.28);color:#14344a}
@@ -38,5 +47,7 @@
 .seago-assistant-form>button:disabled{background:#c6d4da;cursor:not-allowed}
 .seago-assistant-disclaimer{display:block;text-align:center;margin-top:8px;color:#859aa6;font-size:9px;line-height:1.35}
 @media(max-width:370px){.seago-assistant-panel{right:8px;width:calc(100vw - 16px);border-radius:17px}.seago-assistant-header{padding:13px 12px}.seago-assistant-messages{padding:12px 8px}.seago-assistant-message-content{max-width:92%}}
-@media(min-width:700px){.seago-assistant-launcher{bottom:110px}.seago-assistant-panel{bottom:98px}}
+@media(min-width:700px){.seago-assistant-launcher--floating{bottom:110px}.seago-assistant-panel{bottom:98px}}
 @media(prefers-reduced-motion:reduce){.seago-assistant-panel,.seago-assistant-launcher{scroll-behavior:auto;transition:none}}
+
+@media(max-width:360px){.hero__top-actions{gap:6px}.seago-assistant-launcher--header{width:40px;height:40px}}

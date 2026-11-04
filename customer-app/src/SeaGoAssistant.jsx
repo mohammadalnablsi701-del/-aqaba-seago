@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bot, CalendarDays, ChevronRight, LoaderCircle, MessageCircle, Send, Ship, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Bot, CalendarDays, ChevronRight, LoaderCircle, Send, Ship, X } from "lucide-react";
 import { answerSeaGoQuestion, ASSISTANT_STARTERS } from "./seagoAssistantEngine.js";
 
 const GREETING = {
@@ -14,7 +15,7 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Amman",weekday:"short",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}).format(date);
 }
 
-export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onOpenTrip, onNavigate }) {
+export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onOpenTrip, onNavigate, placement="floating" }) {
   const [open,setOpen]=useState(false);
   const [draft,setDraft]=useState("");
   const [messages,setMessages]=useState([GREETING]);
@@ -93,12 +94,14 @@ export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onO
 
   return (
     <>
-      {!open&&<button ref={launcher} type="button" className="seago-assistant-launcher"
-        onClick={()=>setOpen(true)} aria-label="Open SeaGo Assistant" aria-haspopup="dialog">
-        <MessageCircle size={22} strokeWidth={2.1}/>
-        <span>Ask SeaGo</span>
+      {!open&&<button ref={launcher} type="button"
+        className={`seago-assistant-launcher seago-assistant-launcher--${placement}`}
+        onClick={()=>setOpen(true)} title="Ask SeaGo about trips"
+        aria-label="Open SeaGo Assistant" aria-haspopup="dialog" aria-expanded={false}>
+        <Bot size={23} strokeWidth={2} aria-hidden="true"/>
+        <span className="seago-assistant-launcher__status" aria-hidden="true"/>
       </button>}
-      {open&&<>
+      {open&&createPortal(<>
         <button type="button" className="seago-assistant-backdrop" aria-label="Close SeaGo Assistant" onClick={close}/>
         <section ref={dialog} className="seago-assistant-panel" role="dialog" aria-modal="true" aria-labelledby="seago-assistant-title">
           <header className="seago-assistant-header">
@@ -149,7 +152,7 @@ export default function SeaGoAssistant({ trips, fetchDepartures, hasLiveApi, onO
             <span className="seago-assistant-disclaimer">Booking and payment happen through the official SeaGo checkout.</span>
           </div>
         </section>
-      </>}
+      </>,document.body)}
     </>
   );
 }
