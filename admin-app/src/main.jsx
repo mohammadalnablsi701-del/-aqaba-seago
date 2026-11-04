@@ -11,10 +11,11 @@ async function ensureFreshAdmin(){
     const versionUrl=new URL("../version.json",window.location.href);
     versionUrl.searchParams.set("_",Date.now().toString());
     const r=await fetch(versionUrl,{cache:"no-store"});
-    if(!r.ok)return;
+    // The preview may not publish version.json. Never leave the root blank.
+    if(!r.ok)throw new Error("Version metadata unavailable");
     const v=await r.json();
     const commit=String(v?.commit||"").trim();
-    if(!commit)return;
+    if(!commit)throw new Error("Version commit unavailable");
     const key="seago_admin_build";
     const previous=localStorage.getItem(key);
     localStorage.setItem(key,commit);

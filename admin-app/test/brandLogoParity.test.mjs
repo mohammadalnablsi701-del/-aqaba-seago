@@ -22,3 +22,11 @@ test("Admin brand and bootstrap are safe on mobile and when JavaScript fails",()
  assert.match(html,/prefers-reduced-motion:reduce/);
  assert.match(css,/\.admin-brand \.admin-brand-mark\{[^}]*object-fit:contain/);
 });
+
+test("Admin mounts the login even if a standalone preview has no version.json",()=>{
+ const src=read("src/main.jsx");
+ assert.doesNotMatch(src,/if\(!r\.ok\)return;/);
+ assert.doesNotMatch(src,/if\(!commit\)return;/);
+ assert.match(src,/if\(!r\.ok\)throw new Error/);
+ assert.match(src,/createRoot\(document\.getElementById\("root"\)\)\.render/);
+});
