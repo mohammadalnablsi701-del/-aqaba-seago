@@ -1,11 +1,14 @@
 # Native asset sources
 
-Native launcher source (unchanged):
+Native launcher source, reconciled from [PR #240](https://github.com/mohammadalnablsi701-del/-aqaba-seago/pull/240):
 
-- `logo.svg` — square SeaGo wheel mark for the app icon
-- `public/app-customer.svg` — the approved Direction A Customer artwork and the only source used for launch branding
+- `logo.svg` — byte-for-byte identical to `public/app-customer.svg` (approved Direction A)
+- `icon-master-1024.png` — original approved opaque RGB full-resolution iOS/Android master
+- `android-adaptive-foreground-432.png` — original approved transparent foreground
+- `android-adaptive-background-432.png` — original approved opaque ivory background
+- `android-adaptive-foreground.svg` / `android-adaptive-background.svg` — editable approved layers
 
-The mobile GitHub Actions workflows invoke `scripts/generate-native-assets.sh` after Capacitor creates each native project. Existing launcher resources still render from `logo.svg`; this launch-screen change does not alter them.
+`scripts/generate-native-icons.py` creates density-matched native icons, while `scripts/native-launch-assets.mjs` continues to produce the **unchanged** navy Android/iOS static handoff for the 3-second animated WebView splash. The two paths must not overwrite each other. The wrapper `scripts/generate-native-assets.sh` supports `--icons-only` and `--splash-only`.
 
 `scripts/native-launch-assets.mjs` embeds the approved SVG bytes intact in a navy SVG composition, then `rsvg-convert` rasterizes each splash PNG at its existing size. Portrait and landscape compositions keep the approved square artwork centered and undistorted. There is no separately drawn splash logo.
 

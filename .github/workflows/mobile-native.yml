@@ -60,11 +60,11 @@ jobs:
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-        run: npm run build
+        run: npm run build -- --base=./
 
       - name: Verify Android production web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android Production"
 
       - name: Create Android project
         working-directory: customer-app
@@ -91,7 +91,7 @@ jobs:
 
       - name: Verify synced Android web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="Android synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="android/app/src/main/assets/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="Android synced artifact"
 
       - name: Run Firebase Task completion unit test
         working-directory: customer-app/android
@@ -147,11 +147,11 @@ jobs:
         working-directory: customer-app
         env:
           VITE_API_BASE_URL: https://aqaba-seago-api.onrender.com
-        run: npm run build
+        run: npm run build -- --base=./
 
       - name: Verify iOS production web environment
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="iOS Production"
+        run: node scripts/verify-build-env.mjs --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="iOS Production"
 
       - name: Create iOS project
         working-directory: customer-app
@@ -172,7 +172,7 @@ jobs:
 
       - name: Verify synced iOS web artifact
         working-directory: customer-app
-        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="/-aqaba-seago/" --label="iOS synced artifact"
+        run: node scripts/verify-build-env.mjs --dist="ios/App/App/public" --expected="https://aqaba-seago-api.onrender.com" --forbidden="https://aqaba-seago-api-staging.onrender.com" --base="./" --label="iOS synced artifact"
 
       - name: Build unsigned simulator app
         working-directory: customer-app
