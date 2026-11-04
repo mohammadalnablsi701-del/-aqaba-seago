@@ -117,7 +117,7 @@ test("budget includes child pricing, not adult-only pricing",async()=>{
 test("children without adult count require clarification, not invented ticket count",async()=>{
  const reply=await answerSeaGoQuestion("sunset cruise for 3 children",trips,{now,hasLiveApi:true,listDepartures:async()=>rows});
  assert.equal(reply.cards.length,0);
- assert.match(reply.text,/How many adults and children/);
+ assert.match(reply.text,/confirm the number of adults and children/);
 });
 test("all API failures with cached home availability fail closed",async()=>{
  const reply=await answerSeaGoQuestion("sunset cruise for 2 people",trips,{
