@@ -484,14 +484,14 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, search
         <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)} aria-label="Save trip"><Heart fill={favourite?"currentColor":"none"}/></button>
         <BrandLogo compact/>
         <div className="detail-language-toggle"><LanguageSwitch/></div>
-        <div className="detail-hero__badge"><CheckCircle2 size={14}/> Verified SeaGo experience</div>
+        <div className="detail-hero__badge"><CheckCircle2 size={14}/> {t("Verified SeaGo experience")}</div>
       </div>
 
       <div className="detail-body">
         <div className="detail-kicker">{localizedTripCategory(trip.category,language)} · {t("Aqaba, Jordan")}</div>
         <h1>{localizedTripTitle(trip,language)}</h1>
         <VesselName value={trip.vesselName} className="seago-vessel-detail"/>
-        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified operator <span>{trip.providerName || "Approved SeaGo partner"}</span></div>
+        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> {t("Verified operator")} <span>{trip.providerName || t("Approved SeaGo partner")}</span></div>
 
         <div className="detail-price-summary">
           <div><small>{t("From")}</small><strong dir="ltr">{trip.price} JOD</strong><span>{t("per adult")}</span></div>
@@ -630,11 +630,11 @@ function AuthForm({ onAuthenticated }) {
         {error && <div className="form-error">{error}</div>}
         <button className="primary-button auth-submit" disabled={busy}>
           {busy ? <LoaderCircle className="spin" size={18}/> : null}
-          {mode==="login"?"Sign in":"Create account"}
+          {t(mode==="login"?"Sign in":"Create account")}
         </button>
       </form>
       <button className="auth-switch" onClick={()=>switchMode(mode==="login"?"register":"login")}>
-        {mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in"}
+        {t(mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in")}
       </button>
     </div>
   );
@@ -823,7 +823,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
         <h1>{t(success.paymentProvider==="mock" ? "Test payment ready" : "Ready for secure payment")}</h1>
         <p>{t(success.paymentProvider==="mock" ? "Controlled pilot mode: this is a test payment and no real money will be charged." : "Your selected seats are temporarily protected. Complete payment to create the confirmed booking and QR ticket.")}</p>
         {success.priceChanged&&<div className="booking-note"><T>Price updated to the latest server amount before payment.</T></div>}
-        <div className="payment-review-card">
+        <div className="payment-review-card" dir="auto">
           <div><span>{t("Experience")}</span><b>{localizedTripTitle(trip,language)}</b></div>
           {trip.vesselName&&<div><span><T>Vessel</T></span><b>{trip.vesselName}</b></div>}
           {selected?.startsAt&&<div><span>{t("Departure")}</span><b>{localizedDepartureDate(selected.startsAt,language)}</b></div>}
@@ -851,7 +851,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
     <div className="screen standard-screen booking-screen">
       <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><LanguageSwitch/></div>
       <div className="booking-title"><span><T>BOOKING · STEP 1 OF 2</T></span><h1>{t("Choose your trip details")}</h1><p className="booking-subtitle">{t("Review the departure, persons and package before payment.")}</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"person":"persons"}</p>}<div className="booking-progress"><i/><i/></div></div>
-      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{localizedTripTitle(trip,language)}</h3><VesselName value={trip.vesselName} className="seago-vessel-booking"/><p>{localizedTripDuration(trip,language)} · {t("Aqaba")}</p><div className="booking-verified"><CheckCircle2 size={14}/> Verified operator</div></div></div>
+      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{localizedTripTitle(trip,language)}</h3><VesselName value={trip.vesselName} className="seago-vessel-booking"/><p>{localizedTripDuration(trip,language)} · {t("Aqaba")}</p><div className="booking-verified"><CheckCircle2 size={14}/> {t("Verified operator")}</div></div></div>
       {trip.departureLocation?.name&&<div className="booking-location-card"><div><MapPin size={20}/><span><small>Departure point</small><strong>{trip.departureLocation.name}</strong>{trip.departureLocation.address&&<em>{trip.departureLocation.address}</em>}</span></div>{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Google Maps <ChevronRight size={16}/></a>}</div>}
 
       {loading ? <LoadingState label="Checking live departures"/> : (
@@ -1391,7 +1391,7 @@ function SideMenu({ open, onClose, active, setActive }) {
     <button className="side-menu-backdrop" aria-label="Close menu" onClick={onClose}/>
     <aside className="side-menu" aria-label="Main menu">
       <div className="side-menu__head"><BrandLogo/><button className="side-menu__close" onClick={onClose} aria-label="Close menu">×</button></div>
-      <div className="side-menu__eyebrow">EXPLORE AQABA</div>
+      <div className="side-menu__eyebrow">{t("Explore Aqaba")}</div><div className="seago-side-language"><LanguageSwitch/></div>
       <nav>{items.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>{setActive(id);onClose();}}><Icon size={20}/><span>{t(label)}</span><ChevronRight size={17}/></button>)}</nav>
       <div className="side-menu__footer">Aqaba SeaGo · Red Sea experiences</div>
     </aside>
@@ -1410,6 +1410,7 @@ function readStoredAuth() {
 }
 
 function CustomerApp(){
+  const {language,t}=useCustomerLocale();
   const [active,setActive]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
     if(params.get("open")==="notifications") return "notifications";
@@ -1554,7 +1555,7 @@ function CustomerApp(){
     }
 
     setSearchResults(candidates);
-    const parts=[tripType!=="All Trips"?tripType:null,date?new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" persons":null].filter(Boolean);
+    const parts=[tripType!=="All Trips"?t(tripType):null,date?new Date(date+"T12:00:00").toLocaleDateString(language==="ar"?"ar-JO":"en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" "+t("Persons"):null].filter(Boolean);
     setSearchSummary(parts.length?parts.join(" · "):"DISCOVER AQABA");
     setActive("trips");
   }
