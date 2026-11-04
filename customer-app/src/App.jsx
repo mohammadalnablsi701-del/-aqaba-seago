@@ -12,7 +12,7 @@ import {
 } from "./api.js";
 import { createQuoteRequestGate, formatServerMoney, pricingViewFromQuote, quoteMatchesSelection } from "./pricingTruth.js";
 import { aqabaDateKey, availableDepartures, selectInitialDeparture } from "./departureSelection.js";
-import { CUSTOMER_LANGUAGE_KEY, languageFromStorage, tr, localizedTripTitle, localizedTripCategory, localizedTripDuration, localizedDepartureDate, verifiedTripImages } from "./customerLocalization.js";
+import { trustedTripImages } from "./tripMedia.js";
 import { createTicketsRefreshController } from "./ticketsRefresh.js";
 import { isNativeSeaGo, enableNativePush, nativePushPermission, syncNativePushAuth, resumeNativePush } from "./nativePush.js";
 import { sendNativeTestPush } from "./api.js";
@@ -122,10 +122,8 @@ function formatDuration(minutes) {
 }
 
 function VesselName({ value, className }) {
-  const {language}=useCustomerLocale();
   const vesselName=String(value||"").trim();
   if(!vesselName)return null;
-  if(language==="ar")return <span className={className}>القارب · {vesselName}</span>;
   return <span className={className}>Vessel · {vesselName}</span>;
 }
 
@@ -179,7 +177,7 @@ function normalizeTrip(raw, index = 0) {
   return {
     id: raw._id,
     apiId: raw._id,
-    title: profile?.title || raw.titleEn || raw.titleAr || "Aqaba Sea Experience",
+    title: profile?.title || raw.titleEn || "Aqaba Sea Experience",
     vesselName: String(raw.vesselName || "").trim(),
     subtitle: `${raw.providerId?.businessName || "Aqaba SeaGo partner"} · ${category}`,
     providerName: raw.providerId?.businessName || "Aqaba SeaGo partner",
@@ -191,7 +189,7 @@ function normalizeTrip(raw, index = 0) {
     buffetAdultPrice: Number(raw.pricing?.buffetAdultPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetChildPrice: Number(raw.pricing?.buffetChildPrice ?? raw.pricing?.childPrice ?? raw.pricing?.adultPrice ?? raw.pricing?.pricePerPerson ?? 0),
     buffetDescription: String(raw.pricing?.buffetDescription || ""),
-    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : verifiedTripImages(raw.images),
+    images: String(raw.providerId?.businessName||"").includes("Demo Partner") ? [] : trustedTripImages(raw.images),
     rating: null,
     reviews: null,
     category,
@@ -240,32 +238,25 @@ function HeroScene() {
   );
 }
 
-const LocaleContext=React.createContext({language:"en",setLanguage:()=>{},t:value=>value});
-function useCustomerLocale(){return React.useContext(LocaleContext);}
-function LanguageSwitch(){
-  const {language,setLanguage}=useCustomerLocale();
-  return <button type="button" className="seago-language-switch" lang={language==="ar"?"en":"ar"} aria-label={language==="ar"?"Switch to English":"التبديل إلى العربية"} onClick={()=>setLanguage(lang=>lang==="ar"?"en":"ar")}>{language==="ar"?"English":"العربية"}</button>;
-}
-function T({children}){
-  const {language}=useCustomerLocale();
-  return tr(String(children),language);
-}
-// Display only official photos supplied by the operator; gracefully disclose missing media.
-function TripMedia({trip,large=false}){
-  const {language,t}=useCustomerLocale();
+function TripMedia({trip, large=false}){
   const src=trip?.images?.[0]||"";
-  const [broken,setBroken]=useState(false);
-  useEffect(()=>setBroken(false),[src]);
-  return src&&!broken
-    ? <img className="seago-trip-photo" src={src} alt={localizedTripTitle(trip,language)} loading={large?"eager":"lazy"} onError={()=>setBroken(true)}/>
-    : <div className="seago-photo-placeholder"><ShipWheel size={large?64:40} strokeWidth={1.3}/><small>{t("Photo not yet provided")}</small></div>;
+  const [failed,setFailed]=useState(false);
+  useEffect(()=>setFailed(false),[src]);
+  if(!src||failed){
+    return <div className="seago-photo-placeholder" role="img" aria-label="Trip photo unavailable">
+      <ShipWheel size={large?64:42} strokeWidth={1.25}/>
+      <span>Trip photos not yet provided</span>
+    </div>;
+  }
+  return <img className="seago-trip-photo" src={src}
+    alt={trip?.title?`Photo supplied for ${trip.title}`:"Photo supplied by the tour operator"}
+    loading={large?"eager":"lazy"} onError={()=>setFailed(true)}/>;
 }
 
 function ApiNotice({ usingFallback, apiError }) {
-  const {t}=useCustomerLocale();
-  if(apiError) return <div className="api-notice api-notice--error">{t("SeaGo can’t load live experiences right now. Please try again shortly.")}</div>;
+  if(apiError) return <div className="api-notice api-notice--error">SeaGo can’t load live experiences right now. Please try again shortly.</div>;
   if (!usingFallback) return null;
-  return <div className="api-notice">{t("Preview mode · sample trips are shown because no live API is configured.")}</div>;
+  return <div className="api-notice">Preview mode · sample trips are shown because no live API is configured.</div>;
 }
 
 function localDateInputValue(date=new Date()) {
@@ -273,7 +264,6 @@ function localDateInputValue(date=new Date()) {
 }
 
 function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, usingFallback, apiError, loading, onSearch, onOpenMenu, onSeeAll }) {
-  const {language,t}=useCustomerLocale();
   const [tripType,setTripType]=useState("All Trips");
   const [date,setDate]=useState(()=>localDateInputValue());
   const [guests,setGuests]=useState(2);
@@ -291,33 +281,33 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
         <HeroScene />
         <div className="hero__top">
           <BrandLogo />
-          <div className="hero__actions"><LanguageSwitch/><button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button></div>
+          <button className="icon-button" aria-label="Menu" onClick={onOpenMenu}><span className="hamburger">☰</span></button>
         </div>
         <div className="hero__copy">
           <p className="eyebrow">ESCAPE · EXPLORE · REMEMBER</p>
-          <h1>{language==="ar"?t("Make Aqaba Unforgettable"):<>Make Aqaba<br/>Unforgettable</>}</h1>
-          <p>{t("Your next Red Sea memory starts here.")}</p>
+          <h1>Make Aqaba<br/>Unforgettable</h1>
+          <p>Your next Red Sea memory starts here.</p>
         </div>
         <div className="search-card">
           <label className="search-row search-row--control">
             <span className="search-row__icon"><Anchor size={18}/></span>
-            <span><small>{t("Trip Type")}</small>
+            <span><small>Trip Type</small>
               <select value={tripType} onChange={e=>setTripType(e.target.value)}>
-                {categories.map(c=><option key={c} value={c}>{t(c)}</option>)}
+                {categories.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
             </span>
             <ChevronRight size={18}/>
           </label>
           <label className="search-row search-row--control">
             <span className="search-row__icon"><CalendarDays size={18}/></span>
-            <span><small>{t("Date")}</small>
+            <span><small>Date</small>
               <input type="date" value={date} min={localDateInputValue()} onChange={e=>setDate(e.target.value)}/>
             </span>
             <ChevronRight size={18}/>
           </label>
           <div className="search-row search-row--control">
             <span className="search-row__icon"><UsersRound size={18}/></span>
-            <span><small>{t("Persons")}</small><strong>{guests} {t(guests===1?"Person":"Persons")}</strong></span>
+            <span><small>Persons</small><strong>{guests} {guests===1?"Person":"Persons"}</strong></span>
             <div className="guest-stepper">
               <button type="button" onClick={()=>setGuests(Math.max(1,guests-1))}>−</button>
               <button type="button" onClick={()=>setGuests(Math.min(20,guests+1))}>+</button>
@@ -325,24 +315,24 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
           </div>
           <button className="primary-button" onClick={submitSearch} disabled={searching||loading}>
             {(searching||loading)?<LoaderCircle className="spin" size={18}/>:<Search size={18}/>} 
-            {t(loading?"Loading trips...":searching?"Searching...":"Search Trips")} {!loading&&<ChevronRight size={18}/>} 
+            {loading?"Loading trips...":searching?"Searching...":"Search Trips"} {!loading&&<ChevronRight size={18}/>} 
           </button>
         </div>
       </section>
 
       <ApiNotice usingFallback={usingFallback} apiError={apiError} />
       {!loading&&!usingFallback&&!apiError&&tripList.length>0&&!tripList.some(trip=>trip.liveInventory?.nextDepartureAt)&&
-        <div className="api-notice" role="status">{t("Trips are available to explore, but no future departures are scheduled yet. Booking will open once operators publish dates.")}</div>}
+        <div className="api-notice" role="status">Trips are available to explore, but no future departures are scheduled yet. Booking will open once operators publish dates.</div>}
 
       <section className="home-trust-strip" aria-label="SeaGo booking benefits">
-        <div><CheckCircle2 size={16}/><span><b>{t("Verified operators")}</b><small>{t("Approved SeaGo partners")}</small></span></div>
-        <div><CheckCircle2 size={16}/><span><b>{t("Clear pricing")}</b><small>{t("No hidden fees")}</small></span></div>
-        <div><Ticket size={16}/><span><b>{t("Instant ticket")}</b><small>{t("After payment")}</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>Verified operators</b><small>Approved SeaGo partners</small></span></div>
+        <div><CheckCircle2 size={16}/><span><b>Clear pricing</b><small>No hidden fees</small></span></div>
+        <div><Ticket size={16}/><span><b>Instant ticket</b><small>After payment</small></span></div>
       </section>
 
       <section className="content-section">
-        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>{t("Popular Sea Experiences")}</h2><p>{t("Trusted trips picked for an easy day on the Red Sea.")}</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
-        {loading?<LoadingState label={t("Loading sea experiences...")}/>:<div className="trip-strip">
+        <div className="section-heading"><div><span>CURATED FOR YOU</span><h2>Popular Sea Experiences</h2><p>Trusted trips picked for an easy day on the Red Sea.</p></div><button onClick={onSeeAll}>See all <ChevronRight size={14}/></button></div>
+        {loading?<LoadingState label="Loading sea experiences..."/>:<div className="trip-strip">
           {tripList.map(trip => (
             <TripCard key={trip.id} trip={trip} onSelectTrip={onSelectTrip} favourite={favourites.includes(trip.id)} toggleFavourite={toggleFavourite}/>
           ))}
@@ -353,36 +343,34 @@ function HomeScreen({ tripList, onSelectTrip, favourites, toggleFavourite, using
 }
 
 function TripCard({ trip, onSelectTrip, favourite, toggleFavourite }) {
-  const {language,t}=useCustomerLocale();
   return (
     <article className="trip-card" onClick={() => onSelectTrip(trip)}>
       <div className={"trip-card__visual trip-card__visual--"+trip.accent}>
         <TripMedia trip={trip}/>
-        <span className="trip-card__badge">{localizedTripCategory(trip.category,language)}</span>
+        <span className="trip-card__badge">{trip.category}</span>
         <button className={"heart-button "+(favourite?"is-active":"")} onClick={(e)=>{e.stopPropagation();toggleFavourite(trip.id);}}><Heart size={18} fill={favourite?"currentColor":"none"}/></button>
       </div>
       <div className="trip-card__body">
-        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> {t("Verified operator")}</span><small>Aqaba</small></div>
-        <h3>{localizedTripTitle(trip,language)}</h3>
+        <div className="trip-card__trust"><span><CheckCircle2 size={14}/> Verified operator</span><small>Aqaba</small></div>
+        <h3>{trip.title}</h3>
         <p>{trip.providerName || trip.subtitle}</p>
         <div className="trip-card__facts">
-          <span><CalendarDays size={14}/>{localizedTripDuration(trip,language)}</span>
-          <span><MapPin size={14}/>{trip.departureLocation?.name || t("Aqaba")}</span>
+          <span><CalendarDays size={14}/>{trip.duration}</span>
+          <span><MapPin size={14}/>{trip.departureLocation?.name || "Aqaba Marina"}</span>
           <VesselName value={trip.vesselName} className="seago-vessel-card"/>
         </div>
         {trip.apiId&&<div className={"trip-live-status "+(trip.liveInventory?.nextDepartureAt?"available":"unavailable")}>
           {trip.liveInventory?.nextDepartureAt
-            ? <><Clock size={13}/><span>{t("Next")} {localizedDepartureDate(trip.liveInventory.nextDepartureAt,language)} · {trip.liveInventory.nextAvailableSeats} {t("seats")}</span></>
-            : <><CalendarDays size={13}/><span>{t("No departures available")}</span></>}
+            ? <><Clock size={13}/><span>Next {new Date(trip.liveInventory.nextDepartureAt).toLocaleString([],{timeZone:"Asia/Amman",weekday:"short",hour:"2-digit",minute:"2-digit"})} · {trip.liveInventory.nextAvailableSeats} seats</span></>
+            : <><CalendarDays size={13}/><span>No departures available</span></>}
         </div>}
-        <div className="trip-card__price"><span>{t("From")}</span><strong dir="ltr">{trip.price} JOD</strong><small>{t("per adult")}</small></div><div className="trip-card__cta">{t(trip.apiId&&!trip.liveInventory?.nextDepartureAt?"View details":"View experience")} <ChevronRight size={15}/></div>
+        <div className="trip-card__price"><span>From</span><strong>{trip.price} JOD</strong><small>per adult</small></div><div className="trip-card__cta">{trip.apiId&&!trip.liveInventory?.nextDepartureAt?"View details":"View experience"} <ChevronRight size={15}/></div>
       </div>
     </article>
   );
 }
 
 function TripsScreen({ tripList, allTrips, onSelectTrip, onSelectAvailableTrip, favourites, toggleFavourite, loading, searchSummary, onClearSearch }) {
-  const {language,t}=useCustomerLocale();
   const [filter,setFilter]=useState("All Trips");
   const [sort,setSort]=useState("recommended");
   const nextAvailableTrip=useMemo(()=>[...(allTrips||[])]
@@ -414,45 +402,44 @@ function TripsScreen({ tripList, allTrips, onSelectTrip, onSelectAvailableTrip, 
       <header className="standard-header trips-header">
         <BrandLogo compact/>
         <div>
-          <span>{searchSummary||t("Explore Aqaba")}</span>
-          <h1>{t("Sea Experiences")}</h1>
-          <p>{t("Verified Red Sea trips, clear pricing and live availability.")}</p>
+          <span>{searchSummary||"DISCOVER AQABA"}</span>
+          <h1>Sea Experiences</h1>
+          <p>Verified Red Sea trips, clear pricing and live availability.</p>
         </div>
       </header>
 
       <section className="trips-toolbar">
         <div className="category-row category-row--premium">
-          {categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{t(c)}</button>)}
+          {categories.map(c=><button className={filter===c?"active":""} onClick={()=>setFilter(c)} key={c}>{c}</button>)}
         </div>
         <div className="sort-row">
-          <div><span>{shown.length}</span><small>{t(shown.length===1?"experience":"experiences")}</small></div>
-          <label>{t("Sort")}
+          <div><span>{shown.length}</span><small>{shown.length===1?"experience":"experiences"}</small></div>
+          <label>Sort
             <select value={sort} onChange={e=>setSort(e.target.value)}>
-              <option value="recommended">{t("Recommended")}</option>
-              <option value="price-low">{t("Price: Low to High")}</option>
-              <option value="price-high">{t("Price: High to Low")}</option>
-              <option value="duration">{t("Shortest first")}</option>
+              <option value="recommended">Recommended</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="duration">Shortest first</option>
             </select>
           </label>
         </div>
       </section>
 
-      {loading ? <LoadingState label={t("Finding the best sea experiences...")}/> :
+      {loading ? <LoadingState label="Finding the best sea experiences..."/> :
         shown.length
           ? <div className="trip-grid trip-grid--premium">{shown.map(t=><TripCard key={t.id} trip={t} onSelectTrip={onSelectTrip} favourite={favourites.includes(t.id)} toggleFavourite={toggleFavourite}/>)}</div>
           : <div className="empty-state trips-empty">
               <div className="trips-empty__icon"><Search size={28}/></div>
-              <h2>{t(searchSummary?"No trips available for your search":"No trips in this category")}</h2>
-              <p>{t(searchSummary?(anyFutureDates?"Try a different date or party size, or check the next available experience below.":"There are no future departure dates published yet. You can still explore the available experiences."): "Try another category or see all experiences.")}</p>
-              {searchSummary&&nextAvailableTrip&&<button type="button" className="secondary-button" onClick={()=>onSelectAvailableTrip(nextAvailableTrip)}>{t("Next available")}: {localizedTripTitle(nextAvailableTrip,language)} · {localizedDepartureDate(nextAvailableTrip.liveInventory.nextDepartureAt,language)}</button>}
-              <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>{t("Show all experiences")}</button>
+              <h2>{searchSummary?"No trips available for your search":"No trips in this category"}</h2>
+              <p>{searchSummary?(anyFutureDates?"Try a different date or party size, or check the next available experience below.":"There are no future departure dates published yet. You can still explore the available experiences."): "Try another category or see all experiences."}</p>
+              {searchSummary&&nextAvailableTrip&&<button type="button" className="secondary-button" onClick={()=>onSelectAvailableTrip(nextAvailableTrip)}>Next available: {nextAvailableTrip.title} · {formatDeparture(nextAvailableTrip.liveInventory.nextDepartureAt)}</button>}
+              <button onClick={()=>{setFilter("All Trips");setSort("recommended");onClearSearch?.();}}>Show all experiences</button>
             </div>}
     </div>
   );
 }
 
 function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, searchCriteria }) {
-  const {language,t}=useCustomerLocale();
   const[departures,setDepartures]=useState([]);const[selectedDeparture,setSelectedDeparture]=useState(null);const[loadingDepartures,setLoadingDepartures]=useState(Boolean(trip?.apiId&&hasApi()));const[departureError,setDepartureError]=useState("");
   const [showAllDepartures,setShowAllDepartures]=useState(false);
   useEffect(()=>{
@@ -485,63 +472,64 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, search
         <button className="detail-back" onClick={onBack} aria-label="Back"><ChevronLeft/></button>
         <button className={"detail-heart "+(favourite?"is-active":"")} onClick={()=>toggleFavourite(trip.id)} aria-label="Save trip"><Heart fill={favourite?"currentColor":"none"}/></button>
         <BrandLogo compact/>
-        <div className="detail-language-toggle"><LanguageSwitch/></div>
-        <div className="detail-hero__badge"><CheckCircle2 size={14}/> {t("Verified SeaGo experience")}</div>
+        <div className="detail-hero__badge"><CheckCircle2 size={14}/> Verified SeaGo experience</div>
       </div>
 
       <div className="detail-body">
-        <div className="detail-kicker">{localizedTripCategory(trip.category,language)} · {t("Aqaba, Jordan")}</div>
-        <h1>{localizedTripTitle(trip,language)}</h1>
+        <div className="detail-kicker">{trip.category} · Aqaba, Jordan</div>
+        <h1>{trip.title}</h1>
         <VesselName value={trip.vesselName} className="seago-vessel-detail"/>
-        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> {t("Verified operator")} <span>{trip.providerName || t("Approved SeaGo partner")}</span></div>
+        <div className="detail-rating detail-rating--verified"><CheckCircle2 size={16}/> Verified operator <span>{trip.providerName || "Approved SeaGo partner"}</span></div>
 
         <div className="detail-price-summary">
-          <div><small>{t("From")}</small><strong dir="ltr">{trip.price} JOD</strong><span>{t("per adult")}</span></div>
-          <div><small>{t("Duration")}</small><strong>{localizedTripDuration(trip,language)}</strong><span>{trip.departureLocation?.name || t("Aqaba")}</span></div>
+          <div><small>From</small><strong>{trip.price} JOD</strong><span>per adult</span></div>
+          <div><small>Duration</small><strong>{trip.duration}</strong><span>{trip.departureLocation?.name || "Aqaba"}</span></div>
         </div>
 
-        <section className="seago-price-details" aria-label={t("Trip prices")}>
-          <h2>{t("Trip prices")}</h2>
-          <div className="seago-price-details__row"><span>{t("Adult price (13+)")}</span><strong dir="ltr">{trip.price} JOD</strong></div>
-          <div className="seago-price-details__row"><span>{t("Child price (6–12)")}</span><strong dir="ltr">{trip.childPrice} JOD</strong></div>
-          {trip.buffetEnabled&&<div className="seago-price-details__row"><span>{t("Adult with buffet")}</span><strong dir="ltr">{trip.buffetAdultPrice} JOD</strong></div>}
-          {trip.buffetEnabled&&<div className="seago-price-details__row"><span>{t("Child with buffet")}</span><strong dir="ltr">{trip.buffetChildPrice} JOD</strong></div>}
-          <p className="seago-price-details__note">{t("Final total and available seats are verified at booking. Check children's eligibility with the operator.")}</p>
-        </section>
+        {trip.apiId&&<section className="seago-price-details" aria-label="Trip prices">
+          <h2>Prices & options</h2>
+          <div className="seago-price-details__row"><span>Adult (13+)</span><strong>{trip.price} JOD</strong></div>
+          {Number.isFinite(Number(trip.childPrice))&&<div className="seago-price-details__row"><span>Child (6–12)</span><strong>{trip.childPrice} JOD</strong></div>}
+          {trip.buffetEnabled&&<>
+            <div className="seago-price-details__row"><span>Adult with buffet</span><strong>{trip.buffetAdultPrice} JOD</strong></div>
+            <div className="seago-price-details__row"><span>Child with buffet</span><strong>{trip.buffetChildPrice} JOD</strong></div>
+          </>}
+          <p className="seago-price-details__note">Final prices and available seats are confirmed during booking. Ask the operator about children under 6.</p>
+        </section>}
 
         <section className="detail-section">
-          <span className="detail-section__label">{t("ABOUT THIS EXPERIENCE")}</span>
-          <p className="detail-description">{language==="ar"?"هذه الرحلة مقدّمة من "+(trip.providerName||"إحدى شركات الرحلات")+" في العقبة. راجع معلومات المغادرة والأسعار قبل الحجز.":trip.description}</p>
+          <span className="detail-section__label">ABOUT THIS EXPERIENCE</span>
+          <p className="detail-description">{trip.description}</p>
         </section>
 
         <div className="detail-confidence">
-          <div><CheckCircle2 size={18}/><span><b><T>Instant confirmation</T></b><small>Ticket issued after successful payment</small></span></div>
-          <div><CheckCircle2 size={18}/><span><b><T>Flexible cancellation</T></b><small>100% refund 24+ hours before departure</small></span></div>
+          <div><CheckCircle2 size={18}/><span><b>Instant confirmation</b><small>Ticket issued after successful payment</small></span></div>
+          <div><CheckCircle2 size={18}/><span><b>Flexible cancellation</b><small>100% refund 24+ hours before departure</small></span></div>
         </div>
 
-        {trip.images?.length>1&&<section className="detail-card-section seago-photo-gallery"><span>{t("Official trip photos")}</span><div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} loading="lazy" alt={localizedTripTitle(trip,language)+" · "+(i+2)} onError={e=>{e.currentTarget.hidden=true}}/>)}</div></section>}
+        {trip.images?.length>1&&<section className="seago-official-photos"><span>Photos provided by the tour operator</span><div className="trip-gallery">{trip.images.slice(1,6).map((u,i)=><img key={u+i} src={u} loading="lazy" alt={`${trip.title} — operator image ${i+2}`} onError={e=>{e.currentTarget.hidden=true}}/>)}</div></section>}
 
         <section className="detail-section">
-          <span className="detail-section__label">{t("TRIP ESSENTIALS")}</span>
+          <span className="detail-section__label">TRIP ESSENTIALS</span>
           <div className="feature-grid">
-            <div><Anchor/><span><small>{t("Experience")}</small><b>{localizedTripCategory(trip.experienceLabel||trip.category,language)}</b></span></div>
-            <div><CalendarDays/><span><small>{t("Duration")}</small><b>{localizedTripDuration(trip,language)}</b></span></div>
-            <div><UsersRound/><span><small>{t("Availability")}</small><b>{trip.liveInventory?.nextDepartureAt?`${trip.liveInventory.nextAvailableSeats} ${t("seats")}`:t("No live departure")}</b></span></div>
-            <div><MapPin/><span><small>{t("Departure")}</small><b>{trip.departureLocation?.name || t("Aqaba")}</b></span></div>
+            <div><Anchor/><span><small>Experience</small><b>{trip.experienceLabel||trip.category}</b></span></div>
+            <div><CalendarDays/><span><small>Duration</small><b>{trip.duration}</b></span></div>
+            <div><UsersRound/><span><small>Availability</small><b>{trip.liveInventory?.nextDepartureAt?`${trip.liveInventory.nextAvailableSeats} seats next trip`:"No live departure"}</b></span></div>
+            <div><MapPin/><span><small>Departure</small><b>{trip.departureLocation?.name || "Aqaba"}</b></span></div>
           </div>
         </section>
 
-        <section className="detail-section live-departures-section"><span className="detail-section__label">{t("UPCOMING DEPARTURES")}</span>{searchCriteria?.date&&<p className="booking-search-context">{t("Searched date")}: {new Date(searchCriteria.date+"T12:00:00").toLocaleDateString(language==="ar"?"ar-JO":"en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {searchCriteria.guests||1} persons</p>}{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{searchCriteria?.date&&!selectedDeparture&&<div role="status" className="no-departures">{t("Your searched departure is no longer available. Select a different date below; we will not change it automatically.")}</div>}{visibleDepartures.map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{localizedDepartureDate(d.startsAt,language)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}{departures.length>6&&<button type="button" className="secondary-button" onClick={()=>setShowAllDepartures(v=>!v)}>{t(showAllDepartures?"Show fewer dates":"Show all available dates")}</button>}</div>:<div className="no-departures">{t(departureError?"Live availability is temporarily unavailable.":"No future departures are available yet.")}</div>}</section>
+        <section className="detail-section live-departures-section"><span className="detail-section__label">UPCOMING DEPARTURES</span>{searchCriteria?.date&&<p className="booking-search-context">Searched date: {new Date(searchCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {searchCriteria.guests||1} persons</p>}{loadingDepartures?<div className="live-departures-loading"><LoaderCircle className="spin" size={16}/> Checking live availability...</div>:departures.length?<div className="detail-departure-list">{searchCriteria?.date&&!selectedDeparture&&<div role="status" className="no-departures">Your searched departure is no longer available. Select a different date below; we will not change it automatically.</div>}{visibleDepartures.map(d=><button key={d.id} className={selectedDeparture?.id===d.id?"detail-departure-option active":"detail-departure-option"} onClick={()=>setSelectedDeparture(d)}><CalendarDays size={17}/><div><b>{formatDeparture(d.startsAt)}</b><span>{d.availableSeats} seat{Number(d.availableSeats)===1?"":"s"} available</span></div><CheckCircle2 size={17}/></button>)}{departures.length>6&&<button type="button" className="secondary-button" onClick={()=>setShowAllDepartures(v=>!v)}>{showAllDepartures?"Show fewer dates":"Show all available dates"}</button>}</div>:<div className="no-departures">{departureError?"Live availability is temporarily unavailable.":"No future departures are available yet."}</div>}</section>
 
-        {trip.buffetEnabled&&<section className="buffet-info detail-card-section"><span><T>OPEN BUFFET OPTION</T></span><h2>Add a meal to your trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}
+        {trip.buffetEnabled&&<section className="buffet-info detail-card-section"><span>OPEN BUFFET OPTION</span><h2>Add a meal to your trip</h2><p>{trip.buffetDescription||"Buffet details are provided by the operator."}</p></section>}
 
-        {trip.departureLocation?.name&&<section className="departure-location detail-card-section"><span><T>DEPARTURE POINT</T></span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">{t("Open in Maps")} <ChevronRight size={15}/></a>}</section>}
+        {trip.departureLocation?.name&&<section className="departure-location detail-card-section"><span>DEPARTURE POINT</span><h2>{trip.departureLocation.name}</h2>{trip.departureLocation.address&&<p>{trip.departureLocation.address}</p>}{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Open in Maps <ChevronRight size={15}/></a>}</section>}
 
         <section className="included detail-card-section">
-          <span><T>CANCELLATION POLICY</T></span>
+          <span>CANCELLATION POLICY</span>
           <h2>Know your refund before you book</h2>
           <div className="policy-grid">
-            <div><b>24+ hrs</b><small><T>100% refund</T></small></div>
+            <div><b>24+ hrs</b><small>100% refund</small></div>
             <div><b>12–24 hrs</b><small>50% refund</small></div>
             <div><b>&lt;12 hrs</b><small>No refund</small></div>
           </div>
@@ -550,7 +538,7 @@ function DetailScreen({ trip, onBack, favourite, toggleFavourite, onBook, search
 
       <div className="sticky-booking">
         <div><small>From</small><strong>{trip.price} JOD</strong><span>/ adult</span></div>
-        <button className="primary-button" disabled={Boolean(trip.apiId&&!selectedDeparture)} onClick={()=>onBook(selectedDeparture)}>{t(trip.apiId&&!selectedDeparture?"No departures available":"Continue with selected time")} <ChevronRight size={18}/></button>
+        <button className="primary-button" disabled={Boolean(trip.apiId&&!selectedDeparture)} onClick={()=>onBook(selectedDeparture)}>{trip.apiId&&!selectedDeparture?"No departures available":"Continue with selected time"} <ChevronRight size={18}/></button>
       </div>
     </div>
   );
@@ -591,7 +579,6 @@ function GoogleSignInButton({role,onAuthenticated}){
 }
 
 function AuthForm({ onAuthenticated }) {
-  const {language,t}=useCustomerLocale();
   const [mode,setMode]=useState("login");
   const [form,setForm]=useState({name:"",email:"",phone:"",password:""});
   const [countryCode,setCountryCode]=useState("+962");
@@ -619,24 +606,24 @@ function AuthForm({ onAuthenticated }) {
     <div className="auth-panel">
       <div className="auth-panel__head">
         <span>SEAGO ACCOUNT</span>
-        <h2>{t(mode==="login" ? "Sign in to book" : "Create your account")}</h2>
-        <p>{t("Continue with Google or use your email and password.")}</p>
+        <h2>{mode==="login" ? "Sign in to book" : "Create your account"}</h2>
+        <p>Continue with Google or use your email and password.</p>
       </div>
       <GoogleSignInButton role="customer" onAuthenticated={onAuthenticated}/>
-      <div className="auth-divider"><span><T>or use email</T></span></div>
+      <div className="auth-divider"><span>or use email</span></div>
       <form onSubmit={submit}>
-        {mode==="register" && <input placeholder={t("Full name")} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
-        <input type="email" placeholder={t("Email")} value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
-        {mode==="register" && <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder={t("Phone (optional)")}/>}
-        <input type="password" minLength="8" maxLength="128" placeholder={t("Password (8+ characters)")} value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
+        {mode==="register" && <input placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>}
+        <input type="email" placeholder="Email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/>
+        {mode==="register" && <CountryPhoneField code={countryCode} setCode={setCountryCode} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="Phone (optional)"/>}
+        <input type="password" minLength="8" maxLength="128" placeholder="Password (8+ characters)" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/>
         {error && <div className="form-error">{error}</div>}
         <button className="primary-button auth-submit" disabled={busy}>
           {busy ? <LoaderCircle className="spin" size={18}/> : null}
-          {t(mode==="login"?"Sign in":"Create account")}
+          {mode==="login"?"Sign in":"Create account"}
         </button>
       </form>
       <button className="auth-switch" onClick={()=>switchMode(mode==="login"?"register":"login")}>
-        {t(mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in")}
+        {mode==="login" ? "New to SeaGo? Create an account" : "Already have an account? Sign in"}
       </button>
     </div>
   );
@@ -685,7 +672,6 @@ function formatDeparture(value) {
 }
 
 function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria }) {
-  const {language,t}=useCustomerLocale();
   const [adults,setAdults]=useState(()=>Math.max(1,Number(initialCriteria?.guests||2)));
   const [children,setChildren]=useState(0);
   const [mealPlan,setMealPlan]=useState("without_buffet");
@@ -820,22 +806,22 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   if(success) {
     return (
       <div className="screen standard-screen payment-handoff">
-        <div className="payment-handoff__top"><BrandLogo /><LanguageSwitch/><span>{t("STEP 2 OF 2")}</span></div>
+        <div className="payment-handoff__top"><BrandLogo /><span>STEP 2 OF 2</span></div>
         <div className="payment-handoff__icon"><CheckCircle2 size={34}/></div>
-        <h1>{t(success.paymentProvider==="mock" ? "Test payment ready" : "Ready for secure payment")}</h1>
-        <p>{t(success.paymentProvider==="mock" ? "Controlled pilot mode: this is a test payment and no real money will be charged." : "Your selected seats are temporarily protected. Complete payment to create the confirmed booking and QR ticket.")}</p>
-        {success.priceChanged&&<div className="booking-note"><T>Price updated to the latest server amount before payment.</T></div>}
-        <div className="payment-review-card" dir="auto">
-          <div><span>{t("Experience")}</span><b>{localizedTripTitle(trip,language)}</b></div>
-          {trip.vesselName&&<div><span><T>Vessel</T></span><b>{trip.vesselName}</b></div>}
-          {selected?.startsAt&&<div><span>{t("Departure")}</span><b>{localizedDepartureDate(selected.startsAt,language)}</b></div>}
-          <div><span>{t("Persons")}</span><b>{adults} {t("Adults")}{children>0 ? " · "+children+" "+t("Children") : ""}</b></div>
-          <div><span>{t("Total")}</span><strong dir="ltr">{formatServerMoney(success.amount,success.currency)}</strong></div>
+        <h1>{success.paymentProvider==="mock" ? "Test payment ready" : "Ready for secure payment"}</h1>
+        <p>{success.paymentProvider==="mock" ? "Controlled pilot mode: this is a test payment and no real money will be charged." : "Your selected seats are temporarily protected. Complete payment to create the confirmed booking and QR ticket."}</p>
+        {success.priceChanged&&<div className="booking-note">Price updated to the latest server amount before payment.</div>}
+        <div className="payment-review-card">
+          <div><span>Experience</span><b>{trip.title}</b></div>
+          {trip.vesselName&&<div><span>Vessel</span><b>{trip.vesselName}</b></div>}
+          {selected?.startsAt&&<div><span>Departure</span><b>{formatDeparture(selected.startsAt)}</b></div>}
+          <div><span>Persons</span><b>{adults} adult{adults===1?"":"s"}{children>0 ? " · "+children+" child"+(children===1?"":"ren") : ""}</b></div>
+          <div><span>Total</span><strong>{formatServerMoney(success.amount,success.currency)}</strong></div>
         </div>
-        {success.expiresAt && <div className={"hold-box hold-box--secure "+(holdExpired?"is-expired":"")}><CheckCircle2 size={16}/><span>{holdExpired?<><b><T>Seat hold expired</T></b><small>Return to trip details to check availability again.</small></>:<>Seats reserved for <b>{String(holdMinutes).padStart(2,"0")}:{String(holdSeconds).padStart(2,"0")}</b><small><T>Complete payment before the timer ends.</T></small></>}</span></div>}
+        {success.expiresAt && <div className={"hold-box hold-box--secure "+(holdExpired?"is-expired":"")}><CheckCircle2 size={16}/><span>{holdExpired?<><b>Seat hold expired</b><small>Return to trip details to check availability again.</small></>:<>Seats reserved for <b>{String(holdMinutes).padStart(2,"0")}:{String(holdSeconds).padStart(2,"0")}</b><small>Complete payment before the timer ends.</small></>}</span></div>}
         <div className="payment-safety"><span><CheckCircle2 size={15}/> Booking created only after successful payment</span><span><CheckCircle2 size={15}/> QR ticket available immediately after confirmation</span></div>
-        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?t("Hold expired"):t("Pay securely")+" · "+formatServerMoney(success.amount,success.currency)} {!holdExpired&&<ChevronRight size={18}/>}</button>}
-        <button className="secondary-button payment-back" onClick={onBack}>{t(holdExpired?"Check availability again":"Back to trip details")}</button>
+        {!success.demo && success.checkoutUrl && <button className="primary-button payment-main-cta" disabled={holdExpired} onClick={()=>{if(!holdExpired)window.location.href=success.checkoutUrl;}}>{holdExpired?"Hold expired":"Pay securely · "+formatServerMoney(success.amount,success.currency)} {!holdExpired&&<ChevronRight size={18}/>}</button>}
+        <button className="secondary-button payment-back" onClick={onBack}>{holdExpired?"Check availability again":"Back to trip details"}</button>
       </div>
     );
   }
@@ -843,7 +829,7 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
   if(error==="AUTH_REQUIRED") {
     return (
       <div className="screen standard-screen booking-screen">
-        <div className="booking-top"><button className="plain-back" onClick={()=>setError("")}><ChevronLeft/></button><BrandLogo compact/><LanguageSwitch/></div>
+        <div className="booking-top"><button className="plain-back" onClick={()=>setError("")}><ChevronLeft/></button><BrandLogo compact/><span/></div>
         <AuthForm onAuthenticated={data=>{onAuthenticated(data);setError("");}}/>
       </div>
     );
@@ -851,40 +837,40 @@ function BookingScreen({ trip, auth, onAuthenticated, onBack, initialCriteria })
 
   return (
     <div className="screen standard-screen booking-screen">
-      <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><LanguageSwitch/></div>
-      <div className="booking-title"><span><T>BOOKING · STEP 1 OF 2</T></span><h1>{t("Choose your trip details")}</h1><p className="booking-subtitle">{t("Review the departure, persons and package before payment.")}</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"person":"persons"}</p>}<div className="booking-progress"><i/><i/></div></div>
-      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{localizedTripTitle(trip,language)}</h3><VesselName value={trip.vesselName} className="seago-vessel-booking"/><p>{localizedTripDuration(trip,language)} · {t("Aqaba")}</p><div className="booking-verified"><CheckCircle2 size={14}/> {t("Verified operator")}</div></div></div>
+      <div className="booking-top"><button className="plain-back" onClick={onBack}><ChevronLeft/></button><BrandLogo compact/><span/></div>
+      <div className="booking-title"><span>BOOKING · STEP 1 OF 2</span><h1>Choose your trip details</h1><p className="booking-subtitle">Review the departure, persons and package before payment.</p>{initialCriteria?.date&&<p className="booking-search-context">Your search: {new Date(initialCriteria.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})} · {guests} {guests===1?"person":"persons"}</p>}<div className="booking-progress"><i/><i/></div></div>
+      <div className="booking-summary"><div className={"booking-thumb booking-thumb--"+trip.accent}><ShipWheel/></div><div><small>{trip.category}</small><h3>{trip.title}</h3><VesselName value={trip.vesselName} className="seago-vessel-booking"/><p>{trip.duration} · Aqaba</p><div className="booking-verified"><CheckCircle2 size={14}/> Verified operator</div></div></div>
       {trip.departureLocation?.name&&<div className="booking-location-card"><div><MapPin size={20}/><span><small>Departure point</small><strong>{trip.departureLocation.name}</strong>{trip.departureLocation.address&&<em>{trip.departureLocation.address}</em>}</span></div>{trip.departureLocation.googleMapsUrl&&<a href={trip.departureLocation.googleMapsUrl} target="_blank" rel="noreferrer">Google Maps <ChevronRight size={16}/></a>}</div>}
 
       {loading ? <LoadingState label="Checking live departures"/> : (
         <>
           <div className="departure-block">
-            <span>{t("1 · CHOOSE DEPARTURE")}</span>
+            <span>1 · CHOOSE DEPARTURE</span>
             {live && departures.length ? visibleBookingDates.map(d=>(
               <button key={d.id} className={selected?.id===d.id?"departure-option active":"departure-option"} onClick={()=>setSelected(d)} disabled={d.availableSeats<1}>
                 <CalendarDays size={17}/>
-                <div><b>{localizedDepartureDate(d.startsAt,language)}</b><small>{d.availableSeats} {t("seats")}</small></div>
+                <div><b>{formatDeparture(d.startsAt)}</b><small>{d.availableSeats} seats available</small></div>
                 <CheckCircle2 size={17}/>
               </button>
-            )) : live ? <div className="no-departures"><T>No future departures are available yet.</T></div> : <div className="preview-departure"><CalendarDays size={18}/> Preview date · live dates appear after API deployment</div>}
-            {live&&departures.length>4&&<button type="button" className="secondary-button" onClick={()=>setShowAllBookingDates(v=>!v)}>{t(showAllBookingDates?"Show fewer dates":"Show all available dates")}</button>}
-            {live&&initialCriteria?.date&&!selected&&departures.length>0&&<div className="no-departures" role="status">{t("The date you selected is no longer available. Choose another departure above before continuing.")}</div>}
+            )) : live ? <div className="no-departures">No future departures are available yet.</div> : <div className="preview-departure"><CalendarDays size={18}/> Preview date · live dates appear after API deployment</div>}
+            {live&&departures.length>4&&<button type="button" className="secondary-button" onClick={()=>setShowAllBookingDates(v=>!v)}>{showAllBookingDates?"Show fewer dates":"Show all available dates"}</button>}
+            {live&&initialCriteria?.date&&!selected&&departures.length>0&&<div className="no-departures" role="status">The date you selected is no longer available. Choose another departure above before continuing.</div>}
           </div>
 
-          <div className="booking-form booking-form--guests"><div className="booking-form__section-title">{t("2 · PERSONS & PACKAGE")}</div>
-            <label><span>{t("Adults")} <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)} disabled={guests>=seatLimit}>+</button></div></label>
-            <label><span>{t("Children")} <small>6–12</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
-            {trip.buffetEnabled&&<div className="meal-options"><span>Buffet</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>{t("No buffet")}</b><small>{t("Base trip price")}</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>{t("Add open buffet")}</b><small>{t("Live price updates below")}</small></button></div>}
-            <div className="booking-account-row"><span><T>Account</T></span><div><UserRound size={18}/><b>{auth?.user?.email || "Sign in during booking"}</b><CheckCircle2 size={16}/></div></div>
-            {(auth?.user?.phoneNormalized||auth?.user?.phone)&&<div className="booking-account-row"><span><T>Phone on ticket</T></span><div><b dir="ltr">{auth?.user?.phoneNormalized||auth?.user?.phone}</b><CheckCircle2 size={16}/></div></div>}
+          <div className="booking-form booking-form--guests"><div className="booking-form__section-title">2 · PERSONS & PACKAGE</div>
+            <label><span>Adults <small>13+</small></span><div className="stepper"><button type="button" onClick={()=>setAdults(Math.max(0,adults-1))} disabled={adults===0}>−</button><b>{adults}</b><button type="button" onClick={()=>setAdults(adults+1)} disabled={guests>=seatLimit}>+</button></div></label>
+            <label><span>Children <small>6–12 years</small></span><div className="stepper"><button type="button" onClick={()=>setChildren(Math.max(0,children-1))} disabled={children===0}>−</button><b>{children}</b><button type="button" onClick={()=>setChildren(children+1)} disabled={guests>=seatLimit}>+</button></div></label>
+            {trip.buffetEnabled&&<div className="meal-options"><span>Buffet</span><button type="button" className={mealPlan==="without_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("without_buffet")}><b>No buffet</b><small>Base trip price</small></button><button type="button" className={mealPlan==="with_buffet"?"meal-option active":"meal-option"} onClick={()=>setMealPlan("with_buffet")}><b>Add open buffet</b><small>Live price updates below</small></button></div>}
+            <div className="booking-account-row"><span>Account</span><div><UserRound size={18}/><b>{auth?.user?.email || "Sign in during booking"}</b><CheckCircle2 size={16}/></div></div>
+            {(auth?.user?.phoneNormalized||auth?.user?.phone)&&<div className="booking-account-row"><span>Phone on ticket</span><div><b dir="ltr">{auth?.user?.phoneNormalized||auth?.user?.phone}</b><CheckCircle2 size={16}/></div></div>}
           </div>
           {auth?.token&&!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated}/>} 
 
           {error && error!=="AUTH_REQUIRED" && <div className="booking-error">{error}</div>}
 
-          <div className="price-box"><div className="price-box__heading"><span>{t("LIVE PRICE SUMMARY")}</span><small><T>Calculated by SeaGo</T></small></div>{quoteReady?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {formatServerMoney(pricingView.adultUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.adultSubtotal,pricingView.currency)}</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {formatServerMoney(pricingView.childUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.childSubtotal,pricingView.currency)}</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{currentQuote.mealPlan==="with_buffet"?"Open buffet":"No buffet"}</b></div>}<div><span>Service fee</span><b><T>Included</T></b></div><hr/><div className="price-box__total"><span>Total</span><strong>{formatServerMoney(pricingView.grossAmount,pricingView.currency)}</strong></div></>:<div className="live-price-loading"><LoaderCircle className={quoteLoading?"spin":""} size={16}/><span>{quoteLoading?"Updating price...":selected?"Current price unavailable. Try again.":"Choose a departure to see the live price"}</span></div>}</div>
-          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quoteReady)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}>{submitting?<><LoaderCircle className="spin" size={18}/> {t("Starting secure payment...")}</>:<>{t("Continue to secure payment")} <ChevronRight size={18}/></>}</button>
-          <div className="cancellation-policy-note"><b>Cancellation policy</b><span><T>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</T></span></div><p className="booking-note"><T>You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</T></p>
+          <div className="price-box"><div className="price-box__heading"><span>LIVE PRICE SUMMARY</span><small>Calculated by SeaGo</small></div>{quoteReady?<>{adults>0&&<div><span>{adults} Adult{adults===1?"":"s"} × {formatServerMoney(pricingView.adultUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.adultSubtotal,pricingView.currency)}</b></div>}{children>0&&<div><span>{children} Child{children===1?"":"ren"} (6–12) × {formatServerMoney(pricingView.childUnitPrice,pricingView.currency)}</span><b>{formatServerMoney(pricingView.childSubtotal,pricingView.currency)}</b></div>}{trip.buffetEnabled&&<div><span>Package</span><b>{currentQuote.mealPlan==="with_buffet"?"Open buffet":"No buffet"}</b></div>}<div><span>Service fee</span><b>Included</b></div><hr/><div className="price-box__total"><span>Total</span><strong>{formatServerMoney(pricingView.grossAmount,pricingView.currency)}</strong></div></>:<div className="live-price-loading"><LoaderCircle className={quoteLoading?"spin":""} size={16}/><span>{quoteLoading?"Updating price...":selected?"Current price unavailable. Try again.":"Choose a departure to see the live price"}</span></div>}</div>
+          <div className="checkout-trust-row"><span><CheckCircle2 size={15}/> Secure checkout</span><span><CheckCircle2 size={15}/> Instant ticket after payment</span></div><button className="primary-button booking-confirm" onClick={confirm} disabled={submitting || (live && (!selected || !quoteReady)) || (Boolean(auth?.token)&&!(auth?.user?.phoneNormalized||auth?.user?.phone))}>{submitting?<><LoaderCircle className="spin" size={18}/> Starting secure payment...</>:<>Continue to secure payment <ChevronRight size={18}/></>}</button>
+          <div className="cancellation-policy-note"><b>Cancellation policy</b><span>24+ hours: 100% refund · 12–24 hours: 50% · Less than 12 hours: no refund</span></div><p className="booking-note">You will review the final amount before payment. Your booking and QR ticket are created only after successful payment.</p>
         </>
       )}
     </div>
@@ -897,7 +883,6 @@ function FavouritesScreen({ favourites, tripList, onSelectTrip, toggleFavourite 
 }
 
 function TicketsScreen({ auth, onAuthenticated }) {
-  const {language,t}=useCustomerLocale();
   const [tickets,setTickets]=useState([]);
   const [loading,setLoading]=useState(Boolean(auth?.token&&hasApi()));
   const [error,setError]=useState("");
@@ -959,7 +944,7 @@ function TicketsScreen({ auth, onAuthenticated }) {
   },[auth?.token,revision]);
 
   if(hasApi()&&!auth?.token){
-    return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="tickets-auth-copy"><Ticket size={38}/><h2><T>Sign in to view your tickets</T></h2><p><T>Your SeaGo bookings stay linked to your account.</T></p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
+    return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="tickets-auth-copy"><Ticket size={38}/><h2>Sign in to view your tickets</h2><p>Your SeaGo bookings stay linked to your account.</p></div><AuthForm onAuthenticated={onAuthenticated}/></div>;
   }
 
   if(!hasApi()){
@@ -970,12 +955,12 @@ function TicketsScreen({ auth, onAuthenticated }) {
 
   if(error&&!tickets.length) return <div className="screen standard-screen"><header className="standard-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>Tickets</h1></div></header><div className="ticket-error-state"><div className="booking-error">{error}</div><button className="secondary-button" onClick={()=>setRevision(x=>x+1)}>Try again</button></div></div>;
 
-  return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1><T>My SeaGo Tickets</T></h1><p><T>Everything you need for check-in, all in one place.</T></p></div></header>{error&&<div className="booking-error ticket-refresh-error">{error}</div>}{!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated} onSaved={()=>setRevision(x=>x+1)}/>} {tickets.length?<div className="ticket-list">{tickets.map(b=>{
+  return <div className="screen standard-screen tickets-screen"><header className="standard-header tickets-header"><BrandLogo compact/><div><span>YOUR BOOKINGS</span><h1>My SeaGo Tickets</h1><p>Everything you need for check-in, all in one place.</p></div></header>{error&&<div className="booking-error ticket-refresh-error">{error}</div>}{!(auth?.user?.phoneNormalized||auth?.user?.phone)&&<RequiredPhoneCapture auth={auth} onAuthenticated={onAuthenticated} onSaved={()=>setRevision(x=>x+1)}/>} {tickets.length?<div className="ticket-list">{tickets.map(b=>{
     const trip=b.tripId||{};
     const departure=b.departureId||{};
     const provider=b.providerId||{};
     const starts=departure.startsAt?new Date(departure.startsAt):null;
-    const title=language==="ar"?(trip.titleAr||trip.titleEn||"Aqaba Sea Experience"):(trip.titleEn||trip.titleAr||"Aqaba Sea Experience");
+    const title=trip.titleEn||trip.titleAr||"Aqaba Sea Experience";
     const departureLocation=trip.departureLocation||{};
     const departureMapsUrl=departureLocation.googleMapsUrl || (departureLocation.address||departureLocation.name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(departureLocation.address||departureLocation.name)}` : "");
     const ref=String(b._id||"").slice(-8).toUpperCase();
@@ -986,22 +971,22 @@ function TicketsScreen({ auth, onAuthenticated }) {
     const qrValue=b.ticketToken ? `SG2:${b.ticketToken}` : (b.ticketValidationUrl || `AQABA-SEAGO|BOOKING:${b._id}|REF:${ref}`);
     return <article className={`ticket-card ticket-card--${visualStatus}`} key={b._id}>
       <div className="ticket-card__top"><div><span className="ticket-kicker">AQABA SEAGO TICKET</span><h2>{title}</h2><VesselName value={trip.vesselName} className="seago-vessel-ticket"/><p>{trip.category?CATEGORY_LABELS[trip.category]||trip.category:"Sea Experience"}</p>{provider.businessName&&<p className="ticket-provider"><CheckCircle2 size={13}/> Verified operator · <strong>{provider.businessName}</strong></p>}{(provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone)&&<p className="ticket-provider-phone"><span>Provider phone · </span><a href={"tel:"+(provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone)} dir="ltr">{provider.phone||provider.ownerUserId?.phoneNormalized||provider.ownerUserId?.phone}</a></p>}</div><span className={`ticket-status ticket-status--${visualStatus}`}>{status}</span></div>
-      {used?<div className="ticket-used-banner"><CheckCircle2 size={16}/><span><b><T>Ticket used</T></b><small>Checked in successfully{b.checkedInAt?" · "+new Date(b.checkedInAt).toLocaleString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"}):""}</small></span></div>:b.status==="confirmed"&&<div className="ticket-ready-banner"><CheckCircle2 size={16}/><span><b><T>Ready for check-in</T></b><small>Keep this ticket open when you arrive</small></span></div>}
+      {used?<div className="ticket-used-banner"><CheckCircle2 size={16}/><span><b>Ticket used</b><small>Checked in successfully{b.checkedInAt?" · "+new Date(b.checkedInAt).toLocaleString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",hour:"numeric",minute:"2-digit"}):""}</small></span></div>:b.status==="confirmed"&&<div className="ticket-ready-banner"><CheckCircle2 size={16}/><span><b>Ready for check-in</b><small>Keep this ticket open when you arrive</small></span></div>}
       <div className="ticket-card__details">
-        <div style={{minWidth:0}}><small><T>Customer name</T></small><strong dir="auto" style={{overflowWrap:"anywhere"}}>{b.customer?.name || auth?.user?.name || "Not provided"}</strong></div>
+        <div style={{minWidth:0}}><small>Customer name</small><strong dir="auto" style={{overflowWrap:"anywhere"}}>{b.customer?.name || auth?.user?.name || "Not provided"}</strong></div>
         <div style={{minWidth:0}}><small>Phone number</small><strong dir="ltr" style={{overflowWrap:"anywhere"}}>{b.customer?.phone || auth?.user?.phoneNormalized || auth?.user?.phone || "Not provided"}</strong></div>
         <div><small>Date</small><strong>{starts?starts.toLocaleDateString("en-GB",{timeZone:"Asia/Amman",day:"2-digit",month:"short",year:"numeric"}):"TBA"}</strong></div>
         <div><small>Time</small><strong>{starts?starts.toLocaleTimeString("en-US",{timeZone:"Asia/Amman",hour:"numeric",minute:"2-digit"}):"TBA"}</strong></div>
         <div><small>Persons</small><strong>{b.adults!==undefined?`${b.adults||0}A · ${b.children||0}C`:b.seats||1}</strong></div><div><small>Package</small><strong>{b.mealPlan==="with_buffet"?"With buffet":"No buffet"}</strong></div>
         <div><small>Total</small><strong>{Number(b.pricing?.grossAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</strong></div>
       </div>
-      <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small><T>Booking reference</T></small><strong>SG-{ref}</strong>{!used&&b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{!used&&b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={108} level="L" includeMargin={true}/><small>Show at check-in</small></div>:<div className={used?"ticket-used-stamp":"ticket-pending"}>{used?<><CheckCircle2 size={28}/><span>USED</span></>:<><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></>}</div>}</div>
+      <div className="ticket-card__location">{departureLocation.name&&<><div className="ticket-location-title"><MapPin size={16}/><span><small>Departure point</small><strong>{departureLocation.name}</strong></span></div>{departureLocation.address&&<span>{departureLocation.address}</span>}{departureMapsUrl&&<a className="ticket-map-button" href={departureMapsUrl} target="_blank" rel="noreferrer"><MapPin size={15}/> Open in Google Maps <ChevronRight size={14}/></a>}</>}</div><div className="ticket-card__footer"><div><small>Booking reference</small><strong>SG-{ref}</strong>{!used&&b.status==="confirmed"&&<span className="ticket-ref-note">Use this if you need support</span>}</div>{!used&&b.status==="confirmed"?<div className="ticket-qr"><QRCodeSVG value={qrValue} size={108} level="L" includeMargin={true}/><small>Show at check-in</small></div>:<div className={used?"ticket-used-stamp":"ticket-pending"}>{used?<><CheckCircle2 size={28}/><span>USED</span></>:<><Ticket size={24}/><span>{b.status==="pending_payment"?"Awaiting payment":"Ticket unavailable"}</span></>}</div>}</div>
     {b.cancellation?.cancelledAt&&<div className={"ticket-cancellation ticket-cancellation--"+(b.cancellation.refundStatus||"none")}>
       <b>{b.status==="refunded"||b.cancellation.refundStatus==="processed"?"Refund completed":"Booking cancelled"}</b>
       <span>{b.cancellation.refundPercentage||0}% refund · {Number(b.cancellation.refundAmount||0).toFixed(2)} {b.pricing?.currency||"JOD"}</span>
       <small>{b.cancellation.refundStatus==="pending"?"Refund is being processed.":b.cancellation.refundStatus==="processed"?"Refund marked as processed.":b.cancellation.refundStatus==="failed"?"Refund needs support review.":"No refund is due under this cancellation."}</small>
     </div>}</article>;
-  })}</div>:<div className="empty-state ticket-empty"><Ticket size={48}/><h2>No trips booked yet</h2><p><T>Once you book a SeaGo experience, your QR ticket and departure details will appear here.</T></p></div>}</div>;
+  })}</div>:<div className="empty-state ticket-empty"><Ticket size={48}/><h2>No trips booked yet</h2><p>Once you book a SeaGo experience, your QR ticket and departure details will appear here.</p></div>}</div>;
 }
 
 function ProfileScreen({ auth, onAuthenticated, onSignOut, navigate }) {
@@ -1082,7 +1067,7 @@ function PersonalDetailsScreen({ auth, onAuthenticated, onBack }) {
     <ProfileSubHeader eyebrow="ACCOUNT" title="Personal details" subtitle="Your SeaGo account information." onBack={onBack}/>
     <section className="profile-detail-card">
       <div><span className="profile-detail-icon"><UserRound size={18}/></span><span><small>Full name</small><b>{user.name||"Not provided"}</b></span></div>
-      <div><span className="profile-detail-icon"><Sparkles size={18}/></span><span><small><T>Email</T></small><b>{user.email||"Not provided"}</b></span></div>
+      <div><span className="profile-detail-icon"><Sparkles size={18}/></span><span><small>Email</small><b>{user.email||"Not provided"}</b></span></div>
       <div><span className="profile-detail-icon"><UserRound size={18}/></span><span><small>Phone</small><b>{user.phone||"Not provided"}</b></span></div>
     </section>
     {auth?.token&&<form className="phone-update-card" onSubmit={submitPhone}>
@@ -1167,7 +1152,7 @@ function PoliciesScreen({ onBack, navigate }) {
       <span>CANCELLATION & REFUNDS</span>
       <h2>Know your refund before cancelling</h2>
       <div className="policy-grid">
-        <div><b>24+ hrs</b><small><T>100% refund</T></small></div>
+        <div><b>24+ hrs</b><small>100% refund</small></div>
         <div><b>12–24 hrs</b><small>50% refund</small></div>
         <div><b>&lt;12 hrs</b><small>No refund</small></div>
       </div>
@@ -1243,7 +1228,6 @@ function TermsScreen({ onBack }) {
 }
 
 function PaymentReturnScreen({ auth, onViewTicket, onReturnHome }) {
-  const {language,t}=useCustomerLocale();
   const params=new URLSearchParams(window.location.search);
   const paymentId=params.get("paymentId");
   const gatewayState=params.get("payment");
@@ -1379,7 +1363,6 @@ function NotificationsScreen({auth,onUnreadChange,onAuthenticated}){
 }
 
 function SideMenu({ open, onClose, active, setActive }) {
-  const {t}=useCustomerLocale();
   const items=[
     ["home",Home,"Home"],
     ["trips",ShipWheel,"Sea Experiences"],
@@ -1393,17 +1376,16 @@ function SideMenu({ open, onClose, active, setActive }) {
     <button className="side-menu-backdrop" aria-label="Close menu" onClick={onClose}/>
     <aside className="side-menu" aria-label="Main menu">
       <div className="side-menu__head"><BrandLogo/><button className="side-menu__close" onClick={onClose} aria-label="Close menu">×</button></div>
-      <div className="side-menu__eyebrow">{t("Explore Aqaba")}</div><div className="seago-side-language"><LanguageSwitch/></div>
-      <nav>{items.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>{setActive(id);onClose();}}><Icon size={20}/><span>{t(label)}</span><ChevronRight size={17}/></button>)}</nav>
+      <div className="side-menu__eyebrow">EXPLORE AQABA</div>
+      <nav>{items.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>{setActive(id);onClose();}}><Icon size={20}/><span>{label}</span><ChevronRight size={17}/></button>)}</nav>
       <div className="side-menu__footer">Aqaba SeaGo · Red Sea experiences</div>
     </aside>
   </div>;
 }
 
 function BottomNav({ active, setActive, unread = 0 }) {
-  const {t}=useCustomerLocale();
   const nav=[["home",Home,"Home"],["trips",ShipWheel,"Trips"],["tickets",Ticket,"Tickets"],["notifications",Bell,"Alerts"],["profile",UserRound,"Profile"]];
-  return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><span className="bottom-nav__icon"><Icon size={20}/>{id==="notifications"&&unread>0&&<em>{unread>9?"9+":unread}</em>}</span><span>{t(label)}</span></button>)}</nav>;
+  return <nav className="bottom-nav">{nav.map(([id,Icon,label])=><button key={id} className={active===id?"active":""} onClick={()=>setActive(id)}><span className="bottom-nav__icon"><Icon size={20}/>{id==="notifications"&&unread>0&&<em>{unread>9?"9+":unread}</em>}</span><span>{label}</span></button>)}</nav>;
 }
 
 function readStoredAuth() {
@@ -1411,8 +1393,7 @@ function readStoredAuth() {
   catch { return null; }
 }
 
-function CustomerApp(){
-  const {language,t}=useCustomerLocale();
+export default function App(){
   const [active,setActive]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
     if(params.get("open")==="notifications") return "notifications";
@@ -1557,7 +1538,7 @@ function CustomerApp(){
     }
 
     setSearchResults(candidates);
-    const parts=[tripType!=="All Trips"?t(tripType):null,date?new Date(date+"T12:00:00").toLocaleDateString(language==="ar"?"ar-JO":"en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" "+t("Persons"):null].filter(Boolean);
+    const parts=[tripType!=="All Trips"?tripType:null,date?new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):null,guests?guests+" persons":null].filter(Boolean);
     setSearchSummary(parts.length?parts.join(" · "):"DISCOVER AQABA");
     setActive("trips");
   }
@@ -1620,18 +1601,4 @@ function CustomerApp(){
     <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} active={active} setActive={setActive}/>
     <BottomNav active={["personal-details","trip-preferences","support","policies","privacy","terms"].includes(active)?"profile":active} setActive={setActive} unread={alertsUnread}/>
   </div>;
-}
-
-export default function App(){
-  const [language,setLanguage]=useState(()=>{
-    try{return languageFromStorage(localStorage.getItem(CUSTOMER_LANGUAGE_KEY));}
-    catch{return "en";}
-  });
-  useEffect(()=>{
-    document.documentElement.lang=language;
-    document.documentElement.dir=language==="ar"?"rtl":"ltr";
-    try{localStorage.setItem(CUSTOMER_LANGUAGE_KEY,language);}catch{}
-  },[language]);
-  const value=useMemo(()=>({language,setLanguage,t:key=>tr(key,language)}),[language]);
-  return <LocaleContext.Provider value={value}><CustomerApp/></LocaleContext.Provider>;
 }

@@ -6,7 +6,7 @@ import PasswordRecovery from "./PasswordRecovery.jsx";
 import "./styles.css";
 import "./vessel-polish.css";
 import "./cancellation-ux.css";
-import "./customerLocale.css";
+import "./customerVisualPolish.css";
 import { enableAccountDeletionUi } from "./accountDeletionUi.js";
 import { enableCancellationUi } from "./cancellationUi.js";
 import { enableNotificationLogoutGuard } from "./notificationCredentialLifecycle.js";
@@ -22,7 +22,7 @@ function PasswordRecoveryEntry(){
       document.querySelectorAll(".auth-panel").forEach(panel=>{
         const title=panel.querySelector(".auth-panel__head h2")?.textContent?.trim();
         const existing=panel.querySelector("[data-seago-forgot-password]");
-        if(!["Sign in to book","سجّل الدخول للحجز"].includes(title)){
+        if(title!=="Sign in to book"){
           existing?.remove();
           return;
         }
@@ -33,7 +33,7 @@ function PasswordRecoveryEntry(){
         button.type="button";
         button.className="auth-switch";
         button.dataset.seagoForgotPassword="1";
-        button.textContent=document.documentElement.lang==="ar"?"نسيت كلمة المرور؟":"Forgot password?";
+        button.textContent="Forgot password?";
         button.addEventListener("click",()=>{
           const url=new URL(window.location.href);
           url.searchParams.set("forgotPassword","1");
