@@ -34,8 +34,7 @@ test("context is untrusted and never transports provider IDs, customer info or p
 test("revised prices replace old ones without erasing earlier trip details",()=>{
   const first={titleAr:"سفينة الأبيض",durationMinutes:90,adultPrice:20,childPrice:10};
   const revised=mergeTripConversationDraft(first,{adultPrice:25,childPrice:null,durationMinutes:""});
-  assert.deepEqual(revised,first);
-  assert.equal(revised.adultPrice,25);
+  assert.deepEqual(revised,{...first,adultPrice:25});
   assert.equal(tripConversationStep(revised).ready,true);
 });
 
