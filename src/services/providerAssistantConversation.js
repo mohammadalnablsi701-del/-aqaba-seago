@@ -22,42 +22,99 @@ export function sanitizeTripConversationDraft(input){
     const value=number(input.durationMinutes,1440);
     if(Number.isInteger(value)&&value>=15)draft.durationMinutes=value;
   }
-  for(const key of ["adultPrice","childPrice"]){
+  for(const key of ["adultPrice","childPrice","buffetAdultPrice","buffetChildPrice"]){
     if(own(input,key)){
       const value=number(input[key],10000);
       if(value!==undefined)draft[key]=value;
     }
   }
+  if(typeof input.buffetEnabled==="boolean")draft.buffetEnabled=input.buffetEnabled;
+  if(own(input,"buffetDescription")){
+    const description=clean(input.buffetDescription,500);
+    if(description)draft.buffetDescription=description;
+  }
+  if(typeof input.googleMapsSkipped==="boolean")draft.googleMapsSkipped=input.googleMapsSkipped;
+  const map=safeGoogleMapsUrl(input.googleMapsUrl);
+  if(map)draft.googleMapsUrl=map;
+  if(draft.buffetEnabled===false){
+    delete draft.buffetDescription;
+    delete draft.buffetAdultPrice;
+    delete draft.buffetChildPrice;
+  }
   return draft;
+}
+/** Only permit Google Maps HTTPS links; never use unknown shortened link hosts. */
+export function safeGoogleMapsUrl(value){
+  if(typeof value!=="string"||value.trim().length>500)return "";
+  try{
+    const url=new URL(value.trim());
+    if(url.protocol!=="https:"||url.username||url.password)return "";
+    const host=url.hostname.toLowerCase();
+    const path=url.pathname.toLowerCase();
+    const accepted=((host==="google.com"||host==="www.google.com")&&path.startsWith("/maps"))||
+      (host==="maps.google.com")||
+      (host==="maps.app.goo.gl"&&path.length>1)||
+      (host==="goo.gl"&&path.startsWith("/maps/"));
+    return accepted?url.toString():"";
+  }catch{return "";}
 }
 export function mergeTripConversationDraft(current,delta){
   return {...sanitizeTripConversationDraft(current),...sanitizeTripConversationDraft(delta)};
 }
+export const tripFieldNames=["title","durationMinutes","adultPrice","childPrice","buffetEnabled","buffetDescription","buffetAdultPrice","buffetChildPrice","locationName","googleMapsUrl"];
 export function assistantConversationContext(raw){
   return {mode:["create_trip","seats"].includes(raw?.mode)?raw.mode:"",
     draft:sanitizeTripConversationDraft(raw?.draft),
-    pendingField:["title","durationMinutes","adultPrice","childPrice"].includes(raw?.pendingField)?raw.pendingField:""};
+    pendingField:tripFieldNames.includes(raw?.pendingField)?raw.pendingField:""};
 }
 const fields=[
   {key:"title",question:"تمام! بنجهّز الرحلة سوا 🌊 شو بدك تسمّيها؟",choices:["رحلة غروب","رحلة سنوركلينغ","رحلة بحرية"]},
   {key:"durationMinutes",question:"حلو! كم مدة الرحلة؟",choices:["ساعة","ساعتين","3 ساعات"]},
-  {key:"adultPrice",question:"كم سعر الشخص الكبير بالدينار الأردني؟",choices:["15 دينار","20 دينار","25 دينار"]},
-  {key:"childPrice",question:"وكم سعر الطفل من عمر 6 إلى 12 سنة؟",choices:["10 دنانير","15 دينار","نفس سعر الكبير"]}
+  {key:"adultPrice",question:"كم سعر الشخص الكبير بدون بوفيه بالدينار الأردني؟",choices:["15 دينار","20 دينار","25 دينار"]},
+  {key:"childPrice",question:"وكم سعر الطفل بدون بوفيه من عمر 6 إلى 12 سنة؟",choices:["10 دنانير","15 دينار","نفس سعر الكبير"]},
+  {key:"buffetEnabled",question:"هل الرحلة فيها بوفيه؟",choices:["نعم، مع بوفيه","لا، بدون بوفيه"]},
+  {key:"buffetDescription",question:"شو بشمل البوفيه؟ اكتب وصف الأكل والمشروبات اللي بتقدمها.",choices:[]},
+  {key:"buffetAdultPrice",question:"كم سعر الكبير مع البوفيه بالدينار الأردني؟",choices:["20 دينار","25 دينار","30 دينار","نفس سعر الكبير"]},
+  {key:"buffetChildPrice",question:"كم سعر الطفل مع البوفيه من 6 إلى 12 سنة؟",choices:["12 دينار","15 دينار","20 دينار","نفس سعر الطفل"]},
+  {key:"locationName",question:"من وين نقطة انطلاق الرحلة؟ اكتب اسم المرسى أو المكان.",choices:[]},
+  {key:"googleMapsUrl",question:"ابعث رابط Google Maps لنقطة الانطلاق، أو اضغط «تخطي الرابط» وبتضيفه لاحقاً في النموذج.",choices:["تخطي الرابط"]}
 ];
+function completedTripField(draft,key){
+  switch(key){
+    case "title":return Boolean(draft.titleAr||draft.titleEn);
+    case "buffetEnabled":return typeof draft.buffetEnabled==="boolean";
+    case "googleMapsUrl":return Boolean(draft.googleMapsUrl||draft.googleMapsSkipped===true);
+    default:return key==="buffetDescription"||key==="locationName"?Boolean(draft[key]):draft[key]!==undefined;
+  }
+}
 export function tripConversationStep(input,options={}){
   const draft=sanitizeTripConversationDraft(input);
-  const pendingField=["title","durationMinutes","adultPrice","childPrice"].includes(options.pendingField)?options.pendingField:"";
-  const completed=[Boolean(draft.titleAr||draft.titleEn),draft.durationMinutes!==undefined,draft.adultPrice!==undefined,draft.childPrice!==undefined];
-  const progress=completed.filter(Boolean).length;
-  const missing=completed.indexOf(false);
+  const questions=fields.filter(f=>draft.buffetEnabled===true||!["buffetDescription","buffetAdultPrice","buffetChildPrice"].includes(f.key));
+  const pendingField=tripFieldNames.includes(options.pendingField)?options.pendingField:"";
+  const done=questions.map(f=>completedTripField(draft,f.key));
+  const progress=done.filter(Boolean).length;
+  const missing=done.indexOf(false);
   if(pendingField||missing!==-1){
-    const field=pendingField?fields.find(x=>x.key===pendingField):fields[missing];
-    const question=pendingField?"أكيد، خلينا نعدّلها. "+field.question:field.question;
-    return {draft,ready:false,progress,total:fields.length,askFor:field.key,pendingField:pendingField||"",text:question,suggestions:field.choices};
+    const field=pendingField?fields.find(f=>f.key===pendingField):questions[missing];
+    return {draft,ready:false,progress,total:questions.length,askFor:field.key,pendingField:pendingField||"",
+      text:(pendingField?"أكيد، خلّينا نعدّلها. ":"")+field.question,suggestions:field.choices};
   }
   const title=draft.titleAr||draft.titleEn;
-  const text="هيك جهّزنا مسودة «"+title+"» ✅\nالمدة: "+draft.durationMinutes+" دقيقة\nسعر الكبير: "+draft.adultPrice+" د.أ\nسعر الطفل: "+draft.childPrice+" د.أ\n\nافتح النموذج، وراجع المكان والصور وباقي التفاصيل قبل حفظ الرحلة. ما تم إنشاء أي شيء لحد الآن.";
-  return {draft,ready:true,progress,total:fields.length,askFor:null,text,suggestions:["بدي أغيّر السعر","بدي أعدّل مدة الرحلة"]};
+  const buffet=draft.buffetEnabled?
+    "\nالبوفيه: نعم\nشو بشمل: "+draft.buffetDescription+
+    "\nسعر الكبير مع البوفيه: "+draft.buffetAdultPrice+" د.أ"+
+    "\nسعر الطفل مع البوفيه: "+draft.buffetChildPrice+" د.أ":
+    "\nالبوفيه: لا";
+  const map=draft.googleMapsUrl||"رح تضيفه لاحقاً بالنموذج";
+  const text="هيك خلّصنا مسودة «"+title+"» ✅\n"+
+    "المدة: "+draft.durationMinutes+" دقيقة\n"+
+    "سعر الكبير بدون بوفيه: "+draft.adultPrice+" د.أ\n"+
+    "سعر الطفل بدون بوفيه: "+draft.childPrice+" د.أ"+
+    buffet+"\nمكان الانطلاق: "+draft.locationName+
+    "\nGoogle Maps: "+map+
+    "\n\nافتح نموذج الرحلة وراجع كل التفاصيل والصور قبل الحفظ. ما تم إنشاء أي شيء لحد الآن.";
+  return {draft,ready:true,progress,total:questions.length,askFor:null,pendingField:"",
+    text,suggestions:["بدي أغير البوفيه","بدي أعدل السعر","بدي أغير مكان الانطلاق"]};
 }
 export function assistantSuggestionList(input){
   return Array.isArray(input)?input.filter(x=>typeof x==="string").map(x=>x.trim().slice(0,90)).filter(Boolean).slice(0,4):[];
@@ -126,9 +183,14 @@ export function localGuidedTripTurn(text,rawContext){
   const draft={...ctx.draft};
   const baseStep=tripConversationStep(draft,{pendingField:ctx.pendingField});
   let pending=ctx.pendingField;
-  const n=normalized(text),number=priceValue(text);
+  const n=normalized(text),value=priceValue(text);
   if(inTrip&&/(?:غير|عدل|تعديل|تغيير|اغير|اعدل)/.test(n)&&!(/\d/.test(n))){
-    if(/طفل/.test(n))pending="childPrice";
+    if(/بوفيه/.test(n)&&/طفل/.test(n))pending="buffetChildPrice";
+    else if(/بوفيه/.test(n)&&/(?:كبير|سعر)/.test(n))pending="buffetAdultPrice";
+    else if(/بوفيه/.test(n))pending="buffetEnabled";
+    else if(/رابط|جوجل|ماب|خريط/.test(n))pending="googleMapsUrl";
+    else if(/مكان|انطلاق|مارينا|مرسى/.test(n))pending="locationName";
+    else if(/طفل/.test(n))pending="childPrice";
     else if(/مده|وقت|ساعه/.test(n))pending="durationMinutes";
     else if(/اسم/.test(n))pending="title";
     else if(/سعر|دينار/.test(n))pending="adultPrice";
@@ -138,15 +200,17 @@ export function localGuidedTripTurn(text,rawContext){
     }
   }
   const field=inTrip?(pending||baseStep.askFor):"";
-  const explicitMinutes=minutesFromText(text,false);
   if(!inTrip){
     const title=titleFromText(text,false);
     if(title)draft.titleAr=title;
     const type=inferredCategory(text);
     if(type)draft.category=type;
-    if(explicitMinutes!==undefined&&explicitMinutes>=15&&explicitMinutes<=1440)draft.durationMinutes=explicitMinutes;
+    const duration=minutesFromText(text,false);
+    if(Number.isInteger(duration)&&duration>=15&&duration<=1440)draft.durationMinutes=duration;
     const amount=n.match(/(?:ب\s*|بسعر\s*|سعر\s*(?:الكبير|الشخص)\s*)(\d+(?:[.,]\d+)?)\s*(?:دينار|دنانير|د\.ا)/);
     if(amount)draft.adultPrice=priceValue(amount[1]);
+    if(/بدون\s*بوفيه|ما\s*في\s*بوفيه/.test(n))draft.buffetEnabled=false;
+    else if(/مع\s*بوفيه|فيه\s*بوفيه/.test(n))draft.buffetEnabled=true;
   }else if(field==="title"){
     const title=titleFromText(text,true);
     if(title)draft.titleAr=title;
@@ -155,17 +219,36 @@ export function localGuidedTripTurn(text,rawContext){
   }else if(field==="durationMinutes"){
     const minutes=minutesFromText(text,true);
     if(Number.isInteger(minutes)&&minutes>=15&&minutes<=1440)draft.durationMinutes=minutes;
-  }else if(field==="adultPrice"){
-    if(number!==undefined)draft.adultPrice=number;
-  }else if(field==="childPrice"){
-    if(/نفس\s*(?:سعر|الكبير)|زي\s*(?:الكبير|سعر الكبير)/.test(n)&&draft.adultPrice!==undefined)draft.childPrice=draft.adultPrice;
-    else if(number!==undefined)draft.childPrice=number;
-  }else if(inTrip&&number!==undefined){
-    if(/طفل/.test(n))draft.childPrice=number;
-    else if(/سعر|الكبير|دينار/.test(n))draft.adultPrice=number;
+  }else if(field==="adultPrice"||field==="childPrice"||field==="buffetAdultPrice"||field==="buffetChildPrice"){
+    const sameAdult=field==="childPrice"&&/نفس\s*(?:سعر|الكبير)|زي\s*(?:الكبير|سعر الكبير)/.test(n);
+    const samePrice=field==="buffetAdultPrice"&&/نفس\s*سعر\s*الكبير/.test(n)?draft.adultPrice:
+      field==="buffetChildPrice"&&/نفس\s*سعر\s*الطفل/.test(n)?draft.childPrice:undefined;
+    const price=sameAdult?draft.adultPrice:(samePrice!==undefined?samePrice:value);
+    if(price!==undefined)draft[field]=price;
+  }else if(field==="buffetEnabled"){
+    if(/^(?:لا|لاء|لأ|no)(?:\s|$|[،,.!])|بدون\s*بوفيه|ما\s*في\s*بوفيه|مش\s*شامل/.test(n)){
+      draft.buffetEnabled=false;
+      delete draft.buffetDescription;delete draft.buffetAdultPrice;delete draft.buffetChildPrice;
+    }else if(/^(?:نعم|اه|ايوه|ايوا|يس|yes|اكيد)(?:\s|$|[،,.!])|مع\s*بوفيه|فيه\s*بوفيه|بوفيه\s*موجود/.test(n)){
+      draft.buffetEnabled=true;
+    }
+  }else if(field==="buffetDescription"){
+    if(n.length>=3&&!/^(?:لا|نعم|اه|تخطي|skip)$/.test(n))draft.buffetDescription=text.trim().slice(0,500);
+  }else if(field==="locationName"){
+    if(n.length>=2&&!/^(?:تخطي|مش عارف|لا اعرف)$/.test(n)&&!/^https?:\/\//.test(text.trim()))draft.locationName=text.trim().slice(0,120);
+  }else if(field==="googleMapsUrl"){
+    if(/^(?:تخطي|تجاوز|ما عندي|لاحقا|بعدين|مش متوفر)/.test(n)){
+      draft.googleMapsSkipped=true;delete draft.googleMapsUrl;
+    }else{
+      const candidate=text.trim().match(/https:\/\/[^\s<>"']+/i)?.[0]||text.trim();
+      const url=safeGoogleMapsUrl(candidate);
+      if(url){draft.googleMapsUrl=url;delete draft.googleMapsSkipped;}
+    }
   }
-  // Explicitly invalid values must never be persisted or treated as complete.
-  const safeDraft=sanitizeTripConversationDraft(draft);
-  const next=tripConversationStep(safeDraft);
+  const next=tripConversationStep(sanitizeTripConversationDraft(draft));
+  // A bad URL never silently completes the question; offer a clear correction.
+  if(field==="googleMapsUrl"&&!draft.googleMapsUrl&&!draft.googleMapsSkipped&&!next.ready){
+    next.text="الرابط لازم يكون رابط Google Maps صحيح (مثل maps.app.goo.gl). ابعثه أو اضغط «تخطي الرابط».";
+  }
   return {intent:"create_trip",mode:"create_trip",...next,pendingField:""};
 }

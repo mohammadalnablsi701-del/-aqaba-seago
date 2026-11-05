@@ -5,7 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn} from "../services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -24,12 +24,16 @@ export function safeAssistantDate(v){
 }
 export function safeTripDraft(value){
   const v=value&&typeof value==="object"?value:{};
+  const extra=sanitizeTripConversationDraft(v);
   const minutes=Number(v.durationMinutes);
   return {titleAr:clean(v.titleAr,120),titleEn:clean(v.titleEn,120),vesselName:clean(v.vesselName,120),
     category:categories.has(v.category)?v.category:"group_boat",
     durationMinutes:Number.isInteger(minutes)&&minutes>=15&&minutes<=1440?minutes:undefined,
     adultPrice:price(v.adultPrice),childPrice:price(v.childPrice),
-    locationName:clean(v.locationName,120),address:clean(v.address,220)};
+    locationName:clean(v.locationName,120),address:clean(v.address,220),
+    buffetEnabled:extra.buffetEnabled,buffetDescription:extra.buffetDescription,
+    buffetAdultPrice:extra.buffetAdultPrice,buffetChildPrice:extra.buffetChildPrice,
+    googleMapsUrl:extra.googleMapsUrl,googleMapsSkipped:extra.googleMapsSkipped};
 }
 function normalize(v){return clean(v).toLocaleLowerCase("ar").replace(/[\u064b-\u065f]/g,"").replace(/[أإآ]/g,"ا").replace(/ة/g,"ه");}
 export async function understandAssistant(body,env=process.env){
@@ -49,9 +53,9 @@ export async function understandAssistant(body,env=process.env){
     "إذا السياق mode=create_trip والمستخدم يعطي اسم أو مدة أو سعر أو يعدّل معلومة، استمر create_trip لا help، ما لم يطلب صراحة التحوّل للحجوزات أو الإلغاء. "+
     "إذا السياق mode=seats وقال المستخدم بكرا أو الجمعة أو اسم رحلة، استمر seats. "+
     "date تاريخ YYYY-MM-DD عند السؤال عن المقاعد، واستخرج اليوم/بكرا/تاريخ صريح وإلا فارغ. tripName اسم رحلة ذكرها المستخدم وإلا فارغ. "+
-    "draft كائن يحتوي فقط على حقول الرحلة المذكورة **في الرسالة الحالية**: titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,locationName,address. "+
+    "draft كائن يحتوي فقط على حقول الرحلة المذكورة **في الرسالة الحالية**: titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,buffetEnabled (boolean true أو false),buffetDescription,buffetAdultPrice,buffetChildPrice,locationName,address,googleMapsUrl. "+
     "لا تنسخ القيم الموجودة بالسياق إلى draft ولا تخترع أسعاراً أو تفاصيل جديدة. يمكن استخدام سعر الكبير الموجود في السياق فقط إذا قال المستخدم صراحة إن سعر الطفل نفس سعر الكبير. "+
-    "durationMinutes دقائق صحيحة، أسعار الأفراد أرقام بالدينار الأردني، والاسم العربي في titleAr. "+
+    "durationMinutes دقائق صحيحة، أسعار الأفراد أرقام بالدينار الأردني، والاسم العربي في titleAr. إذا قال المستخدم نعم بوفيه اجعل buffetEnabled=true، وإذا لا فـ false، ولا تخترع وصف البوفيه أو أسعاره. رابط الخرائط HTTPS من Google فقط. "+
     "category أحد group_boat,private_boat,yacht,glass_bottom,snorkeling,diving,fishing,sunset,private_event,water_sports,semi_submarine فقط إذا عُرف النوع. "+
     "transcript تفريغ الصوت بالعربية إذا كانت رسالة صوتية، وفارغ تماماً للنص. "+
     "reply رد عربي قصير ولطيف في حال help فقط، أجب عن خطوات استخدام واجهة المزود بالمعلومات المؤكدة التالية: الرحلة من صفحة Trips > Add trip؛ بعد الحفظ تُجدول المغادرة وتُحدد سعتها، والحجوزات من Bookings، والمقاعد من المغادرات. لا تؤكد وجود حجوزات أو مواعيد من عندك. "+
@@ -110,7 +114,7 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       const access=await requireProviderCapability(req.user,"manage_trips");
       if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية إنشاء الرحلات."});
       const draft=mergeTripConversationDraft(parsed.context.mode==="create_trip"?parsed.context.draft:{},parsed.delta);
-      const step=tripConversationStep(draft);
+      const step=tripConversationStep(draft,{pendingField:parsed.context.pendingField});
       return res.json({intent:"create_trip",mode:"create_trip",transcript:parsed.transcript,...step});
     }
     if(parsed.intent==="cancel"){

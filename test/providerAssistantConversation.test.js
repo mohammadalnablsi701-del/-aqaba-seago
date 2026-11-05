@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn} from "../src/services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl} from "../src/services/providerAssistantConversation.js";
 
 test("Arabic guided creation asks for missing details one at a time and never autosaves",()=>{
   const first=tripConversationStep({});
@@ -16,10 +16,11 @@ test("Arabic guided creation asks for missing details one at a time and never au
   const fourth=tripConversationStep(mergeTripConversationDraft(third.draft,{adultPrice:20}));
   assert.equal(fourth.askFor,"childPrice");
   const ready=tripConversationStep(mergeTripConversationDraft(fourth.draft,{childPrice:10}));
-  assert.equal(ready.ready,true);
+  assert.equal(ready.ready,false);
+  assert.equal(ready.askFor,"buffetEnabled");
   assert.equal(ready.progress,4);
-  assert.match(ready.text,/سعر الكبير: 20/);
-  assert.match(ready.text,/ما تم إنشاء أي شيء/);
+  assert.equal(ready.total,7);
+  assert.match(ready.text,/بوفيه/);
 });
 
 test("context is untrusted and never transports provider IDs, customer info or payment fields",()=>{
@@ -35,7 +36,7 @@ test("revised prices replace old ones without erasing earlier trip details",()=>
   const first={titleAr:"سفينة الأبيض",durationMinutes:90,adultPrice:20,childPrice:10};
   const revised=mergeTripConversationDraft(first,{adultPrice:25,childPrice:null,durationMinutes:""});
   assert.deepEqual(revised,{...first,adultPrice:25});
-  assert.equal(tripConversationStep(revised).ready,true);
+  assert.equal(tripConversationStep(revised).askFor,"buffetEnabled");
 });
 
 test("invalid fields and impossible prices never become part of a saved draft",()=>{
@@ -60,10 +61,9 @@ test("written trip creation completes even when Gemini cannot be called",()=>{
   assert.equal(price.askFor,"childPrice");
   const child=localGuidedTripTurn("8",{mode:"create_trip",draft:price.draft});
   assert.equal(child.draft.childPrice,8);
-  assert.equal(child.ready,true);
+  assert.equal(child.ready,false);
+  assert.equal(child.askFor,"buffetEnabled");
   assert.equal(child.progress,4);
-  assert.match(child.text,/سعر الطفل: 8 د.أ/);
-  assert.match(child.text,/ما تم إنشاء أي شيء/);
 });
 
 test("Arabic numeral characters, guided edits, and cancellation are safe",()=>{
@@ -74,7 +74,7 @@ test("Arabic numeral characters, guided edits, and cancellation are safe",()=>{
   const revised=localGuidedTripTurn("٢٥ دينار",{mode:"create_trip",draft,pendingField:edit.pendingField});
   assert.equal(revised.draft.adultPrice,25);
   assert.equal(revised.draft.childPrice,8);
-  assert.equal(revised.ready,true);
+  assert.equal(revised.askFor,"buffetEnabled");
   const cancelled=localGuidedTripTurn("إلغاء المسودة",{mode:"create_trip",draft});
   assert.equal(cancelled.intent,"cancel");
   assert.equal(cancelled.mode,"");
