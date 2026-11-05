@@ -7,6 +7,7 @@ import { logRequestError, publicErrorResponse } from "./utils/errorLogging.js";
 import authRoutes from "./routes/auth.js";
 import providerCheckinRoutes from "./routes/providerCheckin.js";
 import providerRoutes from "./routes/providers.js";
+import providerAssistantRoutes from "./routes/providerAssistant.js";
 import adminRoutes from "./routes/admin.js";
 import adminAuditRoutes from "./routes/adminAudit.js";
 import adminCommissionRoutes from "./routes/adminCommission.js";
@@ -62,6 +63,7 @@ export function createApp() {
   app.use("/api/auth", authRoutes);
   app.use("/api/providers", providerCheckinRoutes);
   app.use("/api/providers", providerRoutes);
+  app.use("/api/providers", providerAssistantRoutes);
   app.use("/api/admin/operations", adminDeparturesRoutes);
   app.use("/api/admin/operations", operationsRoutes);
   app.use("/api/admin/bookings", adminBookingSupportRoutes);
