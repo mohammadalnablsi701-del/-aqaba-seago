@@ -226,10 +226,10 @@ export function localGuidedTripTurn(text,rawContext){
     const price=sameAdult?draft.adultPrice:(samePrice!==undefined?samePrice:value);
     if(price!==undefined)draft[field]=price;
   }else if(field==="buffetEnabled"){
-    if(/^(?:لا|لاء|لأ|no)\b|بدون\s*بوفيه|ما\s*في\s*بوفيه|مش\s*شامل/.test(n)){
+    if(/^(?:لا|لاء|لأ|no)(?:\s|$|[،,.!])|بدون\s*بوفيه|ما\s*في\s*بوفيه|مش\s*شامل/.test(n)){
       draft.buffetEnabled=false;
       delete draft.buffetDescription;delete draft.buffetAdultPrice;delete draft.buffetChildPrice;
-    }else if(/^(?:نعم|اه|أه|ايوه|ايوا|يس|yes|اكيد)\b|مع\s*بوفيه|فيه\s*بوفيه|بوفيه\s*موجود/.test(n)){
+    }else if(/^(?:نعم|اه|ايوه|ايوا|يس|yes|اكيد)(?:\s|$|[،,.!])|مع\s*بوفيه|فيه\s*بوفيه|بوفيه\s*موجود/.test(n)){
       draft.buffetEnabled=true;
     }
   }else if(field==="buffetDescription"){
