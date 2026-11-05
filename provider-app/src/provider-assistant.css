@@ -34,3 +34,8 @@
 
 .seago-assistant-consent{display:flex;align-items:flex-start;gap:8px;line-height:1.5;font-size:11px;color:#3e5e69;margin-bottom:10px;cursor:pointer}
 .seago-assistant-consent input{flex-shrink:0;margin-top:2px;accent-color:#087e88}
+
+/* Visible, one-tap assistant entry point for the installed Provider PWA. */
+.seago-ai-launch{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:9px;padding:9px 12px;border:1px solid #008f9d;border-radius:999px;background:#e1f8f6;color:#075a69;font:700 12px system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.2;cursor:pointer;white-space:nowrap;min-height:38px}
+.seago-ai-launch:focus-visible{outline:3px solid #00bfc8;outline-offset:3px}
+@media(max-width:390px){.seago-ai-launch{padding:8px 10px;font-size:11px}}
