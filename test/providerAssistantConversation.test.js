@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList} from "../src/services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn} from "../src/services/providerAssistantConversation.js";
 
 test("Arabic guided creation asks for missing details one at a time and never autosaves",()=>{
   const first=tripConversationStep({});
@@ -27,8 +27,8 @@ test("context is untrusted and never transports provider IDs, customer info or p
     titleAr:"  رحلة الغروب  ", adultPrice:25,childPrice:10,customerPhone:"0799999999",
     providerId:"someone-else",pricing:{commission:0},imageUrl:"https://x",active:true
   },customer:{name:"Should not leave browser"}});
-  assert.deepEqual(ctx,{mode:"create_trip",draft:{titleAr:"رحلة الغروب",adultPrice:25,childPrice:10}});
-  assert.deepEqual(assistantConversationContext({mode:"admin",draft:null}),{mode:"",draft:{}});
+  assert.deepEqual(ctx,{mode:"create_trip",draft:{titleAr:"رحلة الغروب",adultPrice:25,childPrice:10},pendingField:""});
+  assert.deepEqual(assistantConversationContext({mode:"admin",draft:null}),{mode:"",draft:{},pendingField:""});
 });
 
 test("revised prices replace old ones without erasing earlier trip details",()=>{
@@ -42,4 +42,55 @@ test("invalid fields and impossible prices never become part of a saved draft",(
   assert.deepEqual(sanitizeTripConversationDraft({category:"prototype",durationMinutes:-15,adultPrice:-20,childPrice:"hello",titleAr:43}),{});
   assert.equal(sanitizeTripConversationDraft({adultPrice:0,childPrice:0}).adultPrice,0);
   assert.deepEqual(assistantSuggestionList(["hi",false,"",123,"ok","later"]),["hi","ok","later"]);
+});
+
+
+test("written trip creation completes even when Gemini cannot be called",()=>{
+  const start=localGuidedTripTurn("بدي أضيف رحلة",{});
+  assert.equal(start.intent,"create_trip");
+  assert.equal(start.askFor,"title");
+  const titled=localGuidedTripTurn("رحلة غروب",{mode:"create_trip",draft:start.draft});
+  assert.equal(titled.draft.titleAr,"رحلة غروب");
+  assert.equal(titled.askFor,"durationMinutes");
+  const duration=localGuidedTripTurn("ساعتين",{mode:"create_trip",draft:titled.draft});
+  assert.equal(duration.draft.durationMinutes,120);
+  assert.equal(duration.askFor,"adultPrice");
+  const price=localGuidedTripTurn("10 دنانير",{mode:"create_trip",draft:duration.draft});
+  assert.equal(price.draft.adultPrice,10);
+  assert.equal(price.askFor,"childPrice");
+  const child=localGuidedTripTurn("8",{mode:"create_trip",draft:price.draft});
+  assert.equal(child.draft.childPrice,8);
+  assert.equal(child.ready,true);
+  assert.equal(child.progress,4);
+  assert.match(child.text,/سعر الطفل: 8 د.أ/);
+  assert.match(child.text,/ما تم إنشاء أي شيء/);
+});
+
+test("Arabic numeral characters, guided edits, and cancellation are safe",()=>{
+  const draft={titleAr:"رحلة سنوركلينغ",durationMinutes:90,adultPrice:10,childPrice:8};
+  const edit=localGuidedTripTurn("بدي أغير السعر",{mode:"create_trip",draft});
+  assert.equal(edit.pendingField,"adultPrice");
+  assert.equal(edit.ready,false);
+  const revised=localGuidedTripTurn("٢٥ دينار",{mode:"create_trip",draft,pendingField:edit.pendingField});
+  assert.equal(revised.draft.adultPrice,25);
+  assert.equal(revised.draft.childPrice,8);
+  assert.equal(revised.ready,true);
+  const cancelled=localGuidedTripTurn("إلغاء المسودة",{mode:"create_trip",draft});
+  assert.equal(cancelled.intent,"cancel");
+  assert.equal(cancelled.mode,"");
+});
+
+test("guided trip flow cannot turn seat inquiries into trip changes",()=>{
+  assert.equal(localGuidedTripTurn("كم مقعد محجوز بكرا؟",{mode:"create_trip",draft:{titleAr:"رحلة الغروب"}}),null);
+  assert.equal(localGuidedTripTurn("كم مقعد محجوز اليوم؟",{}),null);
+  const complete=localGuidedTripTurn("كيف أضيف رحلة؟",{});
+  assert.equal(complete.askFor,"title");
+});
+
+test("no arbitrary context fields propagate through local trips",()=>{
+  const ctx={mode:"create_trip",draft:{titleAr:"رحلة غروب",customerName:"Sensitive",providerId:"other-company",adultPrice:20},pendingField:"childPrice",apiKey:"not allowed"};
+  const result=localGuidedTripTurn("٨",ctx);
+  assert.deepEqual(result.draft,{titleAr:"رحلة غروب",adultPrice:20,childPrice:8});
+  assert.equal("apiKey" in result,false);
+  assert.equal("providerId" in result.draft,false);
 });
