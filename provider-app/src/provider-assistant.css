@@ -39,3 +39,21 @@
 .seago-ai-launch{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:9px;padding:9px 12px;border:1px solid #008f9d;border-radius:999px;background:#e1f8f6;color:#075a69;font:700 12px system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.2;cursor:pointer;white-space:nowrap;min-height:38px}
 .seago-ai-launch:focus-visible{outline:3px solid #00bfc8;outline-offset:3px}
 @media(max-width:390px){.seago-ai-launch{padding:8px 10px;font-size:11px}}
+
+
+/* Guided conversational assistant — lightweight, touch friendly and accessible. */
+.seago-assistant-progress{margin-top:12px;padding:10px 12px;border:1px solid #deebed;border-radius:12px;background:#f6fbfb}
+.seago-assistant-progress>div:first-child{display:flex;justify-content:space-between;gap:12px;color:#30606b;font-size:12px}
+.seago-assistant-progress strong{font-variant-numeric:tabular-nums}
+.seago-assistant-progress-track{height:6px;border-radius:999px;background:#d7e9ea;overflow:hidden;margin-top:9px}
+.seago-assistant-progress-track span{display:block;background:#079a9e;height:100%;border-radius:inherit;transition:width .2s ease}
+.seago-assistant-speak,.seago-assistant-cancel-draft{margin-top:10px;padding:5px 2px;border:0;background:transparent;color:#286d78;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+.seago-assistant-cancel-draft{display:block;color:#8b4d48}
+.seago-assistant-speak:focus-visible,.seago-assistant-cancel-draft:focus-visible{outline:2px solid #00a9b1;outline-offset:3px}
+.seago-assistant-recording{display:flex;align-items:center;gap:6px}
+.seago-assistant-message p{white-space:pre-line;overflow-wrap:anywhere}
+.seago-assistant-samples button{min-height:40px;cursor:pointer}
+.seago-assistant-samples button:focus-visible{outline:3px solid #00a9b1;outline-offset:2px}
+.seago-assistant-footer .seago-assistant-consent{align-items:center}
+.seago-assistant-footer form input{font-size:16px}
+@media(prefers-reduced-motion:reduce){.seago-assistant-progress-track span{transition:none}}
