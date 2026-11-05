@@ -31,3 +31,6 @@
 .seago-assistant-footer .seago-assistant-mic.recording{background:#b5374c}
 @media(min-width:760px){.seago-assistant{left:50%;transform:translateX(-50%);max-width:700px;border-inline:1px solid #dce6e9;box-shadow:0 0 70px #0002}}
 @media(prefers-reduced-motion:reduce){.seago-assistant *{scroll-behavior:auto!important}}
+
+.seago-assistant-consent{display:flex;align-items:flex-start;gap:8px;line-height:1.5;font-size:11px;color:#3e5e69;margin-bottom:10px;cursor:pointer}
+.seago-assistant-consent input{flex-shrink:0;margin-top:2px;accent-color:#087e88}
