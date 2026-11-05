@@ -89,7 +89,7 @@ function completedTripField(draft,key){
 }
 export function tripConversationStep(input,options={}){
   const draft=sanitizeTripConversationDraft(input);
-  const questions=fields.filter(f=>draft.buffetEnabled!==false||!["buffetDescription","buffetAdultPrice","buffetChildPrice"].includes(f.key));
+  const questions=fields.filter(f=>draft.buffetEnabled===true||!["buffetDescription","buffetAdultPrice","buffetChildPrice"].includes(f.key));
   const pendingField=tripFieldNames.includes(options.pendingField)?options.pendingField:"";
   const done=questions.map(f=>completedTripField(draft,f.key));
   const progress=done.filter(Boolean).length;
