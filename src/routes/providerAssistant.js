@@ -9,7 +9,7 @@ import {requireProviderCapability} from "../services/providerAccess.js";
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
 const formats=new Set(["audio/webm","audio/mp4","audio/m4a","audio/ogg","audio/mpeg","audio/mp3","audio/wav"]);
-const limiter=rateLimit({windowMs:15*60*1000,limit:25,standardHeaders:"draft-8",legacyHeaders:false,keyGenerator:req=>String(req.user?._id||req.ip),message:{error:"وصلت للحد المؤقت لطلبات المساعد. جرّب بعد شوي."}});
+const limiter=rateLimit({windowMs:15*60*1000,limit:25,standardHeaders:"draft-8",legacyHeaders:false,keyGenerator:req=>String(req.user._id),message:{error:"وصلت للحد المؤقت لطلبات المساعد. جرّب بعد شوي."}});
 const today=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Amman",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 const clean=(v,n=140)=>String(v??"").trim().replace(/\s+/g," ").slice(0,n);
 const price=v=>v===undefined||v===null||v===""?undefined:(Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=10000?Number(v):undefined);
