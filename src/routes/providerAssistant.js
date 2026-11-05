@@ -5,6 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability} from "../services/providerAccess.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -40,7 +41,21 @@ export async function understandAssistant(body,env=process.env){
   const mime=clean(body.audioMimeType,80).split(";")[0];
   if(!message&&!audio)throw fail("اكتب سؤالاً أو سجّل رسالة صوتية.");
   if(audio&&(!formats.has(mime)||audio.length>650000||audio.length<200||!/^[A-Za-z0-9+/]+={0,2}$/.test(audio)))throw fail("صيغة أو حجم التسجيل غير مدعوم. سجّل رسالة أقصر.");
-  const instruction="أنت مصنف أوامر لمزودي SeaGo العقبة، تفهم اللهجة الأردنية والفصحى. التاريخ في العقبة اليوم "+today()+". أعد JSON صحيح فقط بشكل {intent,date,tripName,transcript,draft}. intent أحد seats أو create_trip أو help. استفسار مقاعد أو حجوزات أو أماكن شاغرة = seats، طلب إنشاء رحلة = create_trip. date تاريخ YYYY-MM-DD، اليوم أو غداً حسب كلام المستخدم، أو فارغ. tripName اسم الرحلة المذكور وإلا فارغ. transcript تفريغ الكلام إذا كان التسجيل صوتياً وإلا فارغ. draft كائن يحوي titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,locationName,address. لا تخترع سعر أو وقت أو موقع أو قيمة مفقودة. category واحد من group_boat,private_boat,yacht,glass_bottom,snorkeling,diving,fishing,sunset,private_event,water_sports,semi_submarine. لا تنشئ أي رحلة فعلياً.";
+  const context=assistantConversationContext(body.context);
+  const instruction="أنت مساعد بحرّي تفاعلي لمزودي Aqaba SeaGo، افهم اللهجة الأردنية والعربية. التاريخ الحالي في الأردن "+today()+". "+ 
+    "السياق الحالي الآمن (بيانات رحلة غير منشورة فقط): "+JSON.stringify(context)+". "+
+    "أعد كائن JSON صحيح فقط بالحقول {intent,date,tripName,transcript,draft,reply}، بدون Markdown. "+
+    "intent يجب أن يكون واحداً فقط: seats إذا المستخدم يسأل عن المقاعد والحجوزات أو الشواغر؛ create_trip إذا طلب إضافة رحلة أو تعديل مسودتها أو سأل كيف يضيف رحلة؛ cancel إذا ألغى مسودة الرحلة صراحة؛ help للأسئلة الأخرى. "+
+    "إذا السياق mode=create_trip والمستخدم يعطي اسم أو مدة أو سعر أو يعدّل معلومة، استمر create_trip لا help، ما لم يطلب صراحة التحوّل للحجوزات أو الإلغاء. "+
+    "إذا السياق mode=seats وقال المستخدم بكرا أو الجمعة أو اسم رحلة، استمر seats. "+
+    "date تاريخ YYYY-MM-DD عند السؤال عن المقاعد، واستخرج اليوم/بكرا/تاريخ صريح وإلا فارغ. tripName اسم رحلة ذكرها المستخدم وإلا فارغ. "+
+    "draft كائن يحتوي فقط على حقول الرحلة المذكورة **في الرسالة الحالية**: titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,locationName,address. "+
+    "لا تنسخ القيم الموجودة بالسياق إلى draft ولا تخترع أسعاراً أو تفاصيل جديدة. يمكن استخدام سعر الكبير الموجود في السياق فقط إذا قال المستخدم صراحة إن سعر الطفل نفس سعر الكبير. "+
+    "durationMinutes دقائق صحيحة، أسعار الأفراد أرقام بالدينار الأردني، والاسم العربي في titleAr. "+
+    "category أحد group_boat,private_boat,yacht,glass_bottom,snorkeling,diving,fishing,sunset,private_event,water_sports,semi_submarine فقط إذا عُرف النوع. "+
+    "transcript تفريغ الصوت بالعربية إذا كانت رسالة صوتية، وفارغ تماماً للنص. "+
+    "reply رد عربي قصير ولطيف في حال help فقط، أجب عن خطوات استخدام واجهة المزود بالمعلومات المؤكدة التالية: الرحلة من صفحة Trips > Add trip؛ بعد الحفظ تُجدول المغادرة وتُحدد سعتها، والحجوزات من Bookings، والمقاعد من المغادرات. لا تؤكد وجود حجوزات أو مواعيد من عندك. "+
+    "في إنشاء رحلة لا تدّعِ أنها نُشرت ولا تخترع بيانات. عند طلب معلومات حساسة للعملاء، وجه المستخدم إلى قسم الحجوزات المصرّح له ولا تعرض بيانات شخصية. لا تنفذ أفعالاً.";
   const parts=[{text:instruction}];
   if(message)parts.push({text:message});
   if(audio)parts.push({inlineData:{mimeType:mime==="audio/mp4"?"audio/m4a":mime,data:audio}});
@@ -52,7 +67,7 @@ export async function understandAssistant(body,env=process.env){
   const raw=json?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
   let parsed;
   try{parsed=JSON.parse(raw.trim());}catch{throw fail("لم أفهم الطلب بشكل واضح. جرّب صياغته مرة ثانية.",422);}
-  return {intent:parsed.intent,date:safeAssistantDate(parsed.date),tripName:clean(parsed.tripName),transcript:clean(parsed.transcript,600),draft:safeTripDraft(parsed.draft)};
+  return {intent:["seats","create_trip","cancel","help"].includes(parsed.intent)?parsed.intent:"help",date:safeAssistantDate(parsed.date),tripName:clean(parsed.tripName),transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context,reply:clean(parsed.reply,600)};
 }
 export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
@@ -75,14 +90,25 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
     if(parsed.intent==="seats"){
       const access=await requireProviderCapability(req.user,"view_bookings");
       if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية عرض الحجوزات."});
-      return res.json({intent:"seats",transcript:parsed.transcript,...await confirmedSeatsForProvider(access.provider._id,parsed)});
+      const info=await confirmedSeatsForProvider(access.provider._id,parsed);
+      return res.json({intent:"seats",mode:"seats",transcript:parsed.transcript,...info,
+        suggestions:["شو الوضع بكرا؟","كم مقعد محجوز الجمعة؟","بدي أضيف رحلة"]});
     }
     if(parsed.intent==="create_trip"){
       const access=await requireProviderCapability(req.user,"manage_trips");
       if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية إنشاء الرحلات."});
-      return res.json({intent:"create_trip",transcript:parsed.transcript,draft:parsed.draft,text:"جهزت لك مسودة الرحلة. افتح النموذج وراجع الاسم والأسعار والمدة قبل الحفظ؛ ما تم إنشاء أي رحلة بعد."});
+      const draft=mergeTripConversationDraft(parsed.context.mode==="create_trip"?parsed.context.draft:{},parsed.delta);
+      const step=tripConversationStep(draft);
+      return res.json({intent:"create_trip",mode:"create_trip",transcript:parsed.transcript,...step});
     }
-    return res.json({intent:"help",transcript:parsed.transcript,text:"أنا مساعد SeaGo. اسألني عن المقاعد المؤكدة والمتاحة، أو اطلب تجهيز رحلة جديدة للمراجعة."});
+    if(parsed.intent==="cancel"){
+      return res.json({intent:"help",mode:"",transcript:parsed.transcript,
+        text:"تمام، تركنا المسودة. ما تم إنشاء أي رحلة. تحب تسألني عن الحجوزات أو نبدأ رحلة جديدة؟",
+        suggestions:["حجوزات اليوم","جهّز رحلة جديدة"]});
+    }
+    return res.json({intent:"help",mode:"",transcript:parsed.transcript,
+      text:parsed.reply||"أنا معك! نقدر نضيف رحلة سوا خطوة بخطوة، أو أجاوبك عن المقاعد المحجوزة والمتاحة حسب التاريخ.",
+      suggestions:["بدي أضيف رحلة","كم مقعد محجوز اليوم؟","شو الرحلات بكرا؟"]});
   }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
 });
 export default router;
