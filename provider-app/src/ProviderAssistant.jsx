@@ -10,6 +10,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   const [messages,setMessages]=useState([intro]);
   const [input,setInput]=useState("");
   const [busy,setBusy]=useState(false);
+  const [consent,setConsent]=useState(false);
   const [recording,setRecording]=useState(false);
   const [error,setError]=useState("");
   const recRef=useRef(null),micRef=useRef(null),timerRef=useRef(null),aliveRef=useRef(true),scrollRef=useRef(null);
@@ -17,6 +18,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   useEffect(()=>()=>{aliveRef.current=false;clearTimeout(timerRef.current);try{recRef.current?.stop();}catch{}micRef.current?.getTracks().forEach(t=>t.stop());},[]);
   async function send(payload,shown){
     if(busy)return;
+    if(!consent){setError("وافق أولاً على إرسال رسالتك إلى خدمة Google لفهم طلبك.");return;}
     setBusy(true);setError("");
     setMessages(v=>[...v,{role:"user",text:shown}]);
     try{
@@ -42,6 +44,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   }
   async function startRecording(){
     if(busy||recording)return;
+    if(!consent){setError("وافق أولاً على معالجة التسجيل لدى خدمة Google.");return;}
     setError("");
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){setError("تسجيل الصوت غير مدعوم في هذا المتصفح. يمكنك استخدام الشات.");return;}
     let stream;
@@ -84,6 +87,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
     <footer className="seago-assistant-footer">
       {error&&<div className="seago-assistant-error" role="alert">{error}</div>}
       {recording&&<div className="seago-assistant-recording">جاري تسجيل صوتك… اضغط إيقاف للإرسال (حد أقصى 19 ثانية)</div>}
+      <label className="seago-assistant-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أوافق على إرسال رسالتي النصية أو الصوتية إلى Google لفهم الطلب. لن أشارك بيانات شخصية للعملاء.</label>
       <form onSubmit={e=>{e.preventDefault();sendText();}}>
         <button type="button" disabled={busy} onClick={recording?closeRecorder:startRecording} aria-label={recording?"إيقاف وإرسال التسجيل":"ابدأ تسجيل رسالة صوتية"} className={"seago-assistant-mic "+(recording?"recording":"")}>{recording?<Square size={20}/>:<Mic size={20}/>}</button>
         <input aria-label="رسالتك" disabled={busy||recording} value={input} maxLength={1500} placeholder="اسأل عن المقاعد أو اطلب رحلة…" onChange={e=>setInput(e.target.value)}/>
