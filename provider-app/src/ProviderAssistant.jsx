@@ -26,7 +26,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   const [recording,setRecording]=useState(false);
   const [error,setError]=useState("");
   const [audioError,setAudioError]=useState("");
-  const contextRef=useRef({mode:"",draft:{}});
+  const contextRef=useRef({mode:"",draft:{},pendingField:""});
   const sendingRef=useRef(false),recRef=useRef(null),micRef=useRef(null),timerRef=useRef(null),aliveRef=useRef(true),scrollRef=useRef(null);
   useEffect(()=>{scrollRef.current?.scrollIntoView({block:"end",behavior:"smooth"});},[messages,busy,error]);
   useEffect(()=>()=>{aliveRef.current=false;clearTimeout(timerRef.current);try{recRef.current?.stop();}catch{}micRef.current?.getTracks().forEach(t=>t.stop());try{window.speechSynthesis?.cancel();}catch{}},[]);
@@ -47,7 +47,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       if(!response.ok)throw new Error(result.error||"تعذّر إكمال الطلب.");
       if(!aliveRef.current)return;
       const mode=result.mode==="create_trip"?"create_trip":result.mode==="seats"?"seats":"";
-      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{}};
+      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:""};
       setMessages(v=>[...v,{
         role:"assistant",intent:result.intent,text:result.text||"تمام، كيف بقدر أساعدك؟",
         transcript:payload.audioBase64?result.transcript||"":"",rows:Array.isArray(result.rows)?result.rows.slice(0,20):[],
@@ -99,7 +99,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   function close(){try{window.speechSynthesis?.cancel();}catch{}onClose();}
   function cancelDraft(){
     if(sendingRef.current||recording)return;
-    contextRef.current={mode:"",draft:{}};
+    contextRef.current={mode:"",draft:{},pendingField:""};
     setMessages(v=>[...v,{role:"assistant",text:"تمام، لغينا المسودة من المحادثة. ما انحفظت ولا رحلة.",suggestions:starter}]);
   }
   const time=v=>new Date(v).toLocaleTimeString("ar-JO",{timeZone:"Asia/Amman",hour:"2-digit",minute:"2-digit"});

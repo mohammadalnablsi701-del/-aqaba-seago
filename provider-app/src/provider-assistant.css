@@ -57,3 +57,6 @@
 .seago-assistant-footer .seago-assistant-consent{align-items:center}
 .seago-assistant-footer form input{font-size:16px}
 @media(prefers-reduced-motion:reduce){.seago-assistant-progress-track span{transition:none}}
+
+/* Keep numerical progress in the correct order inside the RTL chat. */
+.seago-assistant-progress strong{direction:ltr;unicode-bidi:isolate;display:inline-block}

@@ -5,7 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep} from "../services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -62,7 +62,11 @@ export async function understandAssistant(body,env=process.env){
   let response;
   try{response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",temperature:0,maxOutputTokens:750}}),signal:AbortSignal.timeout(20000)});}
   catch{throw fail("تعذّر الاتصال بالمساعد. جرّب مرة ثانية.",503);}
-  if(!response.ok)throw fail(response.status===429?"انتهت الحصة المجانية مؤقتاً، جرّب لاحقاً.":"خدمة المساعد غير متاحة حالياً.",response.status===429?429:503);
+  if(!response.ok){
+    // Status only: never log provider text/audio, response bodies or API credentials.
+    console.warn("provider_assistant_upstream_error",{httpStatus:response.status});
+    throw fail(response.status===429?"انتهت الحصة المجانية مؤقتاً، جرّب لاحقاً.":"خدمة المساعد غير متاحة حالياً.",response.status===429?429:503);
+  }
   const json=await response.json();
   const raw=json?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
   let parsed;
@@ -86,6 +90,14 @@ export async function confirmedSeatsForProvider(providerId,parsed){
 router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(req,res,next)=>{
   try{
     if(process.env.PROVIDER_AI_ENABLED!=="true")return res.status(503).json({error:"المساعد غير مُفعّل حالياً."});
+    // Guided written steps run locally, even if Gemini is temporarily unavailable.
+    // Check provider capability before returning any conversation state or draft.
+    const local=!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
+    if(local){
+      const access=await requireProviderCapability(req.user,"manage_trips");
+      if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية إنشاء الرحلات."});
+      return res.json(local);
+    }
     const parsed=await understandAssistant(req.body||{});
     if(parsed.intent==="seats"){
       const access=await requireProviderCapability(req.user,"view_bookings");
