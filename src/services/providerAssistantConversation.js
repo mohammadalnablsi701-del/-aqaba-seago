@@ -57,5 +57,5 @@ export function tripConversationStep(input){
   return {draft,ready:true,progress,total:fields.length,askFor:null,text,suggestions:["بدي أغيّر السعر","بدي أعدّل مدة الرحلة"]};
 }
 export function assistantSuggestionList(input){
-  return Array.isArray(input)?input.filter(x=>typeof x==="string").slice(0,4).map(x=>x.trim().slice(0,90)).filter(Boolean):[];
+  return Array.isArray(input)?input.filter(x=>typeof x==="string").map(x=>x.trim().slice(0,90)).filter(Boolean).slice(0,4):[];
 }
