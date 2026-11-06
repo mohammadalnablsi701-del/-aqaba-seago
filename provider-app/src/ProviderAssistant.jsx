@@ -1,40 +1,26 @@
 import React,{useEffect,useRef,useState} from "react";
-import {ArrowRight,CheckCircle2,Headphones,Mic,Send,ShipWheel,Square,Volume2,X} from "lucide-react";
+import {ArrowRight,CheckCircle2,Headphones,Mic,Send,ShipWheel,Square,X} from "lucide-react";
 import "./provider-assistant.css";
 
 const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");
 const intro={role:"assistant",text:"أهلاً! أنا مساعد SeaGo 🌊\nاحكي معي بطبيعتك، بالشات أو بالصوت. بنقدر نجهّز رحلة جديدة خطوة بخطوة، أو نفحص المقاعد والحجوزات من بيانات شركتك."};
 const starter=["بدي أضيف رحلة","كم مقعد محجوز اليوم؟","شو المقاعد المتاحة بكرا؟"];
 function toBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=()=>reject(new Error("تعذّر قراءة التسجيل."));r.onload=()=>resolve(String(r.result||"").split(",")[1]||"");r.readAsDataURL(blob);});}
-function speakArabic(text){
-  if(!("speechSynthesis" in window)||typeof SpeechSynthesisUtterance==="undefined")return false;
-  try{
-    window.speechSynthesis.cancel();
-    const msg=new SpeechSynthesisUtterance(String(text||"").slice(0,650));
-    msg.lang="ar-JO";msg.rate=0.95;
-    const voices=window.speechSynthesis.getVoices();
-    const arabic=voices.find(v=>v.lang?.toLowerCase()==="ar-jo")||voices.find(v=>v.lang?.toLowerCase().startsWith("ar"));
-    if(arabic)msg.voice=arabic;
-    window.speechSynthesis.speak(msg);return true;
-  }catch{return false;}
-}
 export default function ProviderAssistant({token,onClose,onUseDraft}){
   const [messages,setMessages]=useState([intro]);
   const [input,setInput]=useState("");
   const [busy,setBusy]=useState(false);
-  const [consent,setConsent]=useState(false);
   const [recording,setRecording]=useState(false);
   const [error,setError]=useState("");
   const [audioError,setAudioError]=useState("");
   const contextRef=useRef({mode:"",draft:{},pendingField:""});
   const sendingRef=useRef(false),recRef=useRef(null),micRef=useRef(null),timerRef=useRef(null),aliveRef=useRef(true),scrollRef=useRef(null);
   useEffect(()=>{scrollRef.current?.scrollIntoView({block:"end",behavior:"smooth"});},[messages,busy,error]);
-  useEffect(()=>()=>{aliveRef.current=false;clearTimeout(timerRef.current);try{recRef.current?.stop();}catch{}micRef.current?.getTracks().forEach(t=>t.stop());try{window.speechSynthesis?.cancel();}catch{}},[]);
+  useEffect(()=>()=>{aliveRef.current=false;clearTimeout(timerRef.current);try{recRef.current?.stop();}catch{}micRef.current?.getTracks().forEach(t=>t.stop());},[]);
   const latest=messages.at(-1);
   const chips=latest?.role==="assistant"&&Array.isArray(latest.suggestions)?latest.suggestions:(messages.length===1?starter:[]);
   async function send(payload,shown){
     if(sendingRef.current||recording)return;
-    if(!consent){setError("وافق أولاً على إرسال رسالتك إلى Google لفهم الطلب.");return;}
     sendingRef.current=true;setBusy(true);setError("");setAudioError("");
     setMessages(v=>[...v,{role:"user",text:shown}]);
     try{
@@ -61,7 +47,6 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   function sendText(value=input){
     const text=String(value||"").trim();
     if(!text||sendingRef.current||recording)return;
-    if(!consent){setError("وافق أولاً على معالجة رسائلك بواسطة Google.");return;}
     setInput("");send({text},text);
   }
   function stopRecording(){
@@ -70,7 +55,6 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   }
   async function startRecording(){
     if(sendingRef.current||recording)return;
-    if(!consent){setError("وافق أولاً على معالجة الرسالة الصوتية لدى Google.");return;}
     setError("");setAudioError("");
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){setAudioError("تسجيل الصوت مش مدعوم بجهازك حالياً. استخدم الشات.");return;}
     let stream;
@@ -96,14 +80,13 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       recorder.start(250);setRecording(true);timerRef.current=setTimeout(stopRecording,19000);
     }catch{stream?.getTracks().forEach(t=>t.stop());if(aliveRef.current)setAudioError("الميكروفون غير متاح. اسمح بالوصول إليه من إعدادات Safari، أو استخدم الشات.");}
   }
-  function close(){try{window.speechSynthesis?.cancel();}catch{}onClose();}
+  function close(){onClose();}
   function cancelDraft(){
     if(sendingRef.current||recording)return;
     contextRef.current={mode:"",draft:{},pendingField:""};
     setMessages(v=>[...v,{role:"assistant",text:"تمام، لغينا المسودة من المحادثة. ما انحفظت ولا رحلة.",suggestions:starter}]);
   }
   const time=v=>new Date(v).toLocaleTimeString("ar-JO",{timeZone:"Asia/Amman",hour:"2-digit",minute:"2-digit"});
-  const voiceAvailable=typeof window!=="undefined"&&"speechSynthesis" in window;
   return <div className="app"><div className="seago-assistant" dir="rtl">
     <header className="seago-assistant-header"><div><span className="seago-assistant-icon"><ShipWheel size={20}/></span><div><strong>مساعد SeaGo</strong><small>احكي معي، خطوة بخطوة</small></div></div><button type="button" onClick={close} aria-label="إغلاق المساعد"><X size={22}/></button></header>
     <div className="seago-assistant-messages" role="log" aria-live="polite" aria-label="محادثة مساعد المزود">
@@ -114,7 +97,6 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
         {m.rows?.length>0&&<div className="seago-assistant-departures">{m.rows.map((d,j)=><div key={j}><strong>{d.trip}</strong><small>{time(d.startsAt)} · {d.status==="scheduled"?"مجدولة":d.status}</small><span>مؤكد: {d.confirmedSeats} · متاح: {d.availableSeats} · السعة: {d.capacity}</span></div>)}</div>}
         {m.ready&&m.draft&&<button type="button" className="seago-assistant-draft-button" disabled={busy||recording} onClick={()=>onUseDraft(m.draft)}><CheckCircle2 size={17}/> افتح نموذج الرحلة للمراجعة <ArrowRight size={16}/></button>}
         {m.intent==="create_trip"&&!m.ready&&i===messages.length-1&&<button type="button" className="seago-assistant-cancel-draft" disabled={busy||recording} onClick={cancelDraft}>إلغاء مسودة الرحلة</button>}
-        {m.role==="assistant"&&voiceAvailable&&<button type="button" className="seago-assistant-speak" aria-label="اقرأ رد المساعد بصوت عربي" onClick={()=>{if(!speakArabic(m.text))setAudioError("الصوت العربي غير متاح في هذا المتصفح.");}}><Volume2 size={15}/> اسمع الرد</button>}
       </div>)}
       {busy&&<p className="seago-assistant-thinking">عم بجهّز لك الرد…</p>}
       <div ref={scrollRef}/>
@@ -124,13 +106,13 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       {error&&<div className="seago-assistant-error" role="alert">{error}</div>}
       {audioError&&<div className="seago-assistant-error" role="alert">{audioError}</div>}
       {recording&&<div className="seago-assistant-recording"><Headphones size={15}/> عم بسجّل صوتك… اضغط إيقاف للإرسال (19 ثانية كحد أقصى)</div>}
-      <label className="seago-assistant-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> أوافق على إرسال كلامي النصي أو الصوتي إلى Google لفهم الطلب. لن أشارك بيانات شخصية للعملاء.</label>
+      <p className="seago-assistant-privacy-notice">يُرسل محتوى رسائلك النصية أو الصوتية إلى Google لفهم طلبك. تجنّب مشاركة بيانات العملاء الشخصية.</p>
       <form onSubmit={e=>{e.preventDefault();sendText();}}>
         <button type="button" disabled={busy} onClick={recording?stopRecording:startRecording} aria-label={recording?"أوقف وأرسل التسجيل":"سجّل رسالة صوتية"} className={"seago-assistant-mic "+(recording?"recording":"")}>{recording?<Square size={20}/>:<Mic size={20}/>}</button>
         <input aria-label="رسالتك" disabled={busy||recording} value={input} maxLength={1500} placeholder="احكيلي شو بدك تعمل…" onChange={e=>setInput(e.target.value)}/>
         <button type="submit" disabled={busy||recording||!input.trim()} aria-label="إرسال"><Send size={20}/></button>
       </form>
-      <small>ما بتم حفظ أي رحلة من المحادثة وحدها. راجع النموذج واضغط حفظ بنفسك. الصوت المقروء اختياري ويستخدم صوت الجهاز إذا كان متاحاً.</small>
+      <small>ما بتم حفظ أي رحلة من المحادثة وحدها. راجع النموذج واضغط حفظ بنفسك.</small>
     </footer>
   </div></div>;
 }
