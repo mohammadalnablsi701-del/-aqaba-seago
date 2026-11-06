@@ -5,7 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview} from "../services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview,localProviderFactQuery} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -36,6 +36,38 @@ export function safeTripDraft(value){
     googleMapsUrl:extra.googleMapsUrl,googleMapsSkipped:extra.googleMapsSkipped};
 }
 function normalize(v){return clean(v).toLocaleLowerCase("ar").replace(/[\u064b-\u065f]/g,"").replace(/[أإآ]/g,"ا").replace(/ة/g,"ه");}
+// Gemini can intermittently return 503 even when the SeaGo API is healthy.
+// Retry only transient upstream failures; never retry 429 quotas or 4xx config errors.
+// Time is bounded so iPhone callers are not held indefinitely.
+const transientModelStatus=new Set([500,502,503,504]);
+const modelBusyMessage="خدمة الذكاء الاصطناعي مشغولة مؤقتاً. جرّب زر إعادة المحاولة دون تسجيل الصوت من جديد.";
+export async function requestAssistantModel(endpoint,options,{audio=false,fetcher=globalThis.fetch,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),clock=()=>Date.now()}={}){
+  const deadline=clock()+(audio?48000:26000);
+  for(let attempt=1;attempt<=3;attempt++){
+    const remaining=deadline-clock();
+    if(remaining<=250)break;
+    let response;
+    try{
+      response=await fetcher(endpoint,{...options,signal:AbortSignal.timeout(Math.min(remaining,audio?18000:10000))});
+    }catch{
+      console.warn("provider_assistant_upstream_network_error",{attempt});
+      if(attempt===3)throw fail(modelBusyMessage,503);
+    }
+    if(response){
+      if(response.ok)return response;
+      console.warn("provider_assistant_upstream_error",{httpStatus:response.status,attempt});
+      if(response.status===429)throw fail("تم الوصول لحد استخدام Gemini مؤقتاً. جرّب لاحقاً.",429);
+      if(!transientModelStatus.has(response.status))
+        throw fail(response.status===401||response.status===403||response.status===404
+          ?"إعدادات نموذج الذكاء الاصطناعي بحاجة مراجعة. تواصل مع إدارة SeaGo.":"خدمة المساعد غير متاحة حالياً.",503);
+      if(attempt===3)throw fail(modelBusyMessage,503);
+    }
+    const wait=Math.min(450*2**(attempt-1),deadline-clock()-350);
+    if(wait<=0)break;
+    await sleep(wait);
+  }
+  throw fail(modelBusyMessage,503);
+}
 export async function understandAssistant(body,env=process.env){
   const key=String(env.GEMINI_API_KEY||"").trim();
   if(!key)throw fail("المساعد يحتاج مفتاح Gemini المجاني على الخادم.",503);
@@ -67,14 +99,10 @@ export async function understandAssistant(body,env=process.env){
   const parts=[{text:instruction}];
   if(message)parts.push({text:redactAssistantText(message)});
   if(audio)parts.push({inlineData:{mimeType:mime==="audio/mp4"?"audio/m4a":mime,data:audio}});
-  let response;
-  try{response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",temperature:0,maxOutputTokens:750}}),signal:AbortSignal.timeout(audio?40000:20000)});}
-  catch{throw fail("تعذّر الاتصال بالمساعد. جرّب مرة ثانية.",503);}
-  if(!response.ok){
-    // Status only: never log provider text/audio, response bodies or API credentials.
-    console.warn("provider_assistant_upstream_error",{httpStatus:response.status});
-    throw fail(response.status===429?"انتهت الحصة المجانية مؤقتاً، جرّب لاحقاً.":"خدمة المساعد غير متاحة حالياً.",response.status===429?429:503);
-  }
+  const response=await requestAssistantModel("https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent",
+    {method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},
+      body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",temperature:0,maxOutputTokens:750}})},
+    {audio:Boolean(audio)});
   const json=await response.json();
   const raw=json?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
   let parsed;
@@ -145,7 +173,8 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
     if(process.env.PROVIDER_AI_ENABLED!=="true")return res.status(503).json({error:"المساعد غير مُفعّل حالياً."});
     // Guided written steps run locally, even if Gemini is temporarily unavailable.
     // Check provider capability before returning any conversation state or draft.
-    const local=!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
+    const localFacts=!(req.body?.audioBase64)&&localProviderFactQuery(req.body?.text,req.body?.context);
+    const local=!localFacts&&!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
     if(local){
       // Language-only help is available to any authenticated provider, without granting trip/booking access.
       if(local.intent==="create_trip"||local.intent==="cancel"){
@@ -154,7 +183,7 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       }
       return res.json(local);
     }
-    const parsed=await understandAssistant(req.body||{});
+    const parsed=localFacts||await understandAssistant(req.body||{});
     // Voice must follow the exact same deterministic language control as typed messages.
     // Do not let a generic model reply discard the existing draft or chosen language.
     if(parsed.needsClarification){

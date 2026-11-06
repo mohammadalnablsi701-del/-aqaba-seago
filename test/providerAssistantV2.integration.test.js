@@ -248,6 +248,28 @@ test("SeaGo Provider Assistant V2: authenticated two-provider HTTP and mocked sp
     assert.equal(answer.data.transcript,"فان شو كابتن وليلة آر");
   });
 
+
+  await t.test("text fallback during Gemini overload reads only own trip facts without calling Google",async()=>{
+    const callsBefore=captured.length;
+    let answer=await ask(ownerA,{intent:"help",reply:"No model should be called"},{
+      text:"شو أسعار رحلاتي؟",context:context("ar",{intent:"trip_info",tripName:"Bravo Secret Cruise"})
+    });
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.source,"provider_data");
+    assert.match(answer.data.text,/رحلة غروب الشرق/);
+    assert.match(answer.data.text,/رحلة غروب الغرب/);
+    assert.doesNotMatch(answer.data.text,/رحلة خاصة برافو|99 JOD/);
+
+    answer=await ask(ownerB,{intent:"help",reply:"No model should be called"},{
+      text:"ليش رحلاتنا مش مبينة للعملاء؟",context:context("ar")
+    });
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.intent,"trip_visibility");
+    assert.match(answer.data.text,/رحلة خاصة برافو/);
+    assert.doesNotMatch(answer.data.text,/رحلة غروب الشرق|رحلة غروب الغرب/);
+    assert.equal(captured.length,callsBefore,"Neither text query should call Gemini");
+  });
+
   await t.test("AI requests never changed trips, bookings or ticket states",async()=>{
     assert.equal(await Trip.countDocuments({providerId:providerA._id}),2);
     assert.equal(await Trip.countDocuments({providerId:providerB._id}),1);
