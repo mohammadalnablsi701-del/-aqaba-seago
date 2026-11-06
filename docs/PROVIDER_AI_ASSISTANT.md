@@ -36,3 +36,24 @@
 - Verify iPhone installed PWA permissions, recording, transcript and fallback. No merge/deployment without review.
 
 - The guided trip wizard accepts English and Arabic requests. A language-switch command changes future responses without treating it as a trip field; language is kept in sanitized per-turn context.
+
+## Grounded assistant V1 — operator help, not autonomous control
+
+- Text and up-to-60-second voice are sent to the configured Gemini endpoint for multilingual intent recognition and optional general explanations. Voice transcripts are shown to the provider.
+- The backend — not Gemini — answers provider-specific factual questions. Read-only tools include saved trip names/prices/buffet/departure locations, future-departure sellability checks, and existing confirmed/available-seat aggregation.
+- Every query is scoped to the authenticated approved provider ID. Trip read access requires existing manage_trips or view_bookings capabilities; seat totals require view_bookings. Booking/customer names, phone numbers, payment details, and commission configuration are never included in Gemini prompts or trip answer payloads.
+- Troubleshooting topics include QR/camera, microphone, login/session, missing bookings, payment state, trip form, and seat discrepancies. Guidance is labeled as advice rather than a diagnosis; unknown errors require the exact message and screen.
+- A whitelisted conversational focus (intent, trip name, date) helps interpret follow-up questions without storing free-form chat history or raw customer data.
+- The assistant NEVER saves/edits/cancels a live booking, verifies a payment, checks in a ticket, or changes trip inventory by itself. Trip creation still requires manual review and Save.
+- Limitations: the model may misunderstand ambiguous speech or classify an intent incorrectly. Provider data may be incomplete or stale until synced; a visibility diagnosis cannot prove the customer UI is rendering correctly. Arbitrary questions and app repairs are not guaranteed.
+- Availability and usage depend on the configured Google model/key and its quota. No new paid provider service or extra secret is needed.
+- PRIVACY: Existing text/voice submissions are transmitted to Google. Keep personal customer details out of prompts and audio. The prior UI checkbox removal does not remove applicable privacy/consent obligations.
+
+## Guided acceptance before production
+
+1. Verify built Provider PWA and backend on isolated Staging with approved provider and a different provider account.
+2. Check natural-language and voice examples: «شو سعر رحلة الغروب؟», «ليش رحلة الغروب مش ظاهرة؟», «كم مقعد متاح بكرا؟», and «ما عم يفتح الماسح».
+3. Compare trip details and available seats to the real provider-scoped database; test an inactive, paused, sold-out, and unscheduled trip.
+4. Confirm a user without view_bookings cannot access seat counts; confirm a user of provider A cannot retrieve provider B's trip details.
+5. Verify transcripts on iPhone Safari PWA and that 60-second uploads stay within codec/size limits.
+6. Test provider app can still create a draft and never save without explicit action.
