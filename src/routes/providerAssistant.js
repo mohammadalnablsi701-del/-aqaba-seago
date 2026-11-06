@@ -3,6 +3,7 @@ import {rateLimit} from "express-rate-limit";
 import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
+import {normalizeAssistantBookingCounts,formatAssistantBookingDiagnosis} from "../services/providerAssistantDiagnostics.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
 import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview,localProviderFactQuery} from "../services/providerAssistantConversation.js";
@@ -84,7 +85,7 @@ export async function understandAssistant(body,env=process.env){
     "Safe conversation context (unpublished trip draft and non-sensitive focus only): "+JSON.stringify(context)+".",
     "Return ONLY valid JSON with: intent,date,tripName,topic,listAllTrips,replyLanguage,transcript,needsClarification,draft,reply.",
     "Choose exactly one intent: seats (real confirmed/available seats or bookings counts); trip_info (saved trip prices, duration, buffet, departure location or list); trip_visibility (why a saved trip may not appear or be sellable); troubleshoot (QR/camera, mic, login, missing booking, payments, trip saving, seat mismatch); create_trip (draft creation or edits); cancel (explicit draft cancellation); help (general advice).",
-    "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general. If focus.intent is troubleshoot and the message reports that the previous guidance failed or adds details about the same issue, retain troubleshoot and the same topic.",
+    "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general. For a missing or unconfirmed booking choose booking_missing; for a mismatch between available and confirmed seats choose seats_mismatch; for a QR scanner rejection choose qr_checkin. Extract departure date and trip name only when explicitly stated, never infer customer identity. If focus.intent is troubleshoot and the message is a follow-up, preserve its topic. Server-side authorized aggregate booking checks provide actual status, not an assumed payment result.",
     "For plural customer-visibility questions like 'ليش رحلاتنا مش مبينة للعملاء' choose trip_visibility with no tripName; the backend will check all of this provider's saved trips. Never reply with generic navigation advice to a data question.",
     "For spoken language commands like 'بدنا نحكي بالإنجليزية' set replyLanguage=en and transcribe exactly; don't answer a different question.",
     "If speech sounds garbled or transcription cannot be understood with reasonable confidence, set needsClarification=true and do not invent an answer. For understandable speech use false.",
@@ -120,14 +121,18 @@ export async function understandAssistant(body,env=process.env){
   const intent=allVisibility?"trip_visibility":(intents.has(parsed.intent)?parsed.intent:"help");
   const topics=new Set(["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"]);
   const listRequest=parsed.listAllTrips===true||message.includes("رحلاتي")||message.includes("كل الرحلات")||message.toLowerCase().includes("all trips")||message.toLowerCase().includes("my trips");
-  const tripName=(listRequest||allVisibility)?"":(clean(parsed.tripName,100)||(["seats","trip_info","trip_visibility"].includes(intent)?context.focus.tripName:""));
+  const sameIssue=intent==="troubleshoot"&&context.focus.intent==="troubleshoot"&&
+    (parsed.topic==="general"||parsed.topic===context.focus.topic);
+  const tripName=(listRequest||allVisibility)?"":(clean(parsed.tripName,100)||(["seats","trip_info","trip_visibility"].includes(intent)||sameIssue?context.focus.tripName:""));
   const spokenSwitch=assistantLanguageSwitch(utterance);
   const replyLanguage=spokenSwitch||(parsed.replyLanguage==="en"?"en":parsed.replyLanguage==="ar"?"ar":context.lang);
-  const date=parsed.date?safeAssistantDate(parsed.date):(intent==="seats"&&context.focus.intent==="seats"&&context.focus.date?safeAssistantDate(context.focus.date):safeAssistantDate(null));
+  const previousDate=((intent==="seats"&&context.focus.intent==="seats")||sameIssue)&&context.focus.date;
+  const dateProvided=Boolean(parsed.date||previousDate);
+  const date=parsed.date?safeAssistantDate(parsed.date):(previousDate?safeAssistantDate(previousDate):safeAssistantDate(null));
   return {intent,date,tripName,topic:topics.has(parsed.topic)?parsed.topic:"general",
     transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),
     delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context:{...context,lang:replyLanguage},
-    needsClarification:audio&&parsed.needsClarification===true,reply:clean(parsed.reply,700)};
+    dateProvided,needsClarification:audio&&parsed.needsClarification===true,reply:clean(parsed.reply,700)};
 }
 export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
