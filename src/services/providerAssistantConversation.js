@@ -374,7 +374,7 @@ export function assistantTripSummary(trip,lang="ar"){
       "\nسعر الكبير مع البوفيه: "+formatNumber(p.buffetAdultPrice)+" د.أ"+
       "\nسعر الطفل مع البوفيه: "+formatNumber(p.buffetChildPrice)+" د.أ":"")+
     "\nمكان الانطلاق: "+(clean(loc.name,120)||"غير محدد")+
-    (loc.googleMapsUrl?"\nGoogle Maps: "+String(loc.googleMapsUrl).slice(0,500):"")+
+    (safeGoogleMapsUrl(loc.googleMapsUrl)?"\nGoogle Maps: "+safeGoogleMapsUrl(loc.googleMapsUrl):"")+
     "\nهاي التفاصيل من الرحلة المحفوظة لدى شركتك. للتعديل افتح قسم الرحلات.";
 }
 export function assistantVisibilityDiagnosis(trip,departures,lang="ar"){
