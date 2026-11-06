@@ -153,6 +153,28 @@ jobs:
           curl -fsS https://aqaba-seago-api.onrender.com/api/trips > /tmp/trips.json
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/trips.json","utf8")); if(!Array.isArray(x)) process.exit(1); console.log("Public trips:",x.length)'
 
+      - name: Verify assistant monitoring rejects anonymous and invalid tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://aqaba-seago-api.onrender.com/api/admin/assistant/metrics"
+          for mode in anonymous invalid-token; do
+            body="$(mktemp)"
+            if [ "$mode" = "invalid-token" ]; then
+              status="$(curl --connect-timeout 8 --max-time 20 -sS -o "$body" -w "%{http_code}" -H "$(printf 'Authorization: %s %s' Bearer invalid.mock.token)" "$endpoint")"
+            else
+              status="$(curl --connect-timeout 8 --max-time 20 -sS -o "$body" -w "%{http_code}" "$endpoint")"
+            fi
+            echo "$mode: HTTP $status"
+            test "$status" = "401"
+            node - "$body" <<'JS'
+          const fs=require('fs');
+          const data=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(data.error!=='Authentication required' && data.error!=='Invalid or expired token') process.exit(1);
+          if(Object.hasOwn(data,'totalRequests')||Object.hasOwn(data,'hourly')||Object.hasOwn(data,'bySource')) process.exit(1);
+          JS
+          done
+
       - name: Verify password recovery request is privacy-safe
         shell: bash
         run: |
