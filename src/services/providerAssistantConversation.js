@@ -62,6 +62,14 @@ export function mergeTripConversationDraft(current,delta){
   return {...sanitizeTripConversationDraft(current),...sanitizeTripConversationDraft(delta)};
 }
 export const tripFieldNames=["title","durationMinutes","adultPrice","childPrice","buffetEnabled","buffetDescription","buffetAdultPrice","buffetChildPrice","locationName","googleMapsUrl"];
+// Redact likely customer contact details from text before it reaches the AI provider.
+// Voice is sent directly for transcription, so users must avoid speaking PII.
+export function redactAssistantText(value){
+  return String(value||"").slice(0,1500)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]")
+    .replace(/(?:\\+?962|00962|0)?7\\d{8}\\b/g,"[phone]")
+    .replace(/\\b\\d{10,}\\b/g,"[number]");
+}
 export function safeAssistantFocus(raw){
   const intent=["seats","trip_info","trip_visibility"].includes(raw?.intent)?raw.intent:"";
   const date=typeof raw?.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(raw.date)?raw.date:"";
