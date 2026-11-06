@@ -1,7 +1,7 @@
 import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
-import {matchAssistantTrip,safeAssistantFocus} from "./providerAssistantConversation.js";
+import {matchAssistantTrip,safeAssistantFocus,assistantTroubleshooting} from "./providerAssistantConversation.js";
 
 // Read-only formatter for provider-owned booking diagnostics.
 // Inputs are aggregate counts only. No raw bookings, payments or customer data.
@@ -48,9 +48,12 @@ export async function diagnoseProviderBookings(providerId,parsed){
   const intro={intent:"troubleshoot",mode:"",lang,source:"guide",
     transcript:parsed.transcript||"",suggestions:[]};
   if(!parsed.dateProvided||!parsed.date){
-    return {...intro,text:en
-      ?"To check your bookings, tell me the departure date (today, tomorrow or YYYY-MM-DD) and, if possible, the trip name. Please don't share customer names or phone numbers."
-      :"حتى أفحص الحجوزات من النظام، احكيلي تاريخ المغادرة (اليوم أو بكرا أو YYYY-MM-DD)، وإذا بتقدر اسم الرحلة. لا ترسل أسماء العملاء أو أرقامهم.",
+    const prompt=en
+      ?"To check system records, tell me the departure date (today, tomorrow or YYYY-MM-DD) and, if possible, the trip name. Don't share customer names or phone numbers."
+      :"حتى أفحص السجلات، احكيلي تاريخ المغادرة (اليوم أو بكرا أو YYYY-MM-DD)، وإذا بتقدر اسم الرحلة. لا ترسل أسماء العملاء أو أرقامهم.";
+    const qr=topic==="qr_checkin"?assistantTroubleshooting(topic,lang,
+      parsed.context?.focus?.intent==="troubleshoot"&&parsed.context?.focus?.topic==="qr_checkin").text+"\n":"";
+    return {...intro,text:qr+prompt,
       suggestions:en?["Today","Tomorrow"]:["اليوم","بكرا"],
       focus:safeAssistantFocus({intent:"troubleshoot",topic,tripName:parsed.tripName})};
   }
