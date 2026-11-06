@@ -40,3 +40,28 @@ test("assistant rejects recordings above the 1.6M base64 limit without contactin
     /صيغة أو حجم التسجيل غير مدعوم/
   );
 });
+
+test("assistant classifies general trip facts without exposing typed phone or email to Gemini",async()=>{
+  const original=globalThis.fetch;
+  let request;
+  globalThis.fetch=async(_url,options)=>{
+    request=JSON.parse(options.body);
+    return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify({
+      intent:"trip_info",tripName:"Sunset Cruise",date:"",topic:"",transcript:"",draft:{},reply:""
+    })}]}}]})};
+  };
+  try{
+    const result=await understandAssistant({
+      text:"What's the price of Sunset Cruise? 0791234567 foo@example.com",
+      context:{lang:"en",mode:"",focus:{intent:"trip_info",tripName:"Sunset Cruise",date:"2026-11-06"}}
+    },{GEMINI_API_KEY:"test-key"});
+    assert.equal(result.intent,"trip_info");
+    assert.equal(result.tripName,"Sunset Cruise");
+    assert.equal(result.date,"2026-11-06");
+    const payload=JSON.stringify(request);
+    assert.doesNotMatch(payload,/0791234567|foo@example.com/);
+    assert.match(payload,/\[phone\]/);
+    assert.match(payload,/\[email\]/);
+    assert.equal(result.context.lang,"en");
+  }finally{globalThis.fetch=original;}
+});
