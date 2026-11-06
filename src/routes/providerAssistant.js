@@ -46,7 +46,7 @@ export async function understandAssistant(body,env=process.env){
   if(!message&&!audio)throw fail("اكتب سؤالاً أو سجّل رسالة صوتية.");
   if(audio&&(!formats.has(mime)||audio.length>1600000||audio.length<200||!/^[A-Za-z0-9+/]+={0,2}$/.test(audio)))throw fail("صيغة أو حجم التسجيل غير مدعوم. سجّل رسالة أقصر.");
   const context=assistantConversationContext(body.context);
-  const instruction="أنت مساعد بحرّي تفاعلي لمزودي Aqaba SeaGo، افهم اللهجة الأردنية والعربية. التاريخ الحالي في الأردن "+today()+". "+ 
+  const instruction="أنت مساعد بحرّي تفاعلي لمزودي Aqaba SeaGo، افهم الإنجليزية والعربية واللهجة الأردنية. لغة الرد المطلوبة: "+(context.lang==="en"?"English":"Arabic")+". التاريخ الحالي في الأردن "+today()+". "+ 
     "السياق الحالي الآمن (بيانات رحلة غير منشورة فقط): "+JSON.stringify(context)+". "+
     "أعد كائن JSON صحيح فقط بالحقول {intent,date,tripName,transcript,draft,reply}، بدون Markdown. "+
     "intent يجب أن يكون واحداً فقط: seats إذا المستخدم يسأل عن المقاعد والحجوزات أو الشواغر؛ create_trip إذا طلب إضافة رحلة أو تعديل مسودتها أو سأل كيف يضيف رحلة؛ cancel إذا ألغى مسودة الرحلة صراحة؛ help للأسئلة الأخرى. "+
@@ -58,7 +58,7 @@ export async function understandAssistant(body,env=process.env){
     "durationMinutes دقائق صحيحة، أسعار الأفراد أرقام بالدينار الأردني، والاسم العربي في titleAr. إذا قال المستخدم نعم بوفيه اجعل buffetEnabled=true، وإذا لا فـ false، ولا تخترع وصف البوفيه أو أسعاره. رابط الخرائط HTTPS من Google فقط. "+
     "category أحد group_boat,private_boat,yacht,glass_bottom,snorkeling,diving,fishing,sunset,private_event,water_sports,semi_submarine فقط إذا عُرف النوع. "+
     "transcript تفريغ الصوت بالعربية إذا كانت رسالة صوتية، وفارغ تماماً للنص. "+
-    "reply رد عربي قصير ولطيف في حال help فقط، أجب عن خطوات استخدام واجهة المزود بالمعلومات المؤكدة التالية: الرحلة من صفحة Trips > Add trip؛ بعد الحفظ تُجدول المغادرة وتُحدد سعتها، والحجوزات من Bookings، والمقاعد من المغادرات. لا تؤكد وجود حجوزات أو مواعيد من عندك. "+
+    "reply رد قصير ولطيف باللغة المطلوبة في حال help فقط، أجب عن خطوات استخدام واجهة المزود بالمعلومات المؤكدة التالية: الرحلة من صفحة Trips > Add trip؛ بعد الحفظ تُجدول المغادرة وتُحدد سعتها، والحجوزات من Bookings، والمقاعد من المغادرات. لا تؤكد وجود حجوزات أو مواعيد من عندك. "+
     "في إنشاء رحلة لا تدّعِ أنها نُشرت ولا تخترع بيانات. عند طلب معلومات حساسة للعملاء، وجه المستخدم إلى قسم الحجوزات المصرّح له ولا تعرض بيانات شخصية. لا تنفذ أفعالاً.";
   const parts=[{text:instruction}];
   if(message)parts.push({text:message});
@@ -114,8 +114,8 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       const access=await requireProviderCapability(req.user,"manage_trips");
       if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية إنشاء الرحلات."});
       const draft=mergeTripConversationDraft(parsed.context.mode==="create_trip"?parsed.context.draft:{},parsed.delta);
-      const step=tripConversationStep(draft,{pendingField:parsed.context.pendingField});
-      return res.json({intent:"create_trip",mode:"create_trip",transcript:parsed.transcript,...step});
+      const step=tripConversationStep(draft,{pendingField:parsed.context.pendingField,lang:parsed.context.lang});
+      return res.json({intent:"create_trip",mode:"create_trip",transcript:parsed.transcript,...step,lang:parsed.context.lang});
     }
     if(parsed.intent==="cancel"){
       return res.json({intent:"help",mode:"",transcript:parsed.transcript,
