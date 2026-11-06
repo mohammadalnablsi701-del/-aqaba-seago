@@ -9,6 +9,7 @@ import providerCheckinRoutes from "./routes/providerCheckin.js";
 import providerRoutes from "./routes/providers.js";
 import providerAssistantRoutes from "./routes/providerAssistant.js";
 import adminRoutes from "./routes/admin.js";
+import adminAssistantMetricsRoutes from "./routes/adminAssistantMetrics.js";
 import adminAuditRoutes from "./routes/adminAudit.js";
 import adminCommissionRoutes from "./routes/adminCommission.js";
 import adminTripControlRoutes from "./routes/adminTripControl.js";
@@ -70,6 +71,7 @@ export function createApp() {
   app.use("/api/admin/operations", operationsRoutes);
   app.use("/api/admin/bookings", adminBookingSupportRoutes);
   app.use("/api/admin/payments", adminPaymentRoutes);
+  app.use("/api/admin/assistant", adminAssistantMetricsRoutes);
   app.use("/api/admin", adminAuditRoutes);
   app.use("/api/admin", providerAccessAdminRoutes);
   app.use("/api/admin", adminCommissionRoutes);

@@ -58,6 +58,7 @@ export const notifications=(token,options={})=>req("/api/admin/notifications",{t
 export const supportRequests=(token,options={})=>req("/api/admin/support-requests",{token,...options});
 export const setSupportRequestStatus=(token,id,status)=>req("/api/admin/support-requests/"+id,{token,method:"PATCH",body:JSON.stringify({status})});
 export const overview=(token,{from="",to="",providerId=""}={},options={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/overview"+(q.toString()?"?"+q.toString():""),{token,...options});};
+export const assistantMetrics=(token,options={})=>req("/api/admin/assistant/metrics",{token,...options});
 export const operations=(token,options={})=>req("/api/admin/operations",{token,...options});
 export const settlements=(token,{from="",to="",providerId=""}={},options={})=>{const q=new URLSearchParams();if(from)q.set("from",from);if(to)q.set("to",to);if(providerId)q.set("providerId",providerId);return req("/api/admin/settlements"+(q.toString()?"?"+q.toString():""),{token,...options});};
 export const markSettlementPaid=(token,{providerId,from,to})=>runLockedSensitiveAction(`settlement:${providerId}:${from}:${to}:pay`,async()=>{

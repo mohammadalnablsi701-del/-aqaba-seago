@@ -3,6 +3,7 @@ import {rateLimit} from "express-rate-limit";
 import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
+import {assistantRequestMetrics,recordAssistantUpstreamError} from "../services/assistantMetrics.js";
 import {diagnoseProviderBookings} from "../services/providerAssistantDiagnostics.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
@@ -51,11 +52,13 @@ export async function requestAssistantModel(endpoint,options,{audio=false,fetche
     try{
       response=await fetcher(endpoint,{...options,signal:AbortSignal.timeout(Math.min(remaining,audio?18000:10000))});
     }catch{
+      recordAssistantUpstreamError("network");
       console.warn("provider_assistant_upstream_network_error",{attempt});
       if(attempt===3)throw fail(modelBusyMessage,503);
     }
     if(response){
       if(response.ok)return response;
+      recordAssistantUpstreamError(response.status);
       console.warn("provider_assistant_upstream_error",{httpStatus:response.status,attempt});
       if(response.status===429)throw fail("تم الوصول لحد استخدام Gemini مؤقتاً. جرّب لاحقاً.",429);
       if(!transientModelStatus.has(response.status))
@@ -173,7 +176,7 @@ export async function confirmedSeatsForProvider(providerId,parsed){
   return {date,rows,text:lang==="en"?"On "+date+", you have "+confirmed+" confirmed seats and "+available+" currently bookable seats across "+rows.length+" departures. Temporary payment holds may reduce availability."
     :"بتاريخ "+date+" عندك "+confirmed+" مقعد مؤكد، و"+available+" مقعد قابل للحجز حالياً ("+rows.length+" مغادرة). حجوزات الدفع المؤقتة قد تقلل المقاعد المتاحة."};
 }
-router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(req,res,next)=>{
+router.post("/me/assistant",requireAuth,requireRole("provider"),assistantRequestMetrics,limiter,async(req,res,next)=>{
   try{
     if(process.env.PROVIDER_AI_ENABLED!=="true")return res.status(503).json({error:"المساعد غير مُفعّل حالياً."});
     // Guided written steps run locally, even if Gemini is temporarily unavailable.
@@ -181,6 +184,7 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
     const localFacts=!(req.body?.audioBase64)&&localProviderFactQuery(req.body?.text,req.body?.context);
     const local=!localFacts&&!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
     if(local){
+      res.locals.assistantMetricsSource="local";
       // Language-only help is available to any authenticated provider, without granting trip/booking access.
       if(local.intent==="create_trip"||local.intent==="cancel"){
         const access=await requireProviderCapability(req.user,"manage_trips");
@@ -188,6 +192,7 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       }
       return res.json(local);
     }
+    res.locals.assistantMetricsSource=localFacts?"local":"gemini";
     const parsed=localFacts||await understandAssistant(req.body||{});
     // Voice must follow the exact same deterministic language control as typed messages.
     // Do not let a generic model reply discard the existing draft or chosen language.

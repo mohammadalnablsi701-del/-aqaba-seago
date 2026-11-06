@@ -270,6 +270,30 @@ test("SeaGo Provider Assistant V2: authenticated two-provider HTTP and mocked sp
     assert.equal(captured.length,callsBefore,"Neither text query should call Gemini");
   });
 
+
+  await t.test("V3.1 admin metrics are role-protected, anonymous and sourced from live request outcomes",async()=>{
+    const admin=await User.create({name:"Assistant Quality Admin",phone:"+962790050109",role:"admin"});
+    const endpoint="http://127.0.0.1:"+server.address().port+"/api/admin/assistant/metrics";
+    let response=await originalFetch(endpoint);
+    assert.equal(response.status,401);
+    response=await originalFetch(endpoint,{headers:{authorization:"Bearer "+token(ownerA)}});
+    assert.equal(response.status,403);
+    response=await originalFetch(endpoint,{headers:{authorization:"Bearer "+token(customer)}});
+    assert.equal(response.status,403);
+    response=await originalFetch(endpoint,{headers:{authorization:"Bearer "+token(admin)}});
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get("cache-control"),"no-store");
+    const result=await response.json();
+    assert.equal(result.scope,"single_process");
+    assert.equal(result.retentionHours,24);
+    assert.equal(result.hourly.length,24);
+    assert.ok(result.totalRequests>0);
+    const serialized=JSON.stringify(result);
+    assert.doesNotMatch(serialized,/Alpha Tours|Bravo Marine|Operator A|Sunset Cruise|079005010|customerId|providerId|bookingId|audioBase64|transcript/);
+    assert.equal(result.byMode.audio>0,true);
+    assert.equal(result.bySource.local>0,true);
+  });
+
   await t.test("AI requests never changed trips, bookings or ticket states",async()=>{
     assert.equal(await Trip.countDocuments({providerId:providerA._id}),2);
     assert.equal(await Trip.countDocuments({providerId:providerB._id}),1);

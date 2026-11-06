@@ -81,3 +81,25 @@ V3 adds read-only booking-status diagnosis alongside trip availability checks. T
 **Limitations:** A pending booking does not prove that a payment succeeded or failed. Reservation inventory may include temporary payment holds; confirmation counts and reservedSeats need not match. When a specific booking cannot be located using the summary, a licensed staff member should inspect the authorized Bookings screen without posting personal customer details in the assistant. The feature does not read private gateway event logs or repair QR scanner hardware.
 
 **Release gates:** Run all GitHub Actions and disposable MongoDB multi-provider role/isolation acceptance. Verify with two authorized staging providers, inspect no-PII API responses, test follow-ups in Arabic/English and on iPhone PWA. Merge and production deployment require separate approval.
+
+
+## V3.1 — anonymous quality telemetry and deterministic golden tests
+
+### Admin dashboard / endpoint
+
+- Admin-only `GET /api/admin/assistant/metrics` requires an authenticated **admin** JWT, returns `Cache-Control: no-store`, and powers the new **AI Monitoring** tab in the Admin PWA.
+- Counters are aggregated across successful assistant requests, HTTP 5xx failures, rate limits, HTTP 4xx client errors, text vs voice, local vs Gemini-routed requests, Gemini attempt error codes (including 503 and 429), and a latency histogram with approximate p50/p95 **bucket upper bounds**.
+- The UI refreshes every 30 seconds and displays the last 12 hourly buckets from a **24-hour window**. Its count of model error *attempts* can be larger than user-visible failures because retries may succeed.
+- **Privacy rule:** neither the instrumentation nor metrics response stores or returns conversation text, provider/user identifiers, names, phone/email, IPs, speech recordings, prompts, transcription, booking IDs, or API credentials. Counters come from HTTP response status and safe allowlisted classifications only. Do not add raw error messages to metrics.
+- **Scope limitations:** metrics are *in-memory per Node process*, vanish on restart/cold start, and are not aggregated across instances. Operational success is measured by HTTP success; it does **not** measure whether Gemini's answer is factually correct. The dashboard is not a durable audit ledger and has no automated alert delivery. Auth failures before the assistant handler are not included. Historical metrics would require a separate privacy-reviewed persistence design.
+
+### Automated regression and review gate
+
+- `test/providerAssistantV31.golden.test.js` contributes **150 deterministic fixture variations** covering Jordanian Arabic/English language commands, provider visibility and prices, booking/seat/QR triage, negative and ambiguous questions, bounded conversational follow-ups, synthetic email/phone/number redaction, booking-status aggregation and HTTP status categories.
+- `test/providerAssistantMetrics.test.js` checks rolling-window math, histogram reporting, absence of secret/raw values, safe allowlists, and anonymous endpoint rejection; the disposable two-provider MongoDB integration suite checks admin-only metrics access with real JWTs and synthetic provider sessions.
+- All tests run with `npm test` in the existing CI and release gates, using no paid Gemini API calls or production customer data.
+- **Do not interpret the test count as 150 real voice or Gemini model accuracy evaluations.** For actual linguistic reliability, plan a separately reviewed opt-in dataset of authorized, privacy-safe de-identified cases, with human reference answers and manual iPhone tests.
+- Suggested pilot gates: zero cross-provider disclosure, zero unauthorized write operations, no PII in metrics, all CI green, and a reviewed sample of 20+ real operator conversations. HTTP 503/429 trend and p95 latency are observability signals, not automatic proof of operator satisfaction.
+
+### Release
+Open PR for review, complete build/security/integration CI, verify access via Admin + non-admin, then test on staging where possible before approving production. Existing Render staging branch is independently diverged from `main`; never merge unrelated main changes into it solely to test this feature.
