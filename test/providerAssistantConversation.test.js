@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting} from "../src/services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting,assistantTripList,redactAssistantText} from "../src/services/providerAssistantConversation.js";
 
 test("Arabic guided creation asks for missing details one at a time and never autosaves",()=>{
   const first=tripConversationStep({});
@@ -219,4 +219,28 @@ test("guided troubleshooting never asserts a ticket or payment is valid",()=>{
   assert.match(pay.text,/الدفع غير المؤكد/);
   assert.doesNotMatch(pay.text,/تم تأكيد الدفع/);
   assert.match(assistantTroubleshooting("invalid","en").text,/Which screen/);
+});
+
+test("sensitive provider text contacts are masked before model input",()=>{
+  const text=redactAssistantText("0791234567 +962791234567 foo@example.com 123456789012");
+  assert.equal(text.includes("0791234567"),false);
+  assert.equal(text.includes("example.com"),false);
+  assert.equal(text.includes("123456789012"),false);
+  assert.match(text,/\[phone\]/);
+  assert.match(text,/\[email\]/);
+  assert.match(text,/\[number\]/);
+  assert.match(redactAssistantText("شو سعر رحلة الغروب؟"),/رحلة الغروب/);
+});
+
+test("multiple provider trips can be listed with prices and never show commission amounts",()=>{
+  const rows=[
+    {titleAr:"Sunset",pricing:{adultPrice:20,childPrice:10,commissionValue:9999}},
+    {titleAr:"Snorkeling",pricing:{adultPrice:30,childPrice:15}}
+  ];
+  const text=assistantTripList(rows,"en");
+  assert.match(text,/Sunset/);
+  assert.match(text,/20 \/ 10 JOD/);
+  assert.match(text,/Snorkeling/);
+  assert.doesNotMatch(text,/9999/);
+  assert.equal(matchAssistantTrip([rows[0]],"").match.titleAr,"Sunset");
 });
