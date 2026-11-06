@@ -50,11 +50,11 @@ export async function understandAssistant(body,env=process.env){
     "You are SeaGo Provider's intelligent assistant. Understand Jordanian Arabic, English, and speech in either language.",
     "Respond in "+(context.lang==="en"?"English":"Arabic")+". Jordan local date: "+today()+".",
     "Safe conversation context (unpublished trip draft and non-sensitive focus only): "+JSON.stringify(context)+".",
-    "Return ONLY valid JSON with: intent,date,tripName,topic,transcript,draft,reply.",
+    "Return ONLY valid JSON with: intent,date,tripName,topic,listAllTrips,replyLanguage,transcript,draft,reply.",
     "Choose exactly one intent: seats (real confirmed/available seats or bookings counts); trip_info (saved trip prices, duration, buffet, departure location or list); trip_visibility (why a saved trip may not appear or be sellable); troubleshoot (QR/camera, mic, login, missing booking, payments, trip saving, seat mismatch); create_trip (draft creation or edits); cancel (explicit draft cancellation); help (general advice).",
     "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general. If focus.intent is troubleshoot and the message reports that the previous guidance failed or adds details about the same issue, retain troubleshoot and the same topic.",
     "Do NOT invent live provider data, prices, seat totals, payment statuses, diagnoses, or customer records. The server checks permissions and fetches facts after classification.",
-    "tripName is ONLY an explicitly mentioned trip name; leave blank if none. date is YYYY-MM-DD for a clearly stated date, today, tomorrow or named weekday; otherwise blank.",
+    "tripName is ONLY an explicitly mentioned trip name; leave blank if none. listAllTrips is true only when the user asks for all company trips. date is YYYY-MM-DD for a clearly stated date or relative day, otherwise blank. replyLanguage is en or ar only for an explicit language-switch request; otherwise blank.",
     "If continuing a trip draft, return create_trip when the message supplies its next field. Switch intent when user asks about real saved trips, bookings or an error instead.",
     "draft includes ONLY fields explicitly supplied in this user message: titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,buffetEnabled,buffetDescription,buffetAdultPrice,buffetChildPrice,locationName,address,googleMapsUrl.",
     "Never guess draft prices, names, buffet options or maps links. Use boolean buffetEnabled, positive durations in minutes and JOD prices. For a spoken message, transcript is an accurate short transcription in the spoken language; for text, empty string.",
@@ -79,12 +79,13 @@ export async function understandAssistant(body,env=process.env){
   const intents=new Set(["seats","trip_info","trip_visibility","troubleshoot","create_trip","cancel","help"]);
   const intent=intents.has(parsed.intent)?parsed.intent:"help";
   const topics=new Set(["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"]);
-  const listRequest=/\\b(?:all\\s+trips|my\\s+trips)\\b|(?:كل\\s+الرحلات|رحلاتي)/i.test(message);
-  const tripName=clean(parsed.tripName,100)||(listRequest?"":context.focus.tripName);
+  const listRequest=parsed.listAllTrips===true||message.includes("رحلاتي")||message.includes("كل الرحلات")||message.toLowerCase().includes("all trips")||message.toLowerCase().includes("my trips");
+  const tripName=listRequest?"":(clean(parsed.tripName,100)||context.focus.tripName);
+  const replyLanguage=parsed.replyLanguage==="en"?"en":parsed.replyLanguage==="ar"?"ar":context.lang;
   const date=parsed.date?safeAssistantDate(parsed.date):(context.focus.date?safeAssistantDate(context.focus.date):safeAssistantDate(null));
   return {intent,date,tripName,topic:topics.has(parsed.topic)?parsed.topic:"general",
     transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),
-    delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context,reply:clean(parsed.reply,700)};
+    delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context:{...context,lang:replyLanguage},reply:clean(parsed.reply,700)};
 }
 export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
