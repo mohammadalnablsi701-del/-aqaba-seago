@@ -172,7 +172,10 @@ function minutesFromText(s,allowBare=false){
 const seatRequest=s=>/(?:مقعد|مقاعد|حجوز|محجوز|شاغر|متاح|شو الوضع|مغادر)/.test(normalized(s))&&!/(?:اضيف|اضاف|انشئ|انشاء|جهز|اعمل|سوي|بدّي رحل)/.test(normalized(s));
 const cancellation=s=>/(?:الغي|الغاء|الغِ|كنسل|بطل|امسح)\s*(?:الرحل|المسود|الطلب)|(?:ما\s*بدي\s*اكمل)/.test(normalized(s));
 const languageSwitch=s=>{
-  const n=normalized(s);
+  const n=normalized(s).replace(/[!?.،؛]+$/g,"").trim();
+  // A standalone language name is a command, not a trip title or a request for Gemini.
+  if(/^(?:ب?ال)?(?:انجليزي|انكليزي|english)$/.test(n))return "en";
+  if(/^(?:ب?ال)?(?:عربي|عربيه|arabic)$/.test(n))return "ar";
   if(/(?:رد|جاوب|احكي|تكلم|تحدث|كمل|اكتب).*(?:بالانجليزي|بالانكليزي|english)|^(?:please\s+)?(?:reply|respond|speak|answer|continue)\s+(?:to\s+me\s+)?(?:in\s+)?english\b|^(?:in\s+)?english(?:\s+please)?$/.test(n))return "en";
   if(/(?:رد|جاوب|احكي|تكلم|تحدث|كمل|اكتب).*(?:بالعربي|بالعربيه|arabic)|^(?:please\s+)?(?:reply|respond|speak|answer|continue)\s+(?:to\s+me\s+)?(?:in\s+)?arabic\b|^(?:in\s+)?arabic(?:\s+please)?$/.test(n))return "ar";
   return "";
@@ -217,9 +220,13 @@ export function localGuidedTripTurn(text,rawContext){
   const requestedLang=languageSwitch(text);
   const lang=requestedLang||(!inTrip&&/\b(?:trip|create|add)\b/.test(normalized(text))?"en":ctx.lang);
   // A language request is a control command, never the answer to the pending trip question.
-  if(inTrip&&requestedLang){
-    return {intent:"create_trip",mode:"create_trip",
+  if(requestedLang){
+    if(inTrip)return {intent:"create_trip",mode:"create_trip",
       ...tripConversationStep(ctx.draft,{pendingField:ctx.pendingField,lang}),lang};
+    // Language changes work from an empty chat or seat-query mode, without an AI call.
+    return {intent:"help",mode:ctx.mode==="seats"?"seats":"",lang,
+      text:lang==="en"?"English selected. I'll reply in English. What would you like to do?":"تم اختيار العربية. رح أرد عليك بالعربي. شو بتحب نعمل؟",
+      suggestions:lang==="en"?["Create a trip","Today's bookings","Available seats tomorrow"]:["بدي أضيف رحلة","حجوزات اليوم","المقاعد المتاحة بكرا"]};
   }
   if(inTrip&&cancellation(text))return {intent:"cancel",mode:"",lang,
     text:lang==="en"?"Trip draft canceled. Nothing was saved.":"تمام، ألغيت مسودة الرحلة من المحادثة. ما حفظنا ولا رحلة.",
