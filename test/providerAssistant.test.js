@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {safeAssistantDate,safeTripDraft} from "../src/routes/providerAssistant.js";
+import {safeAssistantDate,safeTripDraft,understandAssistant} from "../src/routes/providerAssistant.js";
 import {createApp} from "../src/app.js";
 
 test("assistant accepts valid Aqaba dates and rejects impossible dates",()=>{
@@ -31,4 +31,12 @@ test("assistant is inaccessible without provider authentication",async()=>{
     assert.equal(response.status,401);
     assert.match((await response.json()).error,/Authentication/i);
   }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("assistant rejects recordings above the 1.6M base64 limit without contacting Google",async()=>{
+  await assert.rejects(
+    understandAssistant({audioBase64:"A".repeat(1600004),audioMimeType:"audio/mp4"},{GEMINI_API_KEY:"test-key"}),
+    /صيغة أو حجم التسجيل غير مدعوم/
+  );
 });
