@@ -52,7 +52,7 @@ export async function understandAssistant(body,env=process.env){
     "Safe conversation context (unpublished trip draft and non-sensitive focus only): "+JSON.stringify(context)+".",
     "Return ONLY valid JSON with: intent,date,tripName,topic,transcript,draft,reply.",
     "Choose exactly one intent: seats (real confirmed/available seats or bookings counts); trip_info (saved trip prices, duration, buffet, departure location or list); trip_visibility (why a saved trip may not appear or be sellable); troubleshoot (QR/camera, mic, login, missing booking, payments, trip saving, seat mismatch); create_trip (draft creation or edits); cancel (explicit draft cancellation); help (general advice).",
-    "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general.",
+    "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general. If focus.intent is troubleshoot and the message reports that the previous guidance failed or adds details about the same issue, retain troubleshoot and the same topic.",
     "Do NOT invent live provider data, prices, seat totals, payment statuses, diagnoses, or customer records. The server checks permissions and fetches facts after classification.",
     "tripName is ONLY an explicitly mentioned trip name; leave blank if none. date is YYYY-MM-DD for a clearly stated date, today, tomorrow or named weekday; otherwise blank.",
     "If continuing a trip draft, return create_trip when the message supplies its next field. Switch intent when user asks about real saved trips, bookings or an error instead.",
@@ -149,8 +149,12 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
         text:assistantVisibilityDiagnosis(trip,future,lang),suggestions:lang==="en"?["Trip prices","Seats tomorrow"]:["أسعار الرحلة","المقاعد بكرا"]});
     }
     if(parsed.intent==="troubleshoot"){
+      const prior=parsed.context.focus;
+      const followUp=prior?.intent==="troubleshoot";
+      const topic=parsed.topic==="general"&&followUp?prior.topic:parsed.topic;
       return res.json({intent:"troubleshoot",mode:"",lang:parsed.context.lang,transcript:parsed.transcript,
-        ...assistantTroubleshooting(parsed.topic,parsed.context.lang)});
+        focus:safeAssistantFocus({intent:"troubleshoot",topic}),
+        ...assistantTroubleshooting(topic,parsed.context.lang,followUp)});
     }
     if(parsed.intent==="seats"){
       const access=await requireProviderCapability(req.user,"view_bookings");
