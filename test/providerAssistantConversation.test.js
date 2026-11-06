@@ -131,3 +131,38 @@ test("English trip creation and suggestions work without Gemini or accidental fi
   assert.equal(edit.askFor,"adultPrice");
   assert.deepEqual(edit.draft,buffet.draft);
 });
+
+
+test("standalone language names switch provider help without Gemini or trip mutations",()=>{
+  for(const term of ["انجليزي","إنجليزي","بالانجليزي","English","english!"]){
+    const result=localGuidedTripTurn(term,{mode:"",lang:"ar",draft:{providerId:"secret"}});
+    assert.equal(result.intent,"help",term);
+    assert.equal(result.mode,"",term);
+    assert.equal(result.lang,"en",term);
+    assert.match(result.text,/reply in English/i,term);
+    assert.equal("draft" in result,false,term);
+  }
+  for(const term of ["عربي","بالعربي","Arabic","ARABIC"]){
+    const result=localGuidedTripTurn(term,{mode:"",lang:"en"});
+    assert.equal(result.lang,"ar",term);
+    assert.match(result.text,/العربي/);
+  }
+});
+
+test("language commands preserve existing trip draft and seat-query context",()=>{
+  const draft={titleAr:"رحلة غروب",durationMinutes:120};
+  const command=localGuidedTripTurn("انجليزي",{mode:"create_trip",draft,lang:"ar"});
+  assert.equal(command.lang,"en");
+  assert.deepEqual(command.draft,draft);
+  assert.equal(command.askFor,"adultPrice");
+  assert.match(command.text,/adult price/i);
+  const previous=localGuidedTripTurn("عربي",{mode:"create_trip",draft:command.draft,lang:"en"});
+  assert.equal(previous.lang,"ar");
+  assert.deepEqual(previous.draft,draft);
+  assert.match(previous.text,/سعر الشخص/);
+  const seats=localGuidedTripTurn("انجليزي",{mode:"seats",lang:"ar"});
+  assert.equal(seats.mode,"seats");
+  assert.equal(seats.intent,"help");
+  assert.equal(seats.lang,"en");
+  assert.equal(localGuidedTripTurn("كم مقعد محجوز اليوم؟",{mode:"seats",lang:"en"}),null);
+});
