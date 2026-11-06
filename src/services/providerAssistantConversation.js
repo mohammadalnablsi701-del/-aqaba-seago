@@ -215,7 +215,7 @@ export function localGuidedTripTurn(text,rawContext){
   const ctx=assistantConversationContext(rawContext);
   const inTrip=ctx.mode==="create_trip";
   const requestedLang=languageSwitch(text);
-  const lang=requestedLang||ctx.lang;
+  const lang=requestedLang||(!inTrip&&/\b(?:trip|create|add)\b/.test(normalized(text))?"en":ctx.lang);
   // A language request is a control command, never the answer to the pending trip question.
   if(inTrip&&requestedLang){
     return {intent:"create_trip",mode:"create_trip",
@@ -230,16 +230,16 @@ export function localGuidedTripTurn(text,rawContext){
   const baseStep=tripConversationStep(draft,{pendingField:ctx.pendingField,lang});
   let pending=ctx.pendingField;
   const n=normalized(text),value=priceValue(text);
-  if(inTrip&&/(?:غير|عدل|تعديل|تغيير|اغير|اعدل)/.test(n)&&!(/\d/.test(n))){
-    if(/بوفيه/.test(n)&&/طفل/.test(n))pending="buffetChildPrice";
-    else if(/بوفيه/.test(n)&&/(?:كبير|سعر)/.test(n))pending="buffetAdultPrice";
-    else if(/بوفيه/.test(n))pending="buffetEnabled";
-    else if(/رابط|جوجل|ماب|خريط/.test(n))pending="googleMapsUrl";
-    else if(/مكان|انطلاق|مارينا|مرسى/.test(n))pending="locationName";
-    else if(/طفل/.test(n))pending="childPrice";
-    else if(/مده|وقت|ساعه/.test(n))pending="durationMinutes";
-    else if(/اسم/.test(n))pending="title";
-    else if(/سعر|دينار/.test(n))pending="adultPrice";
+  if(inTrip&&/(?:غير|عدل|تعديل|تغيير|اغير|اعدل|change|edit|update)/.test(n)&&!(/\d/.test(n))){
+    if(/بوفيه|buffet/.test(n)&&/طفل|child/.test(n))pending="buffetChildPrice";
+    else if(/بوفيه|buffet/.test(n)&&/(?:كبير|سعر|adult|price)/.test(n))pending="buffetAdultPrice";
+    else if(/بوفيه|buffet/.test(n))pending="buffetEnabled";
+    else if(/رابط|جوجل|ماب|خريط|maps?\s*link/.test(n))pending="googleMapsUrl";
+    else if(/مكان|انطلاق|مارينا|مرسى|departure|location/.test(n))pending="locationName";
+    else if(/طفل|child/.test(n))pending="childPrice";
+    else if(/مده|وقت|ساعه|duration/.test(n))pending="durationMinutes";
+    else if(/اسم|title|name/.test(n))pending="title";
+    else if(/سعر|دينار|price/.test(n))pending="adultPrice";
     if(pending){
       const ask=tripConversationStep(draft,{pendingField:pending,lang});
       return {intent:"create_trip",mode:"create_trip",...ask,pendingField:pending,lang};
