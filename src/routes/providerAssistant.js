@@ -91,17 +91,40 @@ export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
   const lang=parsed.context?.lang==="en"?"en":"ar";
   const end=new Date(start.getTime()+86400000);
-  const allTrips=await Trip.find({providerId}).select("_id titleAr titleEn vesselName").lean();
-  const needle=normalize(parsed.tripName);
-  const trips=needle?allTrips.filter(t=>[t.titleAr,t.titleEn,t.vesselName].some(v=>{const a=normalize(v);return a&&(a.includes(needle)||(a.length>2&&needle.includes(a)));})):allTrips;
-  if(!trips.length)return {date,rows:[],text:lang==="en"?"I could not find a trip with that name for your company.":"ما لقيت رحلة بهذا الاسم عند شركتك."};
-  const deps=await Departure.find({tripId:{$in:trips.map(t=>t._id)},startsAt:{$gte:start,$lt:end}}).sort({startsAt:1}).limit(50).lean();
+  const allTrips=await Trip.find({providerId}).select("_id titleAr titleEn vesselName active platformStatus").lean();
+  const query=clean(parsed.tripName,100),selection=matchAssistantTrip(allTrips,query);
+  if(query&&!selection.match){
+    const suggestions=selection.options.slice(0,4);
+    return {date,rows:[],text:selection.ambiguous
+      ?(lang==="en"?"Several trips match. Please specify one: ":"في أكثر من رحلة بنفس الاسم. حدد واحدة: ")+suggestions.join("، ")
+      :(lang==="en"?"No matching trip belongs to your company.":"ما لقيت رحلة بهذا الاسم لشركتك.")};
+  }
+  const trips=query?[selection.match]:allTrips;
+  if(!trips.length)return {date,rows:[],text:lang==="en"?"Your company has no saved trips.":"ما في رحلات محفوظة لشركتك."};
+  // Do not silently drop departures and report incorrect daily totals.
+  const deps=await Departure.find({tripId:{$in:trips.map(t=>t._id)},startsAt:{$gte:start,$lt:end}})
+    .sort({startsAt:1}).limit(201).lean();
+  if(deps.length>200)return {date,rows:[],truncated:true,text:lang==="en"
+    ?"More than 200 departures match this day. Specify a trip to get accurate counts."
+    :"في أكثر من 200 مغادرة بهذا اليوم. حدد اسم الرحلة للحصول على أرقام دقيقة."};
   if(!deps.length)return {date,rows:[],text:lang==="en"?"There are no departures scheduled on "+date+".":"ما في مغادرات مسجلة بتاريخ "+date+"."};
-  const counts=await Booking.aggregate([{$match:{providerId,departureId:{$in:deps.map(d=>d._id)},status:"confirmed"}},{$group:{_id:"$departureId",seats:{$sum:"$seats"},bookings:{$sum:1}}}]);
+  const counts=await Booking.aggregate([{$match:{providerId,departureId:{$in:deps.map(d=>d._id)},status:"confirmed"}},
+    {$group:{_id:"$departureId",seats:{$sum:"$seats"},bookings:{$sum:1}}}]);
   const byTrip=new Map(trips.map(t=>[String(t._id),t])),byId=new Map(counts.map(c=>[String(c._id),c]));
-  const rows=deps.map(d=>{const t=byTrip.get(String(d.tripId)),c=byId.get(String(d._id));return {trip:clean(t?.titleAr||t?.titleEn),startsAt:d.startsAt,status:d.status,confirmedSeats:Number(c?.seats||0),bookings:Number(c?.bookings||0),heldSeats:Number(d.reservedSeats||0),availableSeats:Math.max(0,Number(d.capacity||0)-Number(d.reservedSeats||0)),capacity:Number(d.capacity||0)};});
+  const now=Date.now();
+  const rows=deps.map(d=>{
+    const trip=byTrip.get(String(d.tripId)),confirmed=byId.get(String(d._id));
+    const bookable=trip?.active===true&&trip?.platformStatus!=="paused"&&
+      d.status==="scheduled"&&!d.salesClosed&&new Date(d.startsAt).getTime()>now;
+    return {trip:clean(trip?.titleAr||trip?.titleEn),startsAt:d.startsAt,status:d.status,
+      confirmedSeats:Number(confirmed?.seats||0),bookings:Number(confirmed?.bookings||0),
+      heldSeats:Number(d.reservedSeats||0),availableSeats:bookable
+        ?Math.max(0,Number(d.capacity||0)-Number(d.reservedSeats||0)):0,
+      capacity:Number(d.capacity||0)};
+  });
   const confirmed=rows.reduce((n,d)=>n+d.confirmedSeats,0),available=rows.reduce((n,d)=>n+d.availableSeats,0);
-  return {date,rows,text:lang==="en"?"On "+date+", you have "+confirmed+" confirmed seats and "+available+" available seats across "+rows.length+" departures. Temporary payment holds may affect availability.":"بتاريخ "+date+" عندك "+confirmed+" مقعد مؤكد، و"+available+" مقعد متاح ("+rows.length+" مغادرة). المتاح قد يتأثر بحجوزات الدفع المؤقتة."};
+  return {date,rows,text:lang==="en"?"On "+date+", you have "+confirmed+" confirmed seats and "+available+" currently bookable seats across "+rows.length+" departures. Temporary payment holds may reduce availability."
+    :"بتاريخ "+date+" عندك "+confirmed+" مقعد مؤكد، و"+available+" مقعد قابل للحجز حالياً ("+rows.length+" مغادرة). حجوزات الدفع المؤقتة قد تقلل المقاعد المتاحة."};
 }
 router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(req,res,next)=>{
   try{
