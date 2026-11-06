@@ -407,12 +407,38 @@ export function assistantAllTripsVisibilityRequest(text){
 export function localProviderFactQuery(text,rawContext){
   if(typeof text!=="string"||!text.trim()||text.length>1500)return null;
   const context=assistantConversationContext(rawContext),n=normalized(text);
-  let intent="";
+  let intent="",topic="";
   if(assistantAllTripsVisibilityRequest(text))intent="trip_visibility";
   else if(/(?:رحلاتي|رحلاتنا|الرحلات|كل\s+رحلات|\b(?:my|our|all)\s+trips\b)/.test(n)&&
     /(?:اسعار|سعر|prices?|cost)/.test(n))intent="trip_info";
+  else if(/(?:حجز|حجوز|booking)/.test(n)&&
+    /(?:مش\s*(?:ظاهر|مبين|موجود|موكد)|ما\s*(?:بظهر|بيبين|بان|اتأكد)|غير\s*(?:ظاهر|موكد)|مفقود|not\s+(?:showing|visible|confirmed)|missing|not\s+found)/.test(n)){
+    intent="troubleshoot";topic="booking_missing";
+  }else if(/(?:مقاعد|مقعد|seats?|capacity)/.test(n)&&
+    /(?:مش\s*(?:صح|مطابق)|غير\s*مطابق|فرق|مختلف|غلط|mismatch|doesn.t\s+match|wrong)/.test(n)){
+    intent="troubleshoot";topic="seats_mismatch";
+  }else if(/(?:qr|ماسح|سكانر|scanner)/.test(n)&&
+    /(?:مش|ما|مشكله|عطل|فشل|رفض|مرفوض|خطا|error|fail|not\s+working|problem)/.test(n)){
+    intent="troubleshoot";topic="qr_checkin";
+  }
+  const rawDate=text.match(/\b\d{4}-\d{2}-\d{2}\b/);
+  const relative=n.match(/(?:^|\s)(اليوم|بكرا|غدا|tomorrow|today)(?:\s|$)/);
+  const followUp=!intent&&context.focus.intent==="troubleshoot"&&
+    ["booking_missing","seats_mismatch","qr_checkin"].includes(context.focus.topic)&&
+    (rawDate||relative);
+  if(followUp){intent="troubleshoot";topic=context.focus.topic;}
   if(!intent)return null;
-  return {intent,tripName:"",context,transcript:"",date:"",source:"local_intent"};
+  let date=rawDate?.[0]||"";
+  if(!date&&relative){
+    const offset=/^(?:بكرا|غدا|tomorrow)$/.test(relative[1])?86400000:0;
+    date=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Amman",year:"numeric",month:"2-digit",day:"2-digit"})
+      .format(new Date(Date.now()+offset));
+  }
+  const prior=context.focus;
+  if(!date&&intent==="troubleshoot"&&prior.intent==="troubleshoot"&&prior.topic===topic)date=prior.date;
+  const tripName=intent==="troubleshoot"&&prior.intent==="troubleshoot"&&prior.topic===topic?prior.tripName:"";
+  return {intent,topic,tripName,context,transcript:"",date,
+    dateProvided:Boolean(date),source:"local_intent"};
 }
 export function assistantVisibilityOverview(trips,departures,lang="ar"){
   const rows=Array.isArray(trips)?trips:[];
