@@ -197,6 +197,57 @@ test("SeaGo Provider Assistant V2: authenticated two-provider HTTP and mocked sp
     assert.match(follow.data.text,/camera fail to open/i);
   });
 
+
+  await t.test("iPhone voice language switch survives wrong Gemini intent and preserves unfinished draft",async()=>{
+    const draft={titleAr:"رحلة بحرية"};
+    const answer=await ask(ownerA,{
+      intent:"help",replyLanguage:"ar",reply:"Manage trips in the Trips page",
+      transcript:"بدنا نحكي بالإنجليزية",needsClarification:false
+    },{audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",
+      context:{lang:"ar",mode:"create_trip",draft}});
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.lang,"en");
+    assert.equal(answer.data.mode,"create_trip");
+    assert.equal(answer.data.draft.titleAr,"رحلة بحرية");
+    assert.equal(answer.data.askFor,"durationMinutes");
+    assert.match(answer.data.text,/how long/i);
+    assert.equal(answer.data.transcript,"بدنا نحكي بالإنجليزية");
+  });
+
+  await t.test("plural visibility voice question reads only own trips, never generic model help",async()=>{
+    const question="ليش رحلاتنا مش مبينة للعملاء؟";
+    let answer=await ask(ownerA,{
+      intent:"help",reply:"افتح صفحة الرحلات",transcript:question,
+      tripName:"",needsClarification:false
+    },{audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",
+      context:context("ar",{intent:"trip_info",tripName:"رحلة قديمة"})});
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.intent,"trip_visibility");
+    assert.equal(answer.data.source,"provider_data");
+    assert.equal(answer.data.transcript,question);
+    assert.match(answer.data.text,/رحلة غروب الشرق/);
+    assert.match(answer.data.text,/رحلة غروب الغرب/);
+    assert.match(answer.data.text,/لا توجد مغادرات مستقبلية مجدولة/);
+    assert.doesNotMatch(answer.data.text,/رحلة خاصة برافو|99 JOD|افتح صفحة الرحلات/);
+
+    answer=await ask(ownerB,{intent:"help",reply:"Use Trips",transcript:question},
+      {audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",context:context("ar")});
+    assert.equal(answer.status,200);
+    assert.match(answer.data.text,/رحلة خاصة برافو/);
+    assert.doesNotMatch(answer.data.text,/رحلة غروب الشرق|رحلة غروب الغرب/);
+  });
+
+  await t.test("uncertain iPhone audio asks for correction rather than fabricated navigation",async()=>{
+    const answer=await ask(ownerA,{
+      intent:"help",reply:"افتح صفحة الرحلات",transcript:"فان شو كابتن وليلة آر",
+      needsClarification:true
+    },{audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",context:context("ar")});
+    assert.equal(answer.status,200);
+    assert.match(answer.data.text,/ما قدرت أفهم التسجيل/);
+    assert.doesNotMatch(answer.data.text,/افتح صفحة الرحلات/);
+    assert.equal(answer.data.transcript,"فان شو كابتن وليلة آر");
+  });
+
   await t.test("AI requests never changed trips, bookings or ticket states",async()=>{
     assert.equal(await Trip.countDocuments({providerId:providerA._id}),2);
     assert.equal(await Trip.countDocuments({providerId:providerB._id}),1);

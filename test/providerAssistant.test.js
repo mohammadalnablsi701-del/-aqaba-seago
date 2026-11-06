@@ -149,3 +149,52 @@ test("V2 follow-up dates are reused only for seats questions within seat context
     assert.equal(help.tripName,"");
   }finally{globalThis.fetch=original;}
 });
+
+test("iPhone voice transcript overrides incorrect AI language preference and help intent",async()=>{
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{
+    text:JSON.stringify({intent:"help",replyLanguage:"ar",
+      reply:"بالإمكان إدارة رحلاتك من قائمة الرحلات",transcript:"بدنا نحكي بالإنجليزية",
+      draft:{},needsClarification:false})
+  }]}}]})});
+  try{
+    const result=await understandAssistant({
+      audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",
+      context:{lang:"ar",mode:"create_trip",draft:{titleAr:"رحلة بحرية"}}
+    },{GEMINI_API_KEY:"test-key"});
+    assert.equal(result.context.lang,"en");
+    assert.equal(result.transcript,"بدنا نحكي بالإنجليزية");
+    assert.equal(result.intent,"help"); // Route converts explicit command to local wizard response.
+  }finally{globalThis.fetch=original;}
+});
+
+test("iPhone general visibility transcript overrides generic model help classification",async()=>{
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{
+    text:JSON.stringify({intent:"help",reply:"Go to Trips then Add trip",
+      transcript:"ليش رحلاتنا مش مبينة للعملاء؟",tripName:"",draft:{}})
+  }]}}]})});
+  try{
+    const result=await understandAssistant({
+      audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",
+      context:{lang:"ar",focus:{intent:"trip_info",tripName:"رحلة قديمة"}}
+    },{GEMINI_API_KEY:"test-key"});
+    assert.equal(result.intent,"trip_visibility");
+    assert.equal(result.tripName,"");
+  }finally{globalThis.fetch=original;}
+});
+
+test("an explicitly uncertain audio transcript is not treated as a confirmed command",async()=>{
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{
+    text:JSON.stringify({intent:"help",reply:"Go to Trips",needsClarification:true,
+      transcript:"فان شو كابتن وليلة آر",draft:{}})
+  }]}}]})});
+  try{
+    const result=await understandAssistant({
+      audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",context:{lang:"ar"}
+    },{GEMINI_API_KEY:"test-key"});
+    assert.equal(result.needsClarification,true);
+    assert.equal(result.transcript,"فان شو كابتن وليلة آر");
+  }finally{globalThis.fetch=original;}
+});

@@ -187,11 +187,14 @@ function minutesFromText(s,allowBare=false){
 }
 const seatRequest=s=>/(?:مقعد|مقاعد|حجوز|محجوز|شاغر|متاح|شو الوضع|مغادر)/.test(normalized(s))&&!/(?:اضيف|اضاف|انشئ|انشاء|جهز|اعمل|سوي|بدّي رحل)/.test(normalized(s));
 const cancellation=s=>/(?:الغي|الغاء|الغِ|كنسل|بطل|امسح)\s*(?:الرحل|المسود|الطلب)|(?:ما\s*بدي\s*اكمل)/.test(normalized(s));
-const languageSwitch=s=>{
+export const assistantLanguageSwitch=s=>{
   const n=normalized(s).replace(/[!?.،؛]+$/g,"").trim();
   // A standalone language name is a command, not a trip title or a request for Gemini.
   if(/^(?:ب?ال)?(?:انجليزي|انكليزي|english)$/.test(n))return "en";
+  // Spoken Jordanian requests should be handled as control commands, not free-form Gemini help.
+  if(/(?:بدنا|بدي|حاب(?:ب)?|خلينا|ممكن|اريد|نقدر|يلا).*(?:نحكي|نتكلم|نتحدث|اتكلم|احكي|التحدث).*(?:انجليزي|انكليزي|english)|(?:نحكي|نتكلم|نتحدث|احكي).*(?:بال?انجليزي|بال?انكليزي|english)|(?:switch|change)\s+(?:to\s+)?english\b|\b(?:can|could)\s+(?:you|we)\s+(?:speak|talk)\s+(?:in\s+)?english\b/.test(n))return "en";
   if(/^(?:ب?ال)?(?:عربي|عربيه|arabic)$/.test(n))return "ar";
+  if(/(?:بدنا|بدي|حاب(?:ب)?|خلينا|ممكن|اريد|نقدر|يلا).*(?:نحكي|نتكلم|نتحدث|اتكلم|احكي|التحدث).*(?:عربي|arabic)|(?:نحكي|نتكلم|نتحدث|احكي).*(?:بالعربي|بالعربيه|عربي|arabic)|(?:switch|change)\s+(?:to\s+)?arabic\b|\b(?:can|could)\s+(?:you|we)\s+(?:speak|talk)\s+(?:in\s+)?arabic\b/.test(n))return "ar";
   if(/(?:رد|جاوب|احكي|تكلم|تحدث|كمل|اكتب).*(?:بالانجليزي|بالانكليزي|english)|^(?:please\s+)?(?:reply|respond|speak|answer|continue)\s+(?:to\s+me\s+)?(?:in\s+)?english\b|^(?:in\s+)?english(?:\s+please)?$/.test(n))return "en";
   if(/(?:رد|جاوب|احكي|تكلم|تحدث|كمل|اكتب).*(?:بالعربي|بالعربيه|arabic)|^(?:please\s+)?(?:reply|respond|speak|answer|continue)\s+(?:to\s+me\s+)?(?:in\s+)?arabic\b|^(?:in\s+)?arabic(?:\s+please)?$/.test(n))return "ar";
   return "";
@@ -233,7 +236,7 @@ export function localGuidedTripTurn(text,rawContext){
   if(typeof text!=="string"||!text.trim()||text.length>1500)return null;
   const ctx=assistantConversationContext(rawContext);
   const inTrip=ctx.mode==="create_trip";
-  const requestedLang=languageSwitch(text);
+  const requestedLang=assistantLanguageSwitch(text);
   const lang=requestedLang||(!inTrip&&/\b(?:trip|create|add)\b/.test(normalized(text))?"en":ctx.lang);
   // A language request is a control command, never the answer to the pending trip question.
   if(requestedLang){
@@ -390,6 +393,36 @@ export function assistantVisibilityDiagnosis(trip,departures,lang="ar"){
   if(!reasons.length)reasons.push(lang==="en"?"No obvious availability blocker was found in this trip's saved status. Check the customer date filter and refresh.":"ما ظهر مانع واضح في حالة الرحلة المسجلة. تأكد من تاريخ البحث عند العميل وحدّث الصفحة.");
   return (lang==="en"?"Availability check for ":"فحص ظهور رحلة «")+titleOf(trip)+(lang==="en"?":":"»:")+"\n"+reasons.map((x,i)=>(i+1)+". "+x).join("\n")+
     (lang==="en"?"\nThis checks saved data only; it does not guarantee search visibility.":"\nهذا فحص لبيانات النظام، وليس تأكيداً لظهور الرحلة عند كل عميل.");
+}
+// Summary for plural questions such as "ليش رحلاتنا مش مبينة للعملاء؟".
+// Computed only from already authorized, provider-scoped trips and departures.
+export function assistantAllTripsVisibilityRequest(text){
+  const n=normalized(text);
+  const plural=/(?:رحلاتنا|رحلاتي|رحلاتكم|الرحلات|كل\s+رحلات|\b(?:my|our|all|company)\s+trips\b|\btrips\b)/.test(n);
+  const visibility=/(?:ليش|لماذا|شو السبب|غير ظاهر|مش ظاهر|مش مبين|ما بتظهر|مبين|ظاهر|ما بشوف|العملاء|للعملاء|الزبائن|why|not showing|not visible|customers|appear|show up)/.test(n);
+  return plural&&visibility;
+}
+export function assistantVisibilityOverview(trips,departures,lang="ar"){
+  const rows=Array.isArray(trips)?trips:[];
+  const schedules=Array.isArray(departures)?departures:[];
+  if(!rows.length)return lang==="en"?"No saved trips were found for your company.":"ما في رحلات محفوظة لشركتك.";
+  const now=Date.now();
+  const descriptions=rows.map(trip=>{
+    const future=schedules.filter(d=>String(d.tripId)===String(trip._id)&&
+      d.status==="scheduled"&&new Date(d.startsAt).getTime()>now);
+    let issue="";
+    if(trip.active===false)issue=lang==="en"?"Trip is inactive":"الرحلة غير مفعّلة";
+    else if(trip.platformStatus==="paused")issue=lang==="en"?"Platform paused sales":"البيع موقوف من المنصة";
+    else if(!future.length)issue=lang==="en"?"No future scheduled departures":"لا توجد مغادرات مستقبلية مجدولة";
+    else if(!future.some(d=>!d.salesClosed&&Number(d.capacity||0)>Number(d.reservedSeats||0)))
+      issue=lang==="en"?"All future departures are closed or full":"كل المغادرات القادمة مغلقة أو ممتلئة";
+    else issue=lang==="en"?"No availability blocker detected in saved data":"لا يظهر مانع بيع من البيانات المسجلة";
+    return "• "+titleOf(trip)+": "+issue;
+  });
+  return (lang==="en"?"Your trips — saved availability check:\n":"فحص ظهور رحلات شركتك من بيانات النظام:\n")+
+    descriptions.join("\n")+
+    (lang==="en"?"\nThis is not proof of customer-screen visibility; check customer filters and platform behavior if needed."
+      :"\nهذا لا يؤكد ظهور الرحلات على شاشة العملاء؛ قد نحتاج فحص فلاتر البحث والواجهة.");
 }
 export function assistantTroubleshooting(topic,lang="ar",followUp=false){
   const followups={
