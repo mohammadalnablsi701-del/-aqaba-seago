@@ -277,4 +277,78 @@ test("SeaGo Provider Assistant V2: authenticated two-provider HTTP and mocked sp
     assert.equal(await Booking.countDocuments({checkedInAt:{$exists:true}}),0);
     assert.equal((await Trip.findById(east._id)).pricing.adultPrice,20);
   });
+
+  await t.test("V3 asks for a departure date instead of inventing which booking is missing",async()=>{
+    const before=captured.length;
+    const answer=await ask(ownerA,{intent:"help",reply:"generic advice"},
+      {text:"ليش الحجز مش ظاهر؟",context:context("ar")});
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.intent,"troubleshoot");
+    assert.equal(answer.data.source,"guide");
+    assert.match(answer.data.text,/تاريخ المغادرة/);
+    assert.equal(answer.data.focus.topic,"booking_missing");
+    assert.equal(answer.data.summary,undefined);
+    assert.equal(captured.length,before,"Simple written diagnostic questions bypass Gemini");
+  });
+
+  await t.test("V3 booking status checks use only authorized provider dates and counts",async()=>{
+    for(const status of ["pending_payment","cancelled","expired","refunded"]){
+      await Booking.create({...booking(providerA._id,east._id,open._id,1),status});
+    }
+    const before=captured.length;
+    const answer=await ask(ownerA,{intent:"help",reply:"not used"},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"booking_missing"})});
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.source,"provider_data");
+    assert.equal(answer.data.summary.date,day);
+    assert.equal(answer.data.summary.confirmed,2);
+    assert.equal(answer.data.summary.pendingPayment,1);
+    assert.equal(answer.data.summary.cancelled,1);
+    assert.equal(answer.data.summary.expired,1);
+    assert.equal(answer.data.summary.refunded,1);
+    assert.match(answer.data.text,/Pending payment: 1/);
+    assert.doesNotMatch(JSON.stringify(answer.data),/Bravo Secret Cruise|99 JOD|Operator A|Operator B|0790050104|commissionAmount/);
+    assert.equal(captured.length,before);
+  });
+
+  await t.test("V3 foreign trip search and unauthorized roles never return other provider booking data",async()=>{
+    const foreign=await ask(ownerA,{intent:"troubleshoot",topic:"booking_missing",date:day},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"booking_missing",tripName:"Bravo Secret Cruise"})});
+    assert.equal(foreign.status,200);
+    assert.match(foreign.data.text,/could not find that trip/);
+    assert.equal(foreign.data.summary,undefined);
+    const own=await ask(ownerB,{intent:"troubleshoot",topic:"booking_missing",date:day},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"booking_missing"})});
+    assert.equal(own.status,200);
+    assert.equal(own.data.summary.confirmed,1);
+    assert.equal(own.data.summary.pendingPayment,0);
+    assert.doesNotMatch(own.data.text,/Pending payment: 1/);
+    const member=await ask(staffA,{intent:"troubleshoot",topic:"booking_missing",date:day},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"booking_missing"})});
+    assert.equal(member.status,200);
+    assert.equal(member.data.summary.confirmed,2);
+    const unauthorized=await ask(customer,{intent:"troubleshoot",topic:"booking_missing",date:day},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"booking_missing"})});
+    assert.equal(unauthorized.status,403);
+    assert.equal(unauthorized.data.summary,undefined);
+  });
+
+  await t.test("V3 QR and seat mismatch diagnostics are aggregate-only and never check in tickets",async()=>{
+    const before=await Booking.countDocuments({checkedInAt:{$exists:true}});
+    let answer=await ask(ownerA,{intent:"troubleshoot",topic:"qr_checkin",date:day},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"qr_checkin"})});
+    assert.equal(answer.status,200);
+    assert.equal(answer.data.source,"provider_data");
+    assert.match(answer.data.text,/does not validate an individual QR code/);
+    assert.match(answer.data.text,/Checked in: 0 of 2 confirmed bookings/);
+    assert.doesNotMatch(JSON.stringify(answer.data),/customerId|customerSnapshot|checkedInBy|bookingId/);
+
+    answer=await ask(ownerA,{intent:"troubleshoot",topic:"seats_mismatch",date:day},
+      {text:day,context:context("en",{intent:"troubleshoot",topic:"seats_mismatch"})});
+    assert.equal(answer.status,200);
+    assert.match(answer.data.text,/Confirmed seats: 3/);
+    assert.match(answer.data.text,/reserved seats in departure inventory: 5/);
+    assert.equal(await Booking.countDocuments({checkedInAt:{$exists:true}}),before);
+  });
+
 });

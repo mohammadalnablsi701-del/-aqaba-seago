@@ -301,7 +301,9 @@ test("Provider's simple pricing and visibility text queries work while Gemini is
   assert.equal(visibility.tripName,"");
   assert.equal(visibility.context.focus.tripName,"قديمة"); // Untrusted focus is not used for this all-trips query.
   assert.equal(localProviderFactQuery("اعمل رحلة بحرية جديدة",context),null);
-  assert.equal(localProviderFactQuery("شو لازم أعمل لحل مشكلة QR؟",context),null);
+  const qr=localProviderFactQuery("شو لازم أعمل لحل مشكلة QR؟",context);
+  assert.equal(qr.intent,"troubleshoot");
+  assert.equal(qr.topic,"qr_checkin"); // V3 handles QR diagnostics without relying on Gemini.
   assert.equal(localProviderFactQuery("شو أسعار رحلاتي؟",{lang:"en"}).context.lang,"en");
   const unsafe=localProviderFactQuery("شو أسعار رحلاتي؟",{secret:"should not propagate",providerId:"foreign"});
   assert.equal("secret" in unsafe.context,false);
