@@ -34,3 +34,5 @@
 - Verify staff role limitations and cross-provider separation. Test 401, 403, 429, disabled flag, absent key, failed AI connection and timeouts.
 - Inspect requests and logs to ensure no customer details are sent to Google.
 - Verify iPhone installed PWA permissions, recording, transcript and fallback. No merge/deployment without review.
+
+- The guided trip wizard accepts English and Arabic requests. A language-switch command changes future responses without treating it as a trip field; language is kept in sanitized per-turn context.
