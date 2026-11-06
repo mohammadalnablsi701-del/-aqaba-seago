@@ -412,7 +412,7 @@ export function localProviderFactQuery(text,rawContext){
   else if(/(?:رحلاتي|رحلاتنا|الرحلات|كل\s+رحلات|\b(?:my|our|all)\s+trips\b)/.test(n)&&
     /(?:اسعار|سعر|prices?|cost)/.test(n))intent="trip_info";
   else if(/(?:حجز|حجوز|booking)/.test(n)&&
-    /(?:مش\s*(?:ظاهر|مبين|موجود|موكد)|ما\s*(?:بظهر|بيبين|بان|اتأكد)|غير\s*(?:ظاهر|موكد)|مفقود|not\s+(?:showing|visible|confirmed)|missing|not\s+found)/.test(n)){
+    /(?:مش\s*(?:ظاهر|مبين|موجود|م[وؤ]كد)|مو\s*(?:ظاهر|مبين|م[وؤ]كد)|ما\s*(?:بظهر|بيبين|بان|اتأكد)|غير\s*(?:ظاهر|م[وؤ]كد)|مفقود|not\s+(?:showing|visible|confirmed)|missing|not\s+found)/.test(n)){
     intent="troubleshoot";topic="booking_missing";
   }else if(/(?:مقاعد|مقعد|seats?|capacity)/.test(n)&&
     /(?:مش\s*(?:صح|مطابق)|غير\s*مطابق|فرق|مختلف|غلط|mismatch|doesn.t\s+match|wrong)/.test(n)){
