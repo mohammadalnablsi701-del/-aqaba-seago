@@ -35,6 +35,7 @@ export default function AssistantQualityPanel({token}){
     {error&&<div className="error" role="alert"><AlertTriangle size={16}/> {error}</div>}
     {!snapshot&&!error&&<p className="muted">Loading assistant metrics...</p>}
     {snapshot&&<>
+      {snapshot.totalRequests===0&&<div className="assistant-quality-empty" role="status">No requests recorded since this API process started. Send a message from SeaGo Provider, then refresh. These counters reset on server restart or cold start.</div>}
       <div className="assistant-quality-grid">
         <article><small>Requests · 24h</small><strong>{n(snapshot.totalRequests)}</strong><span>Text {n(snapshot.byMode?.text)} · Voice {n(snapshot.byMode?.audio)}</span></article>
         <article><small>Successful responses</small><strong>{snapshot.successRate===null?"—":snapshot.successRate+"%"}</strong><span>{n(snapshot.successfulRequests)} successful requests</span></article>
