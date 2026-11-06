@@ -5,7 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText} from "../services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -50,9 +50,12 @@ export async function understandAssistant(body,env=process.env){
     "You are SeaGo Provider's intelligent assistant. Understand Jordanian Arabic, English, and speech in either language.",
     "Respond in "+(context.lang==="en"?"English":"Arabic")+". Jordan local date: "+today()+".",
     "Safe conversation context (unpublished trip draft and non-sensitive focus only): "+JSON.stringify(context)+".",
-    "Return ONLY valid JSON with: intent,date,tripName,topic,listAllTrips,replyLanguage,transcript,draft,reply.",
+    "Return ONLY valid JSON with: intent,date,tripName,topic,listAllTrips,replyLanguage,transcript,needsClarification,draft,reply.",
     "Choose exactly one intent: seats (real confirmed/available seats or bookings counts); trip_info (saved trip prices, duration, buffet, departure location or list); trip_visibility (why a saved trip may not appear or be sellable); troubleshoot (QR/camera, mic, login, missing booking, payments, trip saving, seat mismatch); create_trip (draft creation or edits); cancel (explicit draft cancellation); help (general advice).",
     "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general. If focus.intent is troubleshoot and the message reports that the previous guidance failed or adds details about the same issue, retain troubleshoot and the same topic.",
+    "For plural customer-visibility questions like 'ليش رحلاتنا مش مبينة للعملاء' choose trip_visibility with no tripName; the backend will check all of this provider's saved trips. Never reply with generic navigation advice to a data question.",
+    "For spoken language commands like 'بدنا نحكي بالإنجليزية' set replyLanguage=en and transcribe exactly; don't answer a different question.",
+    "If speech sounds garbled or transcription cannot be understood with reasonable confidence, set needsClarification=true and do not invent an answer. For understandable speech use false.",
     "Do NOT invent live provider data, prices, seat totals, payment statuses, diagnoses, or customer records. The server checks permissions and fetches facts after classification.",
     "tripName is ONLY an explicitly mentioned trip name; leave blank if none. listAllTrips is true only when the user asks for all company trips. date is YYYY-MM-DD for a clearly stated date or relative day, otherwise blank. replyLanguage is en or ar only for an explicit language-switch request; otherwise blank.",
     "If continuing a trip draft, return create_trip when the message supplies its next field. Switch intent when user asks about real saved trips, bookings or an error instead.",
@@ -84,15 +87,19 @@ export async function understandAssistant(body,env=process.env){
     (typeof parsed.date!=="string"||safeAssistantDate(parsed.date)!==parsed.date))
     throw fail("التاريخ غير واضح. اذكر اليوم أو تاريخاً صحيحاً.",422);
   const intents=new Set(["seats","trip_info","trip_visibility","troubleshoot","create_trip","cancel","help"]);
-  const intent=intents.has(parsed.intent)?parsed.intent:"help";
+  const utterance=message||clean(parsed.transcript,600);
+  const allVisibility=assistantAllTripsVisibilityRequest(utterance);
+  const intent=allVisibility?"trip_visibility":(intents.has(parsed.intent)?parsed.intent:"help");
   const topics=new Set(["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"]);
   const listRequest=parsed.listAllTrips===true||message.includes("رحلاتي")||message.includes("كل الرحلات")||message.toLowerCase().includes("all trips")||message.toLowerCase().includes("my trips");
-  const tripName=listRequest?"":(clean(parsed.tripName,100)||(["seats","trip_info","trip_visibility"].includes(intent)?context.focus.tripName:""));
-  const replyLanguage=parsed.replyLanguage==="en"?"en":parsed.replyLanguage==="ar"?"ar":context.lang;
+  const tripName=(listRequest||allVisibility)?"":(clean(parsed.tripName,100)||(["seats","trip_info","trip_visibility"].includes(intent)?context.focus.tripName:""));
+  const spokenSwitch=assistantLanguageSwitch(utterance);
+  const replyLanguage=spokenSwitch||(parsed.replyLanguage==="en"?"en":parsed.replyLanguage==="ar"?"ar":context.lang);
   const date=parsed.date?safeAssistantDate(parsed.date):(intent==="seats"&&context.focus.intent==="seats"&&context.focus.date?safeAssistantDate(context.focus.date):safeAssistantDate(null));
   return {intent,date,tripName,topic:topics.has(parsed.topic)?parsed.topic:"general",
     transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),
-    delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context:{...context,lang:replyLanguage},reply:clean(parsed.reply,700)};
+    delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context:{...context,lang:replyLanguage},
+    needsClarification:audio&&parsed.needsClarification===true,reply:clean(parsed.reply,700)};
 }
 export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
@@ -148,6 +155,18 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       return res.json(local);
     }
     const parsed=await understandAssistant(req.body||{});
+    // Voice must follow the exact same deterministic language control as typed messages.
+    // Do not let a generic model reply discard the existing draft or chosen language.
+    if(parsed.transcript&&assistantLanguageSwitch(parsed.transcript)){
+      const switched=localGuidedTripTurn(parsed.transcript,parsed.context);
+      if(switched)return res.json({...switched,transcript:parsed.transcript});
+    }
+    if(parsed.needsClarification){
+      return res.json({intent:"help",mode:parsed.context.mode,lang:parsed.context.lang,
+        transcript:parsed.transcript,
+        text:parsed.context.lang==="en"?"I couldn't understand that recording clearly. Check the transcript below and try again, or type your question.":"ما قدرت أفهم التسجيل بوضوح. تأكد من التفريغ المكتوب تحت وجرب تسجّل مرة ثانية أو اكتب سؤالك.",
+        suggestions:[],source:"guide"});
+    }
     if(parsed.intent==="trip_info"||parsed.intent==="trip_visibility"){
       const access=await resolveProviderAccess(req.user);
       if(!access?.provider||!(access.capabilities.includes("manage_trips")||access.capabilities.includes("view_bookings")))
@@ -155,6 +174,23 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       const rows=await Trip.find({providerId:access.provider._id})
         .select("_id titleAr titleEn vesselName category durationMinutes pricing.pricePerPerson pricing.adultPrice pricing.childPrice pricing.buffetEnabled pricing.buffetDescription pricing.buffetAdultPrice pricing.buffetChildPrice departureLocation active platformStatus")
         .sort({createdAt:-1}).limit(101).lean();
+      if(!parsed.tripName&&parsed.intent==="trip_visibility"){
+        const lang=parsed.context.lang;
+        if(rows.length>12)return res.json({intent:"trip_visibility",mode:"",lang,source:"provider_data",transcript:parsed.transcript,
+          text:lang==="en"?"More than 12 trips found. Please name a trip for a precise visibility diagnosis.":"عندك أكثر من 12 رحلة. اكتب اسم رحلة محددة حتى أفحص سبب عدم ظهورها بدقة.",
+          suggestions:rows.slice(0,4).map(t=>t.titleAr||t.titleEn),
+          focus:safeAssistantFocus({intent:"trip_visibility"})});
+        const futures=await Departure.find({tripId:{$in:rows.map(t=>t._id)},startsAt:{$gt:new Date()}})
+          .select("tripId startsAt status salesClosed capacity reservedSeats").sort({startsAt:1}).limit(201).lean();
+        if(futures.length>200)return res.json({intent:"trip_visibility",mode:"",lang,source:"provider_data",transcript:parsed.transcript,
+          text:lang==="en"?"There are too many upcoming departures to check reliably. Please specify a trip.":"عدد المغادرات المستقبلية كبير؛ اكتب اسم الرحلة حتى ما أعطيك تشخيص غير دقيق.",
+          suggestions:rows.slice(0,4).map(t=>t.titleAr||t.titleEn),
+          focus:safeAssistantFocus({intent:"trip_visibility"})});
+        return res.json({intent:"trip_visibility",mode:"",lang,source:"provider_data",transcript:parsed.transcript,
+          text:assistantVisibilityOverview(rows,futures,lang),
+          suggestions:rows.slice(0,4).map(t=>t.titleAr||t.titleEn),
+          focus:safeAssistantFocus({intent:"trip_visibility"})});
+      }
       if(!parsed.tripName&&parsed.intent==="trip_info"&&rows.length!==1)
         return res.json({intent:"trip_info",mode:"",lang:parsed.context.lang,source:"provider_data",transcript:parsed.transcript,
           text:assistantTripList(rows.slice(0,100),parsed.context.lang),
