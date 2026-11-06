@@ -322,7 +322,7 @@ const tripTerm=s=>String(s||"").toLowerCase().replace(/[\u064b-\u065f\u0670]/g,"
 export function matchAssistantTrip(trips,needle){
   const rows=Array.isArray(trips)?trips:[];
   const query=tripTerm(needle);
-  if(!query)return {match:null,options:rows.slice(0,12).map(titleOf),ambiguous:rows.length!==1};
+  if(!query)return {match:rows.length===1?rows[0]:null,options:rows.slice(0,12).map(titleOf),ambiguous:rows.length>1};
   const scored=rows.map(trip=>{
     const names=[trip.titleAr,trip.titleEn,trip.vesselName].map(tripTerm).filter(Boolean);
     const exact=names.some(x=>x===query);
