@@ -157,15 +157,16 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
     const parsed=await understandAssistant(req.body||{});
     // Voice must follow the exact same deterministic language control as typed messages.
     // Do not let a generic model reply discard the existing draft or chosen language.
+    if(parsed.needsClarification){
+      return res.json({intent:"help",mode:parsed.context.mode,lang:parsed.context.lang,
+        draft:parsed.context.mode==="create_trip"?parsed.context.draft:undefined,
+        pendingField:parsed.context.pendingField,transcript:parsed.transcript,
+        text:parsed.context.lang==="en"?"I couldn't understand that recording clearly. Check the transcript below and try again, or type your question.":"ما قدرت أفهم التسجيل بوضوح. تأكد من التفريغ المكتوب تحت وجرب تسجّل مرة ثانية أو اكتب سؤالك.",
+        suggestions:[],source:"guide"});
+    }
     if(parsed.transcript&&assistantLanguageSwitch(parsed.transcript)){
       const switched=localGuidedTripTurn(parsed.transcript,parsed.context);
       if(switched)return res.json({...switched,transcript:parsed.transcript});
-    }
-    if(parsed.needsClarification){
-      return res.json({intent:"help",mode:parsed.context.mode,lang:parsed.context.lang,
-        transcript:parsed.transcript,
-        text:parsed.context.lang==="en"?"I couldn't understand that recording clearly. Check the transcript below and try again, or type your question.":"ما قدرت أفهم التسجيل بوضوح. تأكد من التفريغ المكتوب تحت وجرب تسجّل مرة ثانية أو اكتب سؤالك.",
-        suggestions:[],source:"guide"});
     }
     if(parsed.intent==="trip_info"||parsed.intent==="trip_visibility"){
       const access=await resolveProviderAccess(req.user);
