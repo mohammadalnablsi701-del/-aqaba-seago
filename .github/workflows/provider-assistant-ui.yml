@@ -1,0 +1,36 @@
+name: Provider Assistant UI
+on:
+  pull_request:
+    branches: [main]
+    paths: ['provider-app/**', '.github/workflows/provider-assistant-ui.yml']
+  push:
+    branches: [main]
+    paths: ['provider-app/**', '.github/workflows/provider-assistant-ui.yml']
+permissions:
+  contents: read
+jobs:
+  assistant-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: provider-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: provider-app/package-lock.json
+      - run: npm ci --no-fund
+      - run: npx playwright install --with-deps chromium webkit
+      - run: node --test test/*.test.mjs
+      - run: npm run test:assistant
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: provider-assistant-browser-qa
+          path: provider-app/test-results/assistant/
+          if-no-files-found: warn
+          retention-days: 14

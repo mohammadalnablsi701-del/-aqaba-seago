@@ -13,3 +13,6 @@ google-services.json
 customer-app/android/
 customer-app/ios/
 customer-app/dist/
+
+provider-app/test-results/
+provider-app/dist/
