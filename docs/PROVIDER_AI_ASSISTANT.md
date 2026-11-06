@@ -69,3 +69,15 @@ Production Render logs recorded repeated `provider_assistant_upstream_error { ht
 - **Voice recognition still requires Gemini.** If Gemini is unavailable for all retry attempts, voice transcription cannot be completed; the provider can try Retry or type the question.
 - Only status and attempt number are logged; never log raw audio/text, Gemini API key or customer records. No new subscriptions, env secrets, or external providers are introduced.
 - Test retry success and exhaustion, 429/4xx fail-fast, transient network errors, privacy, two-provider isolation and text-only fallback before production merge.
+
+## V3 — provider-scoped operational diagnosis (staging candidate)
+
+V3 adds read-only booking-status diagnosis alongside trip availability checks. The assistant first requests a **departure date** if missing, then retrieves aggregated booking states for that date (and a named trip when supplied). Questions supported: "ليش الحجز مش ظاهر؟", "الحجز مش مؤكد", "المقاعد مش مطابقة", and QR troubleshooting. Follow-up dates ("اليوم", "بكرا", YYYY-MM-DD) can use the bounded conversation focus. Voice questions still need Gemini for transcription and intent classification.
+
+**Data checks:** count confirmed, pending_payment, cancelled, expired and refunded bookings; compare confirmed seats to departure reserved/capacity inventory for discrepancies; count already checked-in confirmed bookings for QR diagnostics. All results explicitly describe the selected **departure date**, not booking creation date. These counts **cannot identify or validate any individual customer's booking, payment, or QR code**.
+
+**Security:** The server requires approved provider access with `view_bookings`, scopes every Trip query to the resolved provider ID, every Booking aggregate to provider ID and owned trips/departures, and returns no names, numbers, customer IDs, booking IDs, payment IDs or checkout details. Unknown/ambiguous trip names and large queries are not guessed. No assistant database writes, manual payment confirmations, ticket check-ins, or modifications are performed.
+
+**Limitations:** A pending booking does not prove that a payment succeeded or failed. Reservation inventory may include temporary payment holds; confirmation counts and reservedSeats need not match. When a specific booking cannot be located using the summary, a licensed staff member should inspect the authorized Bookings screen without posting personal customer details in the assistant. The feature does not read private gateway event logs or repair QR scanner hardware.
+
+**Release gates:** Run all GitHub Actions and disposable MongoDB multi-provider role/isolation acceptance. Verify with two authorized staging providers, inspect no-PII API responses, test follow-ups in Arabic/English and on iPhone PWA. Merge and production deployment require separate approval.
