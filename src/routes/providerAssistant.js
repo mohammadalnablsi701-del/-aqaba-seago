@@ -76,13 +76,20 @@ export async function understandAssistant(body,env=process.env){
   const raw=json?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
   let parsed;
   try{parsed=JSON.parse(raw.trim());}catch{throw fail("لم أفهم الطلب بشكل واضح. جرّب صياغته مرة ثانية.",422);}
+  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))
+    throw fail("الرد غير واضح. جرّب صياغة سؤالك مرة ثانية.",422);
+  if(audio&&!clean(parsed.transcript,600))
+    throw fail("ما قدرت أسمع التسجيل بوضوح. جرّب تسجيل أقصر أو اكتب سؤالك.",422);
+  if(parsed.date!==undefined&&parsed.date!==null&&parsed.date!==""&&
+    (typeof parsed.date!=="string"||safeAssistantDate(parsed.date)!==parsed.date))
+    throw fail("التاريخ غير واضح. اذكر اليوم أو تاريخاً صحيحاً.",422);
   const intents=new Set(["seats","trip_info","trip_visibility","troubleshoot","create_trip","cancel","help"]);
   const intent=intents.has(parsed.intent)?parsed.intent:"help";
   const topics=new Set(["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"]);
   const listRequest=parsed.listAllTrips===true||message.includes("رحلاتي")||message.includes("كل الرحلات")||message.toLowerCase().includes("all trips")||message.toLowerCase().includes("my trips");
-  const tripName=listRequest?"":(clean(parsed.tripName,100)||context.focus.tripName);
+  const tripName=listRequest?"":(clean(parsed.tripName,100)||(["seats","trip_info","trip_visibility"].includes(intent)?context.focus.tripName:""));
   const replyLanguage=parsed.replyLanguage==="en"?"en":parsed.replyLanguage==="ar"?"ar":context.lang;
-  const date=parsed.date?safeAssistantDate(parsed.date):(context.focus.date?safeAssistantDate(context.focus.date):safeAssistantDate(null));
+  const date=parsed.date?safeAssistantDate(parsed.date):(intent==="seats"&&context.focus.intent==="seats"&&context.focus.date?safeAssistantDate(context.focus.date):safeAssistantDate(null));
   return {intent,date,tripName,topic:topics.has(parsed.topic)?parsed.topic:"general",
     transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),
     delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context:{...context,lang:replyLanguage},reply:clean(parsed.reply,700)};
