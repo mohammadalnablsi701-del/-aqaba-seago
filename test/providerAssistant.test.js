@@ -82,3 +82,70 @@ test("spoken language command and list-all trip intent override previous focus",
     assert.equal(result.transcript,"Show all my trips in English");
   }finally{globalThis.fetch=original;}
 });
+
+test("V2 model fixtures: Arabic/English intent and operational topic contract",async()=>{
+  const original=globalThis.fetch;
+  let reply={};
+  const calls=[];
+  globalThis.fetch=async(url,options)=>{
+    calls.push({url:String(url),request:JSON.parse(options.body)});
+    return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(reply)}]}}]})};
+  };
+  try{
+    const cases=[
+      {utterance:"ليش رحلتي مش ظاهرة؟",intent:"trip_visibility",name:"رحلة الغروب"},
+      {utterance:"What's the buffet price?",intent:"trip_info",name:"Sunset Cruise"},
+      {utterance:"كم مقعد متاح بكرا؟",intent:"seats",name:""},
+      {utterance:"QR scanner ما عم يشتغل",intent:"troubleshoot",topic:"qr_checkin",name:""},
+      {utterance:"بدي ألغي مسودة الرحلة",intent:"cancel",name:""},
+      {utterance:"شو خطوات حفظ الرحلة؟",intent:"help",name:""}
+    ];
+    for(const c of cases){
+      reply={intent:c.intent,tripName:c.name,topic:c.topic||"general",transcript:"",draft:{},date:""};
+      const result=await understandAssistant({text:c.utterance,context:{lang:"ar"}},{GEMINI_API_KEY:"fake-test-key"});
+      assert.equal(result.intent,c.intent,c.utterance);
+      assert.equal(result.tripName,c.name,c.utterance);
+      assert.equal(result.topic,c.topic||"general",c.utterance);
+    }
+    assert.equal(calls.length,cases.length);
+    assert.ok(calls.every(x=>x.url.startsWith("https://generativelanguage.googleapis.com/")));
+  }finally{globalThis.fetch=original;}
+});
+
+test("V2 unclear audio, invalid dates, malformed JSON and null model outputs fail closed",async()=>{
+  const original=globalThis.fetch;
+  let body="null";
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{text:body}]}}]})});
+  try{
+    await assert.rejects(understandAssistant({text:"hello"},{GEMINI_API_KEY:"fake"}),e=>e.status===422);
+    body="not-json";
+    await assert.rejects(understandAssistant({text:"hello"},{GEMINI_API_KEY:"fake"}),e=>e.status===422);
+    body=JSON.stringify({intent:"seats",date:"2026-02-30",transcript:"",draft:{}});
+    await assert.rejects(understandAssistant({text:"How many seats?"},{GEMINI_API_KEY:"fake"}),e=>e.status===422);
+    body=JSON.stringify({intent:"create_trip",date:"",transcript:"",draft:{titleAr:"Misheard"}});
+    await assert.rejects(understandAssistant({
+      audioBase64:"A".repeat(400),audioMimeType:"audio/mp4"
+    },{GEMINI_API_KEY:"fake"}),e=>e.status===422);
+  }finally{globalThis.fetch=original;}
+});
+
+test("V2 follow-up dates are reused only for seats questions within seat context",async()=>{
+  const original=globalThis.fetch;
+  let intent="seats";
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{
+    text:JSON.stringify({intent,date:"",tripName:"",topic:"general",draft:{},transcript:""})
+  }]}}]})});
+  try{
+    const context={lang:"en",focus:{intent:"seats",date:"2027-05-11",tripName:"Sunset Cruise"}};
+    const seats=await understandAssistant({text:"What about that trip?",context},{GEMINI_API_KEY:"fake"});
+    assert.equal(seats.date,"2027-05-11");
+    assert.equal(seats.tripName,"Sunset Cruise");
+    intent="trip_info";
+    const trip=await understandAssistant({text:"Tell me about prices",context},{GEMINI_API_KEY:"fake"});
+    assert.equal(trip.date,safeAssistantDate(null));
+    assert.equal(trip.tripName,"Sunset Cruise");
+    intent="help";
+    const help=await understandAssistant({text:"How to reset the app?",context},{GEMINI_API_KEY:"fake"});
+    assert.equal(help.tripName,"");
+  }finally{globalThis.fetch=original;}
+});

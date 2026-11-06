@@ -82,6 +82,7 @@ jobs:
                 'test/customer-cancellation.integration.test.js',
                 'test/settlement-ledger.integration.test.js',
                 'test/provider-role-permissions.integration.test.js',
+                'test/providerAssistantV2.integration.test.js',
                 'test/provider-sales-control.integration.test.js',
                 'test/admin-sellability-semantics.integration.test.js',
                 'test/admin-sensitive-actions.integration.test.js',
