@@ -57,3 +57,15 @@
 4. Confirm a user without view_bookings cannot access seat counts; confirm a user of provider A cannot retrieve provider B's trip details.
 5. Verify transcripts on iPhone Safari PWA and that 60-second uploads stay within codec/size limits.
 6. Test provider app can still create a draft and never save without explicit action.
+
+
+## Gemini transient failure recovery (iPhone report, Nov 6, 2026)
+
+Production Render logs recorded repeated `provider_assistant_upstream_error { httpStatus: 503 }` near 11:42–11:43 UTC on the live provider assistant, while the SeaGo API remained healthy. A 503 from Gemini means upstream temporary overload/unavailability, **not proof of account quota exhaustion**. Quota/limit status 429 is handled separately.
+
+- Upstream 500, 502, 503, 504 and transient network exceptions receive **up to 3 attempts total** (initial + 2 retries), with short exponential backoff and bounded total timeout (26 seconds text / 48 seconds voice).
+- No retry for 429 or non-retryable upstream configuration/client errors. The assistant returns a descriptive error and the existing UI Retry action can reuse an unsent voice payload.
+- Explicit **text-only** provider-wide trip price and customer visibility questions are classified locally and answered from authenticated, provider-owned data without calling Google. Role guards, provider isolation and no-write guarantees remain in place.
+- **Voice recognition still requires Gemini.** If Gemini is unavailable for all retry attempts, voice transcription cannot be completed; the provider can try Retry or type the question.
+- Only status and attempt number are logged; never log raw audio/text, Gemini API key or customer records. No new subscriptions, env secrets, or external providers are introduced.
+- Test retry success and exhaustion, 429/4xx fail-fast, transient network errors, privacy, two-provider isolation and text-only fallback before production merge.
