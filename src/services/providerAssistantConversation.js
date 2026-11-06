@@ -402,6 +402,18 @@ export function assistantAllTripsVisibilityRequest(text){
   const visibility=/(?:ليش|لماذا|شو السبب|غير ظاهر|مش ظاهر|مش مبين|ما بتظهر|مبين|ظاهر|ما بشوف|العملاء|للعملاء|الزبائن|why|not showing|not visible|customers|appear|show up)/.test(n);
   return plural&&visibility;
 }
+// Explicit read-only text questions do not need Gemini classification.
+// The API still enforces provider ownership and capability checks before reading DB.
+export function localProviderFactQuery(text,rawContext){
+  if(typeof text!=="string"||!text.trim()||text.length>1500)return null;
+  const context=assistantConversationContext(rawContext),n=normalized(text);
+  let intent="";
+  if(assistantAllTripsVisibilityRequest(text))intent="trip_visibility";
+  else if(/(?:رحلاتي|رحلاتنا|الرحلات|كل\s+رحلات|\b(?:my|our|all)\s+trips\b)/.test(n)&&
+    /(?:اسعار|سعر|prices?|cost)/.test(n))intent="trip_info";
+  if(!intent)return null;
+  return {intent,tripName:"",context,transcript:"",date:"",source:"local_intent"};
+}
 export function assistantVisibilityOverview(trips,departures,lang="ar"){
   const rows=Array.isArray(trips)?trips:[];
   const schedules=Array.isArray(departures)?departures:[];
