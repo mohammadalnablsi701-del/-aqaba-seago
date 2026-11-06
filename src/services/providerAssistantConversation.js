@@ -64,7 +64,7 @@ export function mergeTripConversationDraft(current,delta){
 export const tripFieldNames=["title","durationMinutes","adultPrice","childPrice","buffetEnabled","buffetDescription","buffetAdultPrice","buffetChildPrice","locationName","googleMapsUrl"];
 export function safeAssistantFocus(raw){
   const intent=["seats","trip_info","trip_visibility"].includes(raw?.intent)?raw.intent:"";
-  const date=typeof raw?.date==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(raw.date)?raw.date:"";
+  const date=typeof raw?.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(raw.date)?raw.date:"";
   return {intent,tripName:clean(raw?.tripName,80),date};
 }
 export function assistantConversationContext(raw){
@@ -316,7 +316,7 @@ export function localGuidedTripTurn(text,rawContext){
 // Responses below are deterministic and based only on provider-scoped data supplied
 // by the route after authorization. No customer records, financial commission or
 // provider database rows are sent to the language model.
-const formatNumber=n=>Number.isFinite(Number(n))?String(Number(n)):"—";
+const formatNumber=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?String(Number(n)):"—";
 const titleOf=t=>clean(t?.titleAr||t?.titleEn,120)||"Trip";
 const tripTerm=s=>String(s||"").toLowerCase().replace(/[\u064b-\u065f\u0670]/g,"").replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه").replace(/\s+/g," ").trim();
 export function matchAssistantTrip(trips,needle){
@@ -339,27 +339,27 @@ export function assistantTripSummary(trip,lang="ar"){
   const buffet=Boolean(p.buffetEnabled);
   const title=titleOf(trip);
   if(lang==="en")return "Trip: "+title+
-    "\\nDuration: "+formatNumber(trip?.durationMinutes)+" minutes"+
-    "\\nAdult price: "+formatNumber(adult)+" JOD"+
-    "\\nChild price: "+formatNumber(child)+" JOD"+
-    "\\nBuffet: "+(buffet?"Available":"Not included")+
-    (buffet?"\\nBuffet includes: "+(clean(p.buffetDescription,250)||"Not specified")+
-      "\\nAdult with buffet: "+formatNumber(p.buffetAdultPrice)+" JOD"+
-      "\\nChild with buffet: "+formatNumber(p.buffetChildPrice)+" JOD":"")+
-    "\\nDeparture location: "+(clean(loc.name,120)||"Not configured")+
-    (loc.googleMapsUrl?"\\nGoogle Maps: "+String(loc.googleMapsUrl).slice(0,500):"")+
-    "\\nThese details come from your company's saved trip; review them in Trips to make changes.";
+    "\nDuration: "+formatNumber(trip?.durationMinutes)+" minutes"+
+    "\nAdult price: "+formatNumber(adult)+" JOD"+
+    "\nChild price: "+formatNumber(child)+" JOD"+
+    "\nBuffet: "+(buffet?"Available":"Not included")+
+    (buffet?"\nBuffet includes: "+(clean(p.buffetDescription,250)||"Not specified")+
+      "\nAdult with buffet: "+formatNumber(p.buffetAdultPrice)+" JOD"+
+      "\nChild with buffet: "+formatNumber(p.buffetChildPrice)+" JOD":"")+
+    "\nDeparture location: "+(clean(loc.name,120)||"Not configured")+
+    (safeGoogleMapsUrl(loc.googleMapsUrl)?"\nGoogle Maps: "+safeGoogleMapsUrl(loc.googleMapsUrl):"")+
+    "\nThese details come from your company's saved trip; review them in Trips to make changes.";
   return "الرحلة: "+title+
-    "\\nالمدة: "+formatNumber(trip?.durationMinutes)+" دقيقة"+
-    "\\nسعر الكبير: "+formatNumber(adult)+" د.أ"+
-    "\\nسعر الطفل: "+formatNumber(child)+" د.أ"+
-    "\\nالبوفيه: "+(buffet?"متوفر":"غير مشمول")+
-    (buffet?"\\nيشمل: "+(clean(p.buffetDescription,250)||"غير محدد")+
-      "\\nسعر الكبير مع البوفيه: "+formatNumber(p.buffetAdultPrice)+" د.أ"+
-      "\\nسعر الطفل مع البوفيه: "+formatNumber(p.buffetChildPrice)+" د.أ":"")+
-    "\\nمكان الانطلاق: "+(clean(loc.name,120)||"غير محدد")+
-    (loc.googleMapsUrl?"\\nGoogle Maps: "+String(loc.googleMapsUrl).slice(0,500):"")+
-    "\\nهاي التفاصيل من الرحلة المحفوظة لدى شركتك. للتعديل افتح قسم الرحلات.";
+    "\nالمدة: "+formatNumber(trip?.durationMinutes)+" دقيقة"+
+    "\nسعر الكبير: "+formatNumber(adult)+" د.أ"+
+    "\nسعر الطفل: "+formatNumber(child)+" د.أ"+
+    "\nالبوفيه: "+(buffet?"متوفر":"غير مشمول")+
+    (buffet?"\nيشمل: "+(clean(p.buffetDescription,250)||"غير محدد")+
+      "\nسعر الكبير مع البوفيه: "+formatNumber(p.buffetAdultPrice)+" د.أ"+
+      "\nسعر الطفل مع البوفيه: "+formatNumber(p.buffetChildPrice)+" د.أ":"")+
+    "\nمكان الانطلاق: "+(clean(loc.name,120)||"غير محدد")+
+    (loc.googleMapsUrl?"\nGoogle Maps: "+String(loc.googleMapsUrl).slice(0,500):"")+
+    "\nهاي التفاصيل من الرحلة المحفوظة لدى شركتك. للتعديل افتح قسم الرحلات.";
 }
 export function assistantVisibilityDiagnosis(trip,departures,lang="ar"){
   const list=Array.isArray(departures)?departures:[];
@@ -372,8 +372,8 @@ export function assistantVisibilityDiagnosis(trip,departures,lang="ar"){
   else if(upcoming.every(d=>Number(d.capacity||0)-Number(d.reservedSeats||0)<=0))
     reasons.push(lang==="en"?"Upcoming departures have no free seats; they may appear sold out.":"المغادرات القادمة ممتلئة، وقد تظهر كنفدت المقاعد.");
   if(!reasons.length)reasons.push(lang==="en"?"No obvious availability blocker was found in this trip's saved status. Check the customer date filter and refresh.":"ما ظهر مانع واضح في حالة الرحلة المسجلة. تأكد من تاريخ البحث عند العميل وحدّث الصفحة.");
-  return (lang==="en"?"Availability check for ":"فحص ظهور رحلة «")+titleOf(trip)+(lang==="en"?":":"»:")+"\\n"+reasons.map((x,i)=>(i+1)+". "+x).join("\\n")+
-    (lang==="en"?"\\nThis checks saved data only; it does not guarantee search visibility.":"\\nهذا فحص لبيانات النظام، وليس تأكيداً لظهور الرحلة عند كل عميل.");
+  return (lang==="en"?"Availability check for ":"فحص ظهور رحلة «")+titleOf(trip)+(lang==="en"?":":"»:")+"\n"+reasons.map((x,i)=>(i+1)+". "+x).join("\n")+
+    (lang==="en"?"\nThis checks saved data only; it does not guarantee search visibility.":"\nهذا فحص لبيانات النظام، وليس تأكيداً لظهور الرحلة عند كل عميل.");
 }
 export function assistantTroubleshooting(topic,lang="ar"){
   const ar={
