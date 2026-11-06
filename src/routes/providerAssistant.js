@@ -117,11 +117,43 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       return res.json(local);
     }
     const parsed=await understandAssistant(req.body||{});
+    if(parsed.intent==="trip_info"||parsed.intent==="trip_visibility"){
+      const access=await resolveProviderAccess(req.user);
+      if(!access?.provider||!(access.capabilities.includes("manage_trips")||access.capabilities.includes("view_bookings")))
+        return res.status(403).json({error:"Approved provider trip access required"});
+      const rows=await Trip.find({providerId:access.provider._id})
+        .select("_id titleAr titleEn vesselName category durationMinutes pricing.pricePerPerson pricing.adultPrice pricing.childPrice pricing.buffetEnabled pricing.buffetDescription pricing.buffetAdultPrice pricing.buffetChildPrice departureLocation active platformStatus")
+        .sort({createdAt:-1}).limit(101).lean();
+      const lang=parsed.context.lang,selection=matchAssistantTrip(rows.slice(0,100),parsed.tripName);
+      if(rows.length>100&&!selection.match)return res.json({intent:parsed.intent,mode:"",lang,source:"provider_data",transcript:parsed.transcript,
+        text:lang==="en"?"Please specify the exact trip name from Trips (over 100 trips found).":"اكتب اسم الرحلة المحدد من قسم Trips؛ عدد رحلاتك أكثر من 100.",
+        suggestions:[],focus:safeAssistantFocus({intent:parsed.intent})});
+      if(!selection.match){
+        const names=selection.options;
+        const msg=names.length?(lang==="en"?"Which saved trip? ":"أي رحلة محفوظة تقصد؟ ")+names.join("، "):
+          (lang==="en"?"No matching trip was found for your company.":"ما لقيت رحلة بهذا الاسم محفوظة لشركتك.");
+        return res.json({intent:parsed.intent,mode:"",lang,source:"provider_data",transcript:parsed.transcript,
+          text:msg,suggestions:names.slice(0,4),focus:safeAssistantFocus({intent:parsed.intent})});
+      }
+      const trip=selection.match;
+      const focus=safeAssistantFocus({intent:parsed.intent,tripName:trip.titleAr||trip.titleEn});
+      if(parsed.intent==="trip_info")return res.json({intent:parsed.intent,mode:"",lang,source:"provider_data",transcript:parsed.transcript,focus,
+        text:assistantTripSummary(trip,lang),suggestions:lang==="en"?["Why is this trip not visible?","Seats today"]:["ليش الرحلة مش ظاهرة؟","شو المقاعد اليوم؟"]});
+      const future=await Departure.find({tripId:trip._id,startsAt:{$gt:new Date()}})
+        .select("startsAt status salesClosed capacity reservedSeats").sort({startsAt:1}).limit(100).lean();
+      return res.json({intent:parsed.intent,mode:"",lang,source:"provider_data",transcript:parsed.transcript,focus,
+        text:assistantVisibilityDiagnosis(trip,future,lang),suggestions:lang==="en"?["Trip prices","Seats tomorrow"]:["أسعار الرحلة","المقاعد بكرا"]});
+    }
+    if(parsed.intent==="troubleshoot"){
+      return res.json({intent:"troubleshoot",mode:"",lang:parsed.context.lang,transcript:parsed.transcript,
+        ...assistantTroubleshooting(parsed.topic,parsed.context.lang)});
+    }
     if(parsed.intent==="seats"){
       const access=await requireProviderCapability(req.user,"view_bookings");
       if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية عرض الحجوزات."});
       const info=await confirmedSeatsForProvider(access.provider._id,parsed);
-      return res.json({intent:"seats",mode:"seats",lang:parsed.context.lang,transcript:parsed.transcript,...info,
+      return res.json({intent:"seats",mode:"seats",lang:parsed.context.lang,source:"provider_data",transcript:parsed.transcript,...info,
+        focus:safeAssistantFocus({intent:"seats",tripName:parsed.tripName,date:parsed.date}),
         suggestions:parsed.context.lang==="en"?["What about tomorrow?","Booked seats on Friday","Create a trip"]:["شو الوضع بكرا؟","كم مقعد محجوز الجمعة؟","بدي أضيف رحلة"]});
     }
     if(parsed.intent==="create_trip"){
