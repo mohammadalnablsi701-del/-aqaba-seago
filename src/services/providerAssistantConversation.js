@@ -71,9 +71,11 @@ export function redactAssistantText(value){
     .replace(/\b\d{10,}\b/g,"[number]");
 }
 export function safeAssistantFocus(raw){
-  const intent=["seats","trip_info","trip_visibility"].includes(raw?.intent)?raw.intent:"";
+  const intent=["seats","trip_info","trip_visibility","troubleshoot"].includes(raw?.intent)?raw.intent:"";
   const date=typeof raw?.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(raw.date)?raw.date:"";
-  return {intent,tripName:clean(raw?.tripName,80),date};
+  const topics=["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"];
+  const topic=topics.includes(raw?.topic)?raw.topic:"general";
+  return {intent,tripName:clean(raw?.tripName,80),date,...(intent==="troubleshoot"?{topic}:{})};
 }
 export function assistantConversationContext(raw){
   return {mode:["create_trip","seats"].includes(raw?.mode)?raw.mode:"",
@@ -389,7 +391,21 @@ export function assistantVisibilityDiagnosis(trip,departures,lang="ar"){
   return (lang==="en"?"Availability check for ":"فحص ظهور رحلة «")+titleOf(trip)+(lang==="en"?":":"»:")+"\n"+reasons.map((x,i)=>(i+1)+". "+x).join("\n")+
     (lang==="en"?"\nThis checks saved data only; it does not guarantee search visibility.":"\nهذا فحص لبيانات النظام، وليس تأكيداً لظهور الرحلة عند كل عميل.");
 }
-export function assistantTroubleshooting(topic,lang="ar"){
+export function assistantTroubleshooting(topic,lang="ar",followUp=false){
+  const followups={
+    qr_checkin:["هل المشكلة إن الكاميرا ما تفتح، ولا تقرأ الرمز ثم تظهر رسالة رفض؟ ابعث نص الرسالة وموعد المغادرة، بدون صورة تذكرة عميل.","Does the camera fail to open, or does it read the code and show a rejection? Send the exact message and departure timing, not a customer's ticket."],
+    microphone:["هل يبدأ التسجيل ثم يفشل بالإرسال، أو زر الميكروفون نفسه لا يعمل؟ شو نص الخطأ ونوع المتصفح؟","Does recording fail to start, or does it fail when uploading? Send the error text and browser name."],
+    login:["هل الخطأ كلمة مرور غير صحيحة، انتهاء الجلسة، أو حساب غير مفعل؟ اكتب نص الرسالة فقط بدون كلمة المرور.","Is the message about invalid credentials, expired session, or an inactive account? Send only the error, not your password."],
+    trip_save:["أي حقل عليه تنبيه عند الحفظ؟ وكم مدة الرحلة وهل أضفت مكان الانطلاق؟ ابعث نص خطأ النموذج.","Which field shows an error on Save? What is the duration, and is a departure location set? Send the validation message."],
+    booking_missing:["اكتب تاريخ المغادرة واسم الرحلة وحالة الدفع الظاهرة بدون اسم العميل أو رقم هاتفه.","Give the departure date, trip name, and displayed payment status—no customer name or phone."],
+    payment:["شو حالة الدفع الظاهرة في النظام: قيد المعالجة، فشل، أو بحاجة مراجعة؟ بدون أرقام بطاقات أو بيانات شخصية.","Which payment status is displayed: pending, failed, or needs review? Do not share card details or personal data."],
+    seats_mismatch:["أي رحلة وتاريخ؟ وهل تقارن المقاعد المؤكدة بالمقاعد المتاحة أم المحجوزة مؤقتاً؟","Which trip and date? Are you comparing confirmed, available, or temporarily held seats?"],
+    general:["شو رسالة الخطأ بالتحديد؟ شو الصفحة وأي خطوة عملتها قبل المشكلة؟","What is the exact error, screen, and last action before the problem?"]
+  };
+  if(followUp){
+    const words=followups[topic]||followups.general;
+    return {text:lang==="en"?words[1]:words[0],suggestions:[],source:"guide"};
+  }
   const ar={
     qr_checkin:"إذا مسح QR ما زبط: 1) اسمح للكاميرا من إعدادات المتصفح. 2) استخدم كاميرا الجهاز الخلفية وتأكد من وضوح الرمز. 3) افحص إن الحجز مؤكد والرحلة صحيحة وإن التذكرة ما انمسحت قبل. 4) افحص وقت المغادرة وصلاحية موظف التشييك. إذا ظهر خطأ، اكتب النص كما هو؛ ما رح أؤكد صلاحية تذكرة من غير فحص.",
     microphone:"إذا الصوت ما بيسجّل: 1) اسمح للميكروفون من إعدادات Safari أو التطبيق. 2) أغلق البرامج اللي تستخدم المايك. 3) جرّب مقطع قصير ثم دقيقة كحد أقصى. 4) إذا ظهرت رسالة حجم التسجيل أو صيغة غير مدعومة ابعث نصها. ما بقدر أغيّر صلاحيات جهازك عن بُعد.",
