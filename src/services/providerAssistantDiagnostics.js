@@ -1,3 +1,8 @@
+import Trip from "../models/Trip.js";
+import Departure from "../models/Departure.js";
+import Booking from "../models/Booking.js";
+import {matchAssistantTrip,safeAssistantFocus} from "./providerAssistantConversation.js";
+
 // Read-only formatter for provider-owned booking diagnostics.
 // Inputs are aggregate counts only. No raw bookings, payments or customer data.
 const codes=["pending_payment","confirmed","cancelled","expired","refunded"];
@@ -35,4 +40,63 @@ export function formatAssistantBookingDiagnosis({date,tripName="",topic="booking
     details.push(en?"If a booking is missing, verify its departure date, trip, status and the screen's filters. This aggregate check cannot identify any individual's booking.":"إذا حجز معين مش ظاهر، راجع تاريخ مغادرته والرحلة وحالته وفلاتر الشاشة. هذا الفحص الإجمالي ما بحدد حجز عميل بعينه.");
   }
   return lead+"\n"+summary+"\n"+details.join("\n");
+}
+
+export async function diagnoseProviderBookings(providerId,parsed){
+  const lang=parsed.context?.lang==="en"?"en":"ar",en=lang==="en";
+  const topic=parsed.topic;
+  const intro={intent:"troubleshoot",mode:"",lang,source:"guide",
+    transcript:parsed.transcript||"",suggestions:[]};
+  if(!parsed.dateProvided||!parsed.date){
+    return {...intro,text:en
+      ?"To check your bookings, tell me the departure date (today, tomorrow or YYYY-MM-DD) and, if possible, the trip name. Please don't share customer names or phone numbers."
+      :"حتى أفحص الحجوزات من النظام، احكيلي تاريخ المغادرة (اليوم أو بكرا أو YYYY-MM-DD)، وإذا بتقدر اسم الرحلة. لا ترسل أسماء العملاء أو أرقامهم.",
+      suggestions:en?["Today","Tomorrow"]:["اليوم","بكرا"],
+      focus:safeAssistantFocus({intent:"troubleshoot",topic,tripName:parsed.tripName})};
+  }
+  const date=String(parsed.date);
+  const start=new Date(date+"T00:00:00+03:00");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(start.getTime())||
+    new Date(start.getTime()+10800000).toISOString().slice(0,10)!==date){
+    return {...intro,text:en?"Invalid date. Provide YYYY-MM-DD.":"التاريخ غير صحيح. اكتب التاريخ بصيغة YYYY-MM-DD.",
+      focus:safeAssistantFocus({intent:"troubleshoot",topic,tripName:parsed.tripName})};
+  }
+  const trips=await Trip.find({providerId}).select("_id titleAr titleEn vesselName").limit(101).lean();
+  const focus=safeAssistantFocus({intent:"troubleshoot",topic,tripName:parsed.tripName,date});
+  if(trips.length>100)return {...intro,focus,text:en
+    ?"Your company has over 100 trips. Use the Bookings screen filters to narrow the search."
+    :"عندك أكثر من 100 رحلة. ضيّق البحث من فلاتر الحجوزات لتجنب أرقام ناقصة."};
+  const selection=matchAssistantTrip(trips,parsed.tripName);
+  if(parsed.tripName&&!selection.match){
+    const names=selection.options.slice(0,4);
+    return {...intro,focus:safeAssistantFocus({intent:"troubleshoot",topic,date}),
+      text:selection.ambiguous?(en?"Several trips match. Specify one: ":"في أكثر من رحلة مطابقة. حدد واحدة: ")+names.join("، "):
+        (en?"I could not find that trip for your company. Check the name in Trips.":"ما لقيت الرحلة بهذا الاسم ضمن شركتك. راجع اسمها في قسم الرحلات."),
+      suggestions:names};
+  }
+  const selected=parsed.tripName?[selection.match]:trips;
+  const end=new Date(start.getTime()+86400000);
+  const deps=await Departure.find({tripId:{$in:selected.map(t=>t._id)},startsAt:{$gte:start,$lt:end}})
+    .select("_id tripId startsAt status capacity reservedSeats").limit(201).lean();
+  if(deps.length>200)return {...intro,focus,text:en
+    ?"Too many departures match that date. Give me a trip name to get accurate results."
+    :"في مغادرات كثيرة بهذا التاريخ؛ حدد رحلة حتى ما أعطيك أرقام ناقصة."};
+  const depIds=deps.map(d=>d._id),tripIds=selected.map(t=>t._id);
+  const match={providerId,tripId:{$in:tripIds},departureId:{$in:depIds}};
+  const grouped=depIds.length?await Booking.aggregate([
+    {$match:match},{$group:{_id:"$status",bookings:{$sum:1},seats:{$sum:"$seats"}}}
+  ]):[];
+  const counts=normalizeAssistantBookingCounts(grouped);
+  const checkedIn=depIds.length?await Booking.countDocuments({
+    ...match,status:"confirmed",checkedInAt:{$type:"date"}}):0;
+  const capacity=deps.reduce((n,d)=>n+Number(d.capacity||0),0);
+  const reservedSeats=deps.reduce((n,d)=>n+Number(d.reservedSeats||0),0);
+  const tripName=parsed.tripName?(selection.match.titleAr||selection.match.titleEn):"";
+  return {...intro,source:"provider_data",focus,
+    summary:{date,departures:deps.length,confirmed:counts.confirmed.bookings,
+      pendingPayment:counts.pending_payment.bookings,cancelled:counts.cancelled.bookings,
+      expired:counts.expired.bookings,refunded:counts.refunded.bookings},
+    text:formatAssistantBookingDiagnosis({date,tripName,topic,departureCount:deps.length,
+      counts,checkedIn,confirmedSeats:counts.confirmed.seats,capacity,reservedSeats,lang}),
+    suggestions:en?["Check tomorrow","QR scanner issue"]:["افحص بكرا","مشكلة QR"]};
 }
