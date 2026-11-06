@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl} from "../src/services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting} from "../src/services/providerAssistantConversation.js";
 
 test("Arabic guided creation asks for missing details one at a time and never autosaves",()=>{
   const first=tripConversationStep({});
@@ -28,8 +28,8 @@ test("context is untrusted and never transports provider IDs, customer info or p
     titleAr:"  رحلة الغروب  ", adultPrice:25,childPrice:10,customerPhone:"0799999999",
     providerId:"someone-else",pricing:{commission:0},imageUrl:"https://x",active:true
   },customer:{name:"Should not leave browser"}});
-  assert.deepEqual(ctx,{mode:"create_trip",draft:{titleAr:"رحلة الغروب",adultPrice:25,childPrice:10},pendingField:"",lang:"ar"});
-  assert.deepEqual(assistantConversationContext({mode:"admin",draft:null}),{mode:"",draft:{},pendingField:"",lang:"ar"});
+  assert.deepEqual(ctx,{mode:"create_trip",draft:{titleAr:"رحلة الغروب",adultPrice:25,childPrice:10},pendingField:"",lang:"ar",focus:{intent:"",tripName:"",date:""}});
+  assert.deepEqual(assistantConversationContext({mode:"admin",draft:null}),{mode:"",draft:{},pendingField:"",lang:"ar",focus:{intent:"",tripName:"",date:""}});
 });
 
 test("revised prices replace old ones without erasing earlier trip details",()=>{
@@ -165,4 +165,58 @@ test("language commands preserve existing trip draft and seat-query context",()=
   assert.equal(seats.intent,"help");
   assert.equal(seats.lang,"en");
   assert.equal(localGuidedTripTurn("كم مقعد محجوز اليوم؟",{mode:"seats",lang:"en"}),null);
+});
+
+test("assistant context keeps only whitelisted, bounded follow-up focus",()=>{
+  const focus=safeAssistantFocus({intent:"trip_info",tripName:"Sunset",date:"2026-11-06",providerId:"not allowed",customerPhone:"0799999999"});
+  assert.deepEqual(focus,{intent:"trip_info",tripName:"Sunset",date:"2026-11-06"});
+  assert.deepEqual(safeAssistantFocus({intent:"admin",date:"tomorrow",tripName:"x".repeat(500)}),{intent:"",date:"",tripName:"x".repeat(80)});
+  const context=assistantConversationContext({mode:"seats",lang:"en",focus:{...focus,customerId:"private"}});
+  assert.deepEqual(context.focus,focus);
+  assert.equal("customerId" in context.focus,false);
+});
+
+test("trip matching is provider-supplied only and ambiguous names are not guessed",()=>{
+  const rows=[{titleAr:"رحلة الغروب",titleEn:"Sunset Cruise",vesselName:"White Prince"},{titleAr:"رحلة الغوص",titleEn:"Diving"}];
+  assert.equal(matchAssistantTrip(rows,"sunset").match.titleEn,"Sunset Cruise");
+  assert.equal(matchAssistantTrip(rows,"white prince").match.titleAr,"رحلة الغروب");
+  assert.equal(matchAssistantTrip(rows,"").ambiguous,true);
+  assert.equal(matchAssistantTrip(rows,"trip-not-here").match,null);
+  const ambiguous=matchAssistantTrip([{titleAr:"رحلة غروب صباحية"},{titleAr:"رحلة غروب مسائية"}],"رحلة غروب");
+  assert.equal(ambiguous.match,null);
+  assert.equal(ambiguous.ambiguous,true);
+});
+
+test("trip answer shows only approved public price fields, never commission or PII",()=>{
+  const row={titleAr:"Sunset",durationMinutes:120,pricing:{adultPrice:20,childPrice:10,commissionValue:900,buffetEnabled:true,buffetDescription:"Tea",buffetAdultPrice:25,buffetChildPrice:15},
+    departureLocation:{name:"Ayla Marina",googleMapsUrl:"https://maps.app.goo.gl/abc"},customerPhone:"0799999999"};
+  const ar=assistantTripSummary(row),en=assistantTripSummary(row,"en");
+  assert.match(ar,/المدة: 120 دقيقة/);
+  assert.match(en,/Adult price: 20 JOD/);
+  assert.match(en,/Tea/);
+  assert.match(en,/maps.app.goo.gl/);
+  for(const text of [ar,en]){
+    assert.doesNotMatch(text,/900|0799999999|commission|customerPhone/i);
+  }
+  assert.match(assistantTripSummary({titleAr:"Untitled",pricing:{}}, "en"),/Child price: —/);
+});
+
+test("visibility diagnosis distinguishes real blockers from unknown customer rendering",()=>{
+  const active={titleAr:"الرحلة أ",active:true,platformStatus:"allowed"};
+  const future=new Date(Date.now()+86400000).toISOString();
+  assert.match(assistantVisibilityDiagnosis({...active,active:false},[], "en"),/inactive/);
+  assert.match(assistantVisibilityDiagnosis({...active,platformStatus:"paused"},[], "en"),/paused/);
+  assert.match(assistantVisibilityDiagnosis(active,[], "en"),/No future scheduled departure/);
+  assert.match(assistantVisibilityDiagnosis(active,[{status:"scheduled",startsAt:future,capacity:10,reservedSeats:10,salesClosed:false}], "en"),/no free seats/);
+  assert.match(assistantVisibilityDiagnosis(active,[{status:"scheduled",startsAt:future,capacity:10,reservedSeats:2,salesClosed:false}], "en"),/No obvious availability blocker/);
+});
+
+test("guided troubleshooting never asserts a ticket or payment is valid",()=>{
+  const qr=assistantTroubleshooting("qr_checkin","en");
+  assert.equal(qr.source,"guide");
+  assert.match(qr.text,/exact error/);
+  const pay=assistantTroubleshooting("payment","ar");
+  assert.match(pay.text,/الدفع غير المؤكد/);
+  assert.doesNotMatch(pay.text,/تم تأكيد الدفع/);
+  assert.match(assistantTroubleshooting("invalid","en").text,/Which screen/);
 });
