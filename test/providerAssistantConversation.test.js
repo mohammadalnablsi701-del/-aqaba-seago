@@ -244,3 +244,15 @@ test("multiple provider trips can be listed with prices and never show commissio
   assert.doesNotMatch(text,/9999/);
   assert.equal(matchAssistantTrip([rows[0]],"").match.titleAr,"Sunset");
 });
+
+test("safe troubleshooting focus supports followups without retaining raw chat or customer data",()=>{
+  const result=assistantConversationContext({
+    mode:"",lang:"en",focus:{intent:"troubleshoot",topic:"qr_checkin",message:"customer 0799999999",secret:"private"}
+  });
+  assert.deepEqual(result.focus,{intent:"troubleshoot",topic:"qr_checkin",tripName:"",date:""});
+  const answer=assistantTroubleshooting(result.focus.topic,"en",true);
+  assert.match(answer.text,/camera fail to open/i);
+  assert.equal(answer.source,"guide");
+  assert.equal("message" in result.focus,false);
+  assert.deepEqual(safeAssistantFocus({intent:"troubleshoot",topic:"unsafe"}),{intent:"troubleshoot",topic:"general",tripName:"",date:""});
+});
