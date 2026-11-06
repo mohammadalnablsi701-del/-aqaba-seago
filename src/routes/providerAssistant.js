@@ -79,17 +79,19 @@ export async function understandAssistant(body,env=process.env){
 }
 export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
+  const lang=parsed.context?.lang==="en"?"en":"ar";
   const end=new Date(start.getTime()+86400000);
   const allTrips=await Trip.find({providerId}).select("_id titleAr titleEn vesselName").lean();
   const needle=normalize(parsed.tripName);
   const trips=needle?allTrips.filter(t=>[t.titleAr,t.titleEn,t.vesselName].some(v=>{const a=normalize(v);return a&&(a.includes(needle)||(a.length>2&&needle.includes(a)));})):allTrips;
-  if(!trips.length)return {date,rows:[],text:"ما لقيت رحلة بهذا الاسم عند شركتك."};
+  if(!trips.length)return {date,rows:[],text:lang==="en"?"I could not find a trip with that name for your company.":"ما لقيت رحلة بهذا الاسم عند شركتك."};
   const deps=await Departure.find({tripId:{$in:trips.map(t=>t._id)},startsAt:{$gte:start,$lt:end}}).sort({startsAt:1}).limit(50).lean();
-  if(!deps.length)return {date,rows:[],text:"ما في مغادرات مسجلة بتاريخ "+date+"."};
+  if(!deps.length)return {date,rows:[],text:lang==="en"?"There are no departures scheduled on "+date+".":"ما في مغادرات مسجلة بتاريخ "+date+"."};
   const counts=await Booking.aggregate([{$match:{providerId,departureId:{$in:deps.map(d=>d._id)},status:"confirmed"}},{$group:{_id:"$departureId",seats:{$sum:"$seats"},bookings:{$sum:1}}}]);
   const byTrip=new Map(trips.map(t=>[String(t._id),t])),byId=new Map(counts.map(c=>[String(c._id),c]));
   const rows=deps.map(d=>{const t=byTrip.get(String(d.tripId)),c=byId.get(String(d._id));return {trip:clean(t?.titleAr||t?.titleEn),startsAt:d.startsAt,status:d.status,confirmedSeats:Number(c?.seats||0),bookings:Number(c?.bookings||0),heldSeats:Number(d.reservedSeats||0),availableSeats:Math.max(0,Number(d.capacity||0)-Number(d.reservedSeats||0)),capacity:Number(d.capacity||0)};});
-  return {date,rows,text:"بتاريخ "+date+" عندك "+rows.reduce((n,d)=>n+d.confirmedSeats,0)+" مقعد مؤكد، و"+rows.reduce((n,d)=>n+d.availableSeats,0)+" مقعد متاح ("+rows.length+" مغادرة). المتاح قد يتأثر بحجوزات الدفع المؤقتة."};
+  const confirmed=rows.reduce((n,d)=>n+d.confirmedSeats,0),available=rows.reduce((n,d)=>n+d.availableSeats,0);
+  return {date,rows,text:lang==="en"?"On "+date+", you have "+confirmed+" confirmed seats and "+available+" available seats across "+rows.length+" departures. Temporary payment holds may affect availability.":"بتاريخ "+date+" عندك "+confirmed+" مقعد مؤكد، و"+available+" مقعد متاح ("+rows.length+" مغادرة). المتاح قد يتأثر بحجوزات الدفع المؤقتة."};
 }
 router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(req,res,next)=>{
   try{
@@ -98,8 +100,11 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
     // Check provider capability before returning any conversation state or draft.
     const local=!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
     if(local){
-      const access=await requireProviderCapability(req.user,"manage_trips");
-      if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية إنشاء الرحلات."});
+      // Language-only help is available to any authenticated provider, without granting trip/booking access.
+      if(local.intent==="create_trip"||local.intent==="cancel"){
+        const access=await requireProviderCapability(req.user,"manage_trips");
+        if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية إنشاء الرحلات."});
+      }
       return res.json(local);
     }
     const parsed=await understandAssistant(req.body||{});
@@ -107,8 +112,8 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       const access=await requireProviderCapability(req.user,"view_bookings");
       if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية عرض الحجوزات."});
       const info=await confirmedSeatsForProvider(access.provider._id,parsed);
-      return res.json({intent:"seats",mode:"seats",transcript:parsed.transcript,...info,
-        suggestions:["شو الوضع بكرا؟","كم مقعد محجوز الجمعة؟","بدي أضيف رحلة"]});
+      return res.json({intent:"seats",mode:"seats",lang:parsed.context.lang,transcript:parsed.transcript,...info,
+        suggestions:parsed.context.lang==="en"?["What about tomorrow?","Booked seats on Friday","Create a trip"]:["شو الوضع بكرا؟","كم مقعد محجوز الجمعة؟","بدي أضيف رحلة"]});
     }
     if(parsed.intent==="create_trip"){
       const access=await requireProviderCapability(req.user,"manage_trips");
@@ -118,13 +123,13 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       return res.json({intent:"create_trip",mode:"create_trip",transcript:parsed.transcript,...step,lang:parsed.context.lang});
     }
     if(parsed.intent==="cancel"){
-      return res.json({intent:"help",mode:"",transcript:parsed.transcript,
-        text:"تمام، تركنا المسودة. ما تم إنشاء أي رحلة. تحب تسألني عن الحجوزات أو نبدأ رحلة جديدة؟",
-        suggestions:["حجوزات اليوم","جهّز رحلة جديدة"]});
+      return res.json({intent:"help",mode:"",lang:parsed.context.lang,transcript:parsed.transcript,
+        text:parsed.context.lang==="en"?"Trip draft canceled. Nothing was saved. Want to check bookings or create a new trip?":"تمام، تركنا المسودة. ما تم إنشاء أي رحلة. تحب تسألني عن الحجوزات أو نبدأ رحلة جديدة؟",
+        suggestions:parsed.context.lang==="en"?["Today's bookings","Create a trip"]:["حجوزات اليوم","جهّز رحلة جديدة"]});
     }
-    return res.json({intent:"help",mode:"",transcript:parsed.transcript,
-      text:parsed.reply||"أنا معك! نقدر نضيف رحلة سوا خطوة بخطوة، أو أجاوبك عن المقاعد المحجوزة والمتاحة حسب التاريخ.",
-      suggestions:["بدي أضيف رحلة","كم مقعد محجوز اليوم؟","شو الرحلات بكرا؟"]});
+    return res.json({intent:"help",mode:"",lang:parsed.context.lang,transcript:parsed.transcript,
+      text:parsed.reply||(parsed.context.lang==="en"?"I'm here to help with trip setup, bookings, or available seats. What would you like to do?":"أنا معك! نقدر نضيف رحلة سوا خطوة بخطوة، أو أجاوبك عن المقاعد المحجوزة والمتاحة حسب التاريخ."),
+      suggestions:parsed.context.lang==="en"?["Create a trip","Today's bookings","Trips tomorrow"]:["بدي أضيف رحلة","كم مقعد محجوز اليوم؟","شو الرحلات بكرا؟"]});
   }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
 });
 export default router;
