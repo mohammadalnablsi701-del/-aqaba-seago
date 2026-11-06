@@ -28,8 +28,8 @@ test("context is untrusted and never transports provider IDs, customer info or p
     titleAr:"  رحلة الغروب  ", adultPrice:25,childPrice:10,customerPhone:"0799999999",
     providerId:"someone-else",pricing:{commission:0},imageUrl:"https://x",active:true
   },customer:{name:"Should not leave browser"}});
-  assert.deepEqual(ctx,{mode:"create_trip",draft:{titleAr:"رحلة الغروب",adultPrice:25,childPrice:10},pendingField:""});
-  assert.deepEqual(assistantConversationContext({mode:"admin",draft:null}),{mode:"",draft:{},pendingField:""});
+  assert.deepEqual(ctx,{mode:"create_trip",draft:{titleAr:"رحلة الغروب",adultPrice:25,childPrice:10},pendingField:"",lang:"ar"});
+  assert.deepEqual(assistantConversationContext({mode:"admin",draft:null}),{mode:"",draft:{},pendingField:"",lang:"ar"});
 });
 
 test("revised prices replace old ones without erasing earlier trip details",()=>{
@@ -93,4 +93,41 @@ test("no arbitrary context fields propagate through local trips",()=>{
   assert.deepEqual(result.draft,{titleAr:"رحلة غروب",adultPrice:20,childPrice:8});
   assert.equal("apiKey" in result,false);
   assert.equal("providerId" in result.draft,false);
+});
+
+test("switching to English during trip creation preserves the draft and pending question",()=>{
+  const draft={titleAr:"رحلة غروب"};
+  const start=localGuidedTripTurn("رد علي بالانجليزي",{mode:"create_trip",draft});
+  assert.equal(start.lang,"en");
+  assert.equal(start.askFor,"durationMinutes");
+  assert.deepEqual(start.draft,draft);
+  assert.match(start.text,/how long/i);
+  const next=localGuidedTripTurn("2 hours",{mode:"create_trip",draft:start.draft,lang:start.lang});
+  assert.equal(next.lang,"en");
+  assert.equal(next.draft.durationMinutes,120);
+  assert.equal(next.askFor,"adultPrice");
+  assert.match(next.text,/adult price/i);
+  const arabic=localGuidedTripTurn("رد علي بالعربي",{mode:"create_trip",draft:next.draft,lang:"en"});
+  assert.equal(arabic.lang,"ar");
+  assert.equal(arabic.draft.durationMinutes,120);
+  assert.match(arabic.text,/سعر الشخص/);
+});
+test("English trip creation and suggestions work without Gemini or accidental field values",()=>{
+  const start=localGuidedTripTurn("I want add trip",{});
+  assert.equal(start.lang,"en");
+  assert.equal(start.askFor,"title");
+  assert.match(start.text,/call it/i);
+  const named=localGuidedTripTurn("Sunset Cruise",{mode:"create_trip",draft:start.draft,lang:"en"});
+  assert.equal(named.draft.titleAr,"Sunset Cruise");
+  const duration=localGuidedTripTurn("3 hours",{mode:"create_trip",draft:named.draft,lang:"en"});
+  assert.equal(duration.draft.durationMinutes,180);
+  const adult=localGuidedTripTurn("20 JOD",{mode:"create_trip",draft:duration.draft,lang:"en"});
+  const child=localGuidedTripTurn("Same as adult",{mode:"create_trip",draft:adult.draft,lang:"en"});
+  assert.equal(child.draft.childPrice,20);
+  const buffet=localGuidedTripTurn("No, without buffet",{mode:"create_trip",draft:child.draft,lang:"en"});
+  assert.equal(buffet.draft.buffetEnabled,false);
+  assert.match(buffet.text,/depart from/i);
+  const edit=localGuidedTripTurn("Edit price",{mode:"create_trip",draft:buffet.draft,lang:"en"});
+  assert.equal(edit.askFor,"adultPrice");
+  assert.deepEqual(edit.draft,buffet.draft);
 });

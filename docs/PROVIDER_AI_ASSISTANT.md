@@ -19,9 +19,9 @@
 6. For rollback, set PROVIDER_AI_ENABLED=false.
 
 ## Privacy and device limitations
-- A user's voice/text is sent to Google for intent classification. Google's Free Tier can use submissions to improve products. **A privacy/legal review and explicit opt-in consent design are required before a real provider pilot.** Avoid client names, phone numbers, payment information, and other personal data.
+- A user's voice/text is sent to Google for intent classification. Google's Free Tier can use submissions to improve products. The assistant shows a privacy disclosure but no checkbox; **complete a privacy/legal review and obtain any required consent before a real provider pilot.** Avoid client names, phone numbers, payment information, and other personal data.
 - No customer records/PII are included in the model prompt. Only the server accesses authorized data and computes answer values.
-- Audio recording is limited to 19s client-side, 450KB binary and 650K base64 server-side. The API's existing 1MB JSON request limit still applies.
+- Audio recording is capped at 60 seconds and stops/sends automatically at that limit. Maximum client upload is 1.2MB binary, server validation caps base64 at 1.6M characters, and only the assistant POST route accepts up to 2MB JSON. All other JSON endpoints retain the 1MB limit.
 - iPhone Safari Home Screen PWA microphone and actual audio/mp4 handling must be verified on physical devices. Not all browsers support MediaRecorder or all audio codecs.
 - Text-to-speech/audio replies, arbitrary reporting ranges, and autonomous departure scheduling are out of scope.
 - Free Tier quotas and availability are not guaranteed indefinitely.
@@ -34,3 +34,5 @@
 - Verify staff role limitations and cross-provider separation. Test 401, 403, 429, disabled flag, absent key, failed AI connection and timeouts.
 - Inspect requests and logs to ensure no customer details are sent to Google.
 - Verify iPhone installed PWA permissions, recording, transcript and fallback. No merge/deployment without review.
+
+- The guided trip wizard accepts English and Arabic requests. A language-switch command changes future responses without treating it as a trip field; language is kept in sanitized per-turn context.

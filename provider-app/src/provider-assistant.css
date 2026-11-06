@@ -32,8 +32,7 @@
 @media(min-width:760px){.seago-assistant{left:50%;transform:translateX(-50%);max-width:700px;border-inline:1px solid #dce6e9;box-shadow:0 0 70px #0002}}
 @media(prefers-reduced-motion:reduce){.seago-assistant *{scroll-behavior:auto!important}}
 
-.seago-assistant-consent{display:flex;align-items:flex-start;gap:8px;line-height:1.5;font-size:11px;color:#3e5e69;margin-bottom:10px;cursor:pointer}
-.seago-assistant-consent input{flex-shrink:0;margin-top:2px;accent-color:#087e88}
+.seago-assistant-privacy-notice{margin:0 0 10px;color:#3e5e69;font-size:11px;line-height:1.5}
 
 /* Visible, one-tap assistant entry point for the installed Provider PWA. */
 .seago-ai-launch{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:9px;padding:9px 12px;border:1px solid #008f9d;border-radius:999px;background:#e1f8f6;color:#075a69;font:700 12px system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.2;cursor:pointer;white-space:nowrap;min-height:38px}
@@ -47,14 +46,13 @@
 .seago-assistant-progress strong{font-variant-numeric:tabular-nums}
 .seago-assistant-progress-track{height:6px;border-radius:999px;background:#d7e9ea;overflow:hidden;margin-top:9px}
 .seago-assistant-progress-track span{display:block;background:#079a9e;height:100%;border-radius:inherit;transition:width .2s ease}
-.seago-assistant-speak,.seago-assistant-cancel-draft{margin-top:10px;padding:5px 2px;border:0;background:transparent;color:#286d78;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+.seago-assistant-cancel-draft{margin-top:10px;padding:5px 2px;border:0;background:transparent;color:#286d78;font-size:12px;display:inline-flex;align-items:center;gap:6px}
 .seago-assistant-cancel-draft{display:block;color:#8b4d48}
-.seago-assistant-speak:focus-visible,.seago-assistant-cancel-draft:focus-visible{outline:2px solid #00a9b1;outline-offset:3px}
+.seago-assistant-cancel-draft:focus-visible{outline:2px solid #00a9b1;outline-offset:3px}
 .seago-assistant-recording{display:flex;align-items:center;gap:6px}
 .seago-assistant-message p{white-space:pre-line;overflow-wrap:anywhere}
 .seago-assistant-samples button{min-height:40px;cursor:pointer}
 .seago-assistant-samples button:focus-visible{outline:3px solid #00a9b1;outline-offset:2px}
-.seago-assistant-footer .seago-assistant-consent{align-items:center}
 .seago-assistant-footer form input{font-size:16px}
 @media(prefers-reduced-motion:reduce){.seago-assistant-progress-track span{transition:none}}
 

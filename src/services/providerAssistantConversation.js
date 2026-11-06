@@ -65,7 +65,8 @@ export const tripFieldNames=["title","durationMinutes","adultPrice","childPrice"
 export function assistantConversationContext(raw){
   return {mode:["create_trip","seats"].includes(raw?.mode)?raw.mode:"",
     draft:sanitizeTripConversationDraft(raw?.draft),
-    pendingField:tripFieldNames.includes(raw?.pendingField)?raw.pendingField:""};
+    pendingField:tripFieldNames.includes(raw?.pendingField)?raw.pendingField:"",
+    lang:raw?.lang==="en"?"en":"ar"};
 }
 const fields=[
   {key:"title",question:"تمام! بنجهّز الرحلة سوا 🌊 شو بدك تسمّيها؟",choices:["رحلة غروب","رحلة سنوركلينغ","رحلة بحرية"]},
@@ -79,6 +80,18 @@ const fields=[
   {key:"locationName",question:"من وين نقطة انطلاق الرحلة؟ اكتب اسم المرسى أو المكان.",choices:[]},
   {key:"googleMapsUrl",question:"ابعث رابط Google Maps لنقطة الانطلاق، أو اضغط «تخطي الرابط» وبتضيفه لاحقاً في النموذج.",choices:["تخطي الرابط"]}
 ];
+const englishFields={
+  title:{question:"Let's set up your trip 🌊 What would you like to call it?",choices:["Sunset Cruise","Snorkeling Trip","Boat Trip"]},
+  durationMinutes:{question:"Great! How long is the trip?",choices:["1 hour","2 hours","3 hours"]},
+  adultPrice:{question:"What is the adult price without buffet (JOD)?",choices:["15 JOD","20 JOD","25 JOD"]},
+  childPrice:{question:"What is the child price without buffet, ages 6–12 (JOD)?",choices:["10 JOD","15 JOD","Same as adult"]},
+  buffetEnabled:{question:"Does this trip include a buffet?",choices:["Yes, with buffet","No, without buffet"]},
+  buffetDescription:{question:"What food and drinks are included in the buffet?",choices:[]},
+  buffetAdultPrice:{question:"What is the adult price with buffet (JOD)?",choices:["20 JOD","25 JOD","30 JOD","Same as adult"]},
+  buffetChildPrice:{question:"What is the child price with buffet, ages 6–12 (JOD)?",choices:["12 JOD","15 JOD","20 JOD","Same as child"]},
+  locationName:{question:"Where does the trip depart from? Enter the marina or location.",choices:[]},
+  googleMapsUrl:{question:"Send the Google Maps link for departure, or select Skip link to add it later.",choices:["Skip link"]}
+};
 function completedTripField(draft,key){
   switch(key){
     case "title":return Boolean(draft.titleAr||draft.titleEn);
@@ -89,6 +102,7 @@ function completedTripField(draft,key){
 }
 export function tripConversationStep(input,options={}){
   const draft=sanitizeTripConversationDraft(input);
+  const lang=options.lang==="en"?"en":"ar";
   const questions=fields.filter(f=>draft.buffetEnabled===true||!["buffetDescription","buffetAdultPrice","buffetChildPrice"].includes(f.key));
   const pendingField=tripFieldNames.includes(options.pendingField)?options.pendingField:"";
   const done=questions.map(f=>completedTripField(draft,f.key));
@@ -97,7 +111,8 @@ export function tripConversationStep(input,options={}){
   if(pendingField||missing!==-1){
     const field=pendingField?fields.find(f=>f.key===pendingField):questions[missing];
     return {draft,ready:false,progress,total:questions.length,askFor:field.key,pendingField:pendingField||"",
-      text:(pendingField?"أكيد، خلّينا نعدّلها. ":"")+field.question,suggestions:field.choices};
+      text:lang==="en"?(pendingField?"Sure, let’s update that. ":"")+englishFields[field.key].question:(pendingField?"أكيد، خلّينا نعدّلها. ":"")+field.question,
+      suggestions:lang==="en"?englishFields[field.key].choices:field.choices};
   }
   const title=draft.titleAr||draft.titleEn;
   const buffet=draft.buffetEnabled?
@@ -113,8 +128,18 @@ export function tripConversationStep(input,options={}){
     buffet+"\nمكان الانطلاق: "+draft.locationName+
     "\nGoogle Maps: "+map+
     "\n\nافتح نموذج الرحلة وراجع كل التفاصيل والصور قبل الحفظ. ما تم إنشاء أي شيء لحد الآن.";
+  const englishSummary="Your trip draft “"+title+"” is ready ✅\n"+
+    "Duration: "+draft.durationMinutes+" minutes\n"+
+    "Adult (without buffet): "+draft.adultPrice+" JOD\n"+
+    "Child (without buffet): "+draft.childPrice+" JOD"+
+    (draft.buffetEnabled?"\nBuffet: Yes\nIncludes: "+draft.buffetDescription+
+      "\nAdult (with buffet): "+draft.buffetAdultPrice+" JOD"+
+      "\nChild (with buffet): "+draft.buffetChildPrice+" JOD":"\nBuffet: No")+
+    "\nDeparture: "+draft.locationName+
+    "\nGoogle Maps: "+(draft.googleMapsUrl||"Add later in the form")+
+    "\n\nPlease review the trip form and photos before saving. Nothing has been created yet.";
   return {draft,ready:true,progress,total:questions.length,askFor:null,pendingField:"",
-    text,suggestions:["بدي أغير البوفيه","بدي أعدل السعر","بدي أغير مكان الانطلاق"]};
+    text:lang==="en"?englishSummary:text,suggestions:lang==="en"?["Change buffet","Edit price","Change departure location"]:["بدي أغير البوفيه","بدي أعدل السعر","بدي أغير مكان الانطلاق"]};
 }
 export function assistantSuggestionList(input){
   return Array.isArray(input)?input.filter(x=>typeof x==="string").map(x=>x.trim().slice(0,90)).filter(Boolean).slice(0,4):[];
@@ -131,6 +156,11 @@ function minutesFromText(s,allowBare=false){
   const n=normalized(s),value=numeric(s);
   const hours=(n.match(/(\d+(?:[.,]\d+)?)\s*(?:ساعه|ساعات|ساعتين|ساعه ونص|ساعه ونصف)/)||[])[1];
   if(hours){const num=Number(hours.replace(",","."));if(num>0&&num<=24)return Math.round(num*60+(n.includes("ونص")||n.includes("ونصف")?30:0));}
+  const englishHours=n.match(/(\d+(?:[.,]\d+)?)\s*(?:hours?|hrs?|hr)\b/);
+  if(englishHours){const value=Number(englishHours[1].replace(",","."))*60;if(value>=15&&value<=1440)return Math.round(value);}
+  if(/\b(?:one|two|three)\s+hours?\b/.test(n))return (/\bthree\b/.test(n)?3:/\btwo\b/.test(n)?2:1)*60;
+  const englishMinutes=n.match(/(\d+)\s*(?:minutes?|mins?|min)\b/);
+  if(englishMinutes)return Number(englishMinutes[1]);
   if(/ساعتين|ساعتان/.test(n))return 120;
   if(/ثلاث\s*ساعات|ثلاثه\s*ساعات/.test(n))return 180;
   if(/ساعه\s*ونص|ساعه\s*ونصف/.test(n))return 90;
@@ -141,11 +171,18 @@ function minutesFromText(s,allowBare=false){
 }
 const seatRequest=s=>/(?:مقعد|مقاعد|حجوز|محجوز|شاغر|متاح|شو الوضع|مغادر)/.test(normalized(s))&&!/(?:اضيف|اضاف|انشئ|انشاء|جهز|اعمل|سوي|بدّي رحل)/.test(normalized(s));
 const cancellation=s=>/(?:الغي|الغاء|الغِ|كنسل|بطل|امسح)\s*(?:الرحل|المسود|الطلب)|(?:ما\s*بدي\s*اكمل)/.test(normalized(s));
+const languageSwitch=s=>{
+  const n=normalized(s);
+  if(/(?:رد|جاوب|احكي|تكلم|تحدث|كمل|اكتب).*(?:بالانجليزي|بالانكليزي|english)|^(?:please\s+)?(?:reply|respond|speak|answer|continue)\s+(?:to\s+me\s+)?(?:in\s+)?english\b|^(?:in\s+)?english(?:\s+please)?$/.test(n))return "en";
+  if(/(?:رد|جاوب|احكي|تكلم|تحدث|كمل|اكتب).*(?:بالعربي|بالعربيه|arabic)|^(?:please\s+)?(?:reply|respond|speak|answer|continue)\s+(?:to\s+me\s+)?(?:in\s+)?arabic\b|^(?:in\s+)?arabic(?:\s+please)?$/.test(n))return "ar";
+  return "";
+};
 const startTrip=s=>{
   const n=normalized(s);
   return /(?:بدي|اريد|حاب|حابب|كيف)\s*(?:اضيف|اضافه|انشئ|انشاء|اعمل|اسوي|اسويلي|جهز|ابدا)?\s*(?:لي\s*)?رحل/.test(n) ||
     /(?:اضيف|اضافه|انشئ|انشاء|جهز|اعمل|سوي|ابدا)\s*(?:لي\s*)?رحل/.test(n) ||
-    /رحل[هة].*(?:جديده|جديد)/.test(n);
+    /رحل[هة].*(?:جديده|جديد)/.test(n) ||
+    /\b(?:(?:i\s+(?:want|need|would like)\s+(?:to\s+)?)|(?:how\s+(?:do|can)\s+i\s+))?(?:add|create|make|start)\s+(?:a\s+)?(?:new\s+)?trip\b/.test(n);
 };
 function titleFromText(text,asAnswer){
   const raw=String(text||"").trim();
@@ -177,26 +214,35 @@ export function localGuidedTripTurn(text,rawContext){
   if(typeof text!=="string"||!text.trim()||text.length>1500)return null;
   const ctx=assistantConversationContext(rawContext);
   const inTrip=ctx.mode==="create_trip";
-  if(inTrip&&cancellation(text))return {intent:"cancel",mode:"",text:"تمام، ألغيت مسودة الرحلة من المحادثة. ما حفظنا ولا رحلة.",suggestions:["بدي أضيف رحلة","كم مقعد محجوز اليوم؟"]};
+  const requestedLang=languageSwitch(text);
+  const lang=requestedLang||(!inTrip&&/\b(?:trip|create|add)\b/.test(normalized(text))?"en":ctx.lang);
+  // A language request is a control command, never the answer to the pending trip question.
+  if(inTrip&&requestedLang){
+    return {intent:"create_trip",mode:"create_trip",
+      ...tripConversationStep(ctx.draft,{pendingField:ctx.pendingField,lang}),lang};
+  }
+  if(inTrip&&cancellation(text))return {intent:"cancel",mode:"",lang,
+    text:lang==="en"?"Trip draft canceled. Nothing was saved.":"تمام، ألغيت مسودة الرحلة من المحادثة. ما حفظنا ولا رحلة.",
+    suggestions:lang==="en"?["Create a trip","Today's bookings"]:["بدي أضيف رحلة","كم مقعد محجوز اليوم؟"]};
   if(inTrip&&seatRequest(text))return null;
   if(!inTrip&&!startTrip(text))return null;
   const draft={...ctx.draft};
-  const baseStep=tripConversationStep(draft,{pendingField:ctx.pendingField});
+  const baseStep=tripConversationStep(draft,{pendingField:ctx.pendingField,lang});
   let pending=ctx.pendingField;
   const n=normalized(text),value=priceValue(text);
-  if(inTrip&&/(?:غير|عدل|تعديل|تغيير|اغير|اعدل)/.test(n)&&!(/\d/.test(n))){
-    if(/بوفيه/.test(n)&&/طفل/.test(n))pending="buffetChildPrice";
-    else if(/بوفيه/.test(n)&&/(?:كبير|سعر)/.test(n))pending="buffetAdultPrice";
-    else if(/بوفيه/.test(n))pending="buffetEnabled";
-    else if(/رابط|جوجل|ماب|خريط/.test(n))pending="googleMapsUrl";
-    else if(/مكان|انطلاق|مارينا|مرسى/.test(n))pending="locationName";
-    else if(/طفل/.test(n))pending="childPrice";
-    else if(/مده|وقت|ساعه/.test(n))pending="durationMinutes";
-    else if(/اسم/.test(n))pending="title";
-    else if(/سعر|دينار/.test(n))pending="adultPrice";
+  if(inTrip&&/(?:غير|عدل|تعديل|تغيير|اغير|اعدل|change|edit|update)/.test(n)&&!(/\d/.test(n))){
+    if(/بوفيه|buffet/.test(n)&&/طفل|child/.test(n))pending="buffetChildPrice";
+    else if(/بوفيه|buffet/.test(n)&&/(?:كبير|سعر|adult|price)/.test(n))pending="buffetAdultPrice";
+    else if(/بوفيه|buffet/.test(n))pending="buffetEnabled";
+    else if(/رابط|جوجل|ماب|خريط|maps?\s*link/.test(n))pending="googleMapsUrl";
+    else if(/مكان|انطلاق|مارينا|مرسى|departure|location/.test(n))pending="locationName";
+    else if(/طفل|child/.test(n))pending="childPrice";
+    else if(/مده|وقت|ساعه|duration/.test(n))pending="durationMinutes";
+    else if(/اسم|title|name/.test(n))pending="title";
+    else if(/سعر|دينار|price/.test(n))pending="adultPrice";
     if(pending){
-      const ask=tripConversationStep(draft,{pendingField:pending});
-      return {intent:"create_trip",mode:"create_trip",...ask,pendingField:pending};
+      const ask=tripConversationStep(draft,{pendingField:pending,lang});
+      return {intent:"create_trip",mode:"create_trip",...ask,pendingField:pending,lang};
     }
   }
   const field=inTrip?(pending||baseStep.askFor):"";
@@ -220,16 +266,16 @@ export function localGuidedTripTurn(text,rawContext){
     const minutes=minutesFromText(text,true);
     if(Number.isInteger(minutes)&&minutes>=15&&minutes<=1440)draft.durationMinutes=minutes;
   }else if(field==="adultPrice"||field==="childPrice"||field==="buffetAdultPrice"||field==="buffetChildPrice"){
-    const sameAdult=field==="childPrice"&&/نفس\s*(?:سعر|الكبير)|زي\s*(?:الكبير|سعر الكبير)/.test(n);
-    const samePrice=field==="buffetAdultPrice"&&/نفس\s*سعر\s*الكبير/.test(n)?draft.adultPrice:
-      field==="buffetChildPrice"&&/نفس\s*سعر\s*الطفل/.test(n)?draft.childPrice:undefined;
+    const sameAdult=field==="childPrice"&&/نفس\s*(?:سعر|الكبير)|زي\s*(?:الكبير|سعر الكبير)|same\s+(?:as\s+)?adult|same\s+price/.test(n);
+    const samePrice=field==="buffetAdultPrice"&&/نفس\s*سعر\s*الكبير|same\s+(?:as\s+)?adult/.test(n)?draft.adultPrice:
+      field==="buffetChildPrice"&&/نفس\s*سعر\s*الطفل|same\s+(?:as\s+)?child/.test(n)?draft.childPrice:undefined;
     const price=sameAdult?draft.adultPrice:(samePrice!==undefined?samePrice:value);
     if(price!==undefined)draft[field]=price;
   }else if(field==="buffetEnabled"){
-    if(/^(?:لا|لاء|لأ|no)(?:\s|$|[،,.!])|بدون\s*بوفيه|ما\s*في\s*بوفيه|مش\s*شامل/.test(n)){
+    if(/^(?:لا|لاء|لأ|no)(?:\s|$|[،,.!])|بدون\s*بوفيه|ما\s*في\s*بوفيه|مش\s*شامل|without\s+(?:a\s+)?buffet/.test(n)){
       draft.buffetEnabled=false;
       delete draft.buffetDescription;delete draft.buffetAdultPrice;delete draft.buffetChildPrice;
-    }else if(/^(?:نعم|اه|ايوه|ايوا|يس|yes|اكيد)(?:\s|$|[،,.!])|مع\s*بوفيه|فيه\s*بوفيه|بوفيه\s*موجود/.test(n)){
+    }else if(/^(?:نعم|اه|ايوه|ايوا|يس|yes|اكيد)(?:\s|$|[،,.!])|مع\s*بوفيه|فيه\s*بوفيه|بوفيه\s*موجود|with\s+(?:a\s+)?buffet/.test(n)){
       draft.buffetEnabled=true;
     }
   }else if(field==="buffetDescription"){
@@ -237,7 +283,7 @@ export function localGuidedTripTurn(text,rawContext){
   }else if(field==="locationName"){
     if(n.length>=2&&!/^(?:تخطي|مش عارف|لا اعرف)$/.test(n)&&!/^https?:\/\//.test(text.trim()))draft.locationName=text.trim().slice(0,120);
   }else if(field==="googleMapsUrl"){
-    if(/^(?:تخطي|تجاوز|ما عندي|لاحقا|بعدين|مش متوفر)/.test(n)){
+    if(/^(?:تخطي|تجاوز|ما عندي|لاحقا|بعدين|مش متوفر|skip(?:\s+link)?|later|no\s+link)/.test(n)){
       draft.googleMapsSkipped=true;delete draft.googleMapsUrl;
     }else{
       const candidate=text.trim().match(/https:\/\/[^\s<>"']+/i)?.[0]||text.trim();
@@ -245,10 +291,10 @@ export function localGuidedTripTurn(text,rawContext){
       if(url){draft.googleMapsUrl=url;delete draft.googleMapsSkipped;}
     }
   }
-  const next=tripConversationStep(sanitizeTripConversationDraft(draft));
+  const next=tripConversationStep(sanitizeTripConversationDraft(draft),{lang});
   // A bad URL never silently completes the question; offer a clear correction.
   if(field==="googleMapsUrl"&&!draft.googleMapsUrl&&!draft.googleMapsSkipped&&!next.ready){
-    next.text="الرابط لازم يكون رابط Google Maps صحيح (مثل maps.app.goo.gl). ابعثه أو اضغط «تخطي الرابط».";
+    next.text=lang==="en"?"Please send a valid Google Maps link (for example, maps.app.goo.gl), or select Skip link.":"الرابط لازم يكون رابط Google Maps صحيح (مثل maps.app.goo.gl). ابعثه أو اضغط «تخطي الرابط».";
   }
-  return {intent:"create_trip",mode:"create_trip",...next,pendingField:""};
+  return {intent:"create_trip",mode:"create_trip",...next,pendingField:"",lang};
 }
