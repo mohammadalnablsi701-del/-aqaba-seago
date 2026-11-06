@@ -66,9 +66,9 @@ export const tripFieldNames=["title","durationMinutes","adultPrice","childPrice"
 // Voice is sent directly for transcription, so users must avoid speaking PII.
 export function redactAssistantText(value){
   return String(value||"").slice(0,1500)
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]")
-    .replace(/(?:\\+?962|00962|0)?7\\d{8}\\b/g,"[phone]")
-    .replace(/\\b\\d{10,}\\b/g,"[number]");
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[email]")
+    .replace(/(?:\+?962|00962|0)?7\d{8}\b/g,"[phone]")
+    .replace(/\b\d{10,}\b/g,"[number]");
 }
 export function safeAssistantFocus(raw){
   const intent=["seats","trip_info","trip_visibility"].includes(raw?.intent)?raw.intent:"";
