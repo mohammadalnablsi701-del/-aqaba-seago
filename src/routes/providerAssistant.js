@@ -5,7 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus} from "../services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -124,6 +124,10 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       const rows=await Trip.find({providerId:access.provider._id})
         .select("_id titleAr titleEn vesselName category durationMinutes pricing.pricePerPerson pricing.adultPrice pricing.childPrice pricing.buffetEnabled pricing.buffetDescription pricing.buffetAdultPrice pricing.buffetChildPrice departureLocation active platformStatus")
         .sort({createdAt:-1}).limit(101).lean();
+      if(!parsed.tripName&&parsed.intent==="trip_info"&&rows.length!==1)
+        return res.json({intent:"trip_info",mode:"",lang:parsed.context.lang,source:"provider_data",transcript:parsed.transcript,
+          text:assistantTripList(rows.slice(0,100),parsed.context.lang),
+          suggestions:rows.slice(0,4).map(t=>t.titleAr||t.titleEn),focus:safeAssistantFocus({intent:"trip_info"})});
       const lang=parsed.context.lang,selection=matchAssistantTrip(rows.slice(0,100),parsed.tripName);
       if(rows.length>100&&!selection.match)return res.json({intent:parsed.intent,mode:"",lang,source:"provider_data",transcript:parsed.transcript,
         text:lang==="en"?"Please specify the exact trip name from Trips (over 100 trips found).":"اكتب اسم الرحلة المحدد من قسم Trips؛ عدد رحلاتك أكثر من 100.",
