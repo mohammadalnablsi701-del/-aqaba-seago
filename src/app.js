@@ -53,6 +53,8 @@ export function createApp() {
   app.disable("x-powered-by");
   app.use(helmet({crossOriginResourcePolicy: { policy: "cross-origin" },contentSecurityPolicy: false}));
   app.use(cors(buildCorsOptions()));
+  // Only the provider assistant accepts larger JSON bodies for up-to-one-minute voice messages.
+  app.post("/api/providers/me/assistant", express.json({ limit: "2mb" }));
   app.use(express.json({ limit: "1mb" }));
   app.use(rejectUnsafeRequestKeys);
   const apiLimiter=rateLimit({windowMs:15*60*1000,limit:Number(process.env.API_RATE_LIMIT||300),standardHeaders:"draft-8",legacyHeaders:false,message:{error:"Too many requests. Please try again shortly."}});
