@@ -13,7 +13,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   const [recording,setRecording]=useState(false);
   const [error,setError]=useState("");
   const [audioError,setAudioError]=useState("");
-  const contextRef=useRef({mode:"",draft:{},pendingField:""});
+  const contextRef=useRef({mode:"",draft:{},pendingField:"",lang:"ar"});
   const sendingRef=useRef(false),recRef=useRef(null),micRef=useRef(null),timerRef=useRef(null),aliveRef=useRef(true),scrollRef=useRef(null);
   useEffect(()=>{scrollRef.current?.scrollIntoView({block:"end",behavior:"smooth"});},[messages,busy,error]);
   useEffect(()=>()=>{aliveRef.current=false;clearTimeout(timerRef.current);try{recRef.current?.stop();}catch{}micRef.current?.getTracks().forEach(t=>t.stop());},[]);
@@ -33,9 +33,9 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       if(!response.ok)throw new Error(result.error||"تعذّر إكمال الطلب.");
       if(!aliveRef.current)return;
       const mode=result.mode==="create_trip"?"create_trip":result.mode==="seats"?"seats":"";
-      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:""};
+      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:"",lang:result.lang==="en"?"en":contextRef.current.lang};
       setMessages(v=>[...v,{
-        role:"assistant",intent:result.intent,text:result.text||"تمام، كيف بقدر أساعدك؟",
+        role:"assistant",intent:result.intent,text:result.text||"تمام، كيف بقدر أساعدك؟",lang:contextRef.current.lang,
         transcript:payload.audioBase64?result.transcript||"":"",rows:Array.isArray(result.rows)?result.rows.slice(0,20):[],
         ready:result.ready===true,progress:Number(result.progress)||0,total:Number(result.total)||4,
         draft:mode==="create_trip"?contextRef.current.draft:null,
@@ -83,7 +83,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   function close(){onClose();}
   function cancelDraft(){
     if(sendingRef.current||recording)return;
-    contextRef.current={mode:"",draft:{},pendingField:""};
+    contextRef.current={mode:"",draft:{},pendingField:"",lang:contextRef.current.lang};
     setMessages(v=>[...v,{role:"assistant",text:"تمام، لغينا المسودة من المحادثة. ما انحفظت ولا رحلة.",suggestions:starter}]);
   }
   const time=v=>new Date(v).toLocaleTimeString("ar-JO",{timeZone:"Asia/Amman",hour:"2-digit",minute:"2-digit"});
@@ -91,9 +91,9 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
     <header className="seago-assistant-header"><div><span className="seago-assistant-icon"><ShipWheel size={20}/></span><div><strong>مساعد SeaGo</strong><small>احكي معي، خطوة بخطوة</small></div></div><button type="button" onClick={close} aria-label="إغلاق المساعد"><X size={22}/></button></header>
     <div className="seago-assistant-messages" role="log" aria-live="polite" aria-label="محادثة مساعد المزود">
       {messages.map((m,i)=><div key={i} className={"seago-assistant-message "+m.role}>
-        <p>{m.text}</p>
+        <p dir="auto">{m.text}</p>
         {m.transcript&&<small>🎙️ سمعت: {m.transcript}</small>}
-        {m.intent==="create_trip"&&<div className="seago-assistant-progress"><div><span>تجهيز الرحلة</span><strong>{m.progress} / {m.total}</strong></div><div className="seago-assistant-progress-track"><span style={{width:Math.round(100*m.progress/(m.total||4))+"%"}}/></div></div>}
+        {m.intent==="create_trip"&&<div className="seago-assistant-progress"><div><span>{m.lang==="en"?"Trip setup":"تجهيز الرحلة"}</span><strong>{m.progress} / {m.total}</strong></div><div className="seago-assistant-progress-track"><span style={{width:Math.round(100*m.progress/(m.total||4))+"%"}}/></div></div>}
         {m.rows?.length>0&&<div className="seago-assistant-departures">{m.rows.map((d,j)=><div key={j}><strong>{d.trip}</strong><small>{time(d.startsAt)} · {d.status==="scheduled"?"مجدولة":d.status}</small><span>مؤكد: {d.confirmedSeats} · متاح: {d.availableSeats} · السعة: {d.capacity}</span></div>)}</div>}
         {m.ready&&m.draft&&<button type="button" className="seago-assistant-draft-button" disabled={busy||recording} onClick={()=>onUseDraft(m.draft)}><CheckCircle2 size={17}/> افتح نموذج الرحلة للمراجعة <ArrowRight size={16}/></button>}
         {m.intent==="create_trip"&&!m.ready&&i===messages.length-1&&<button type="button" className="seago-assistant-cancel-draft" disabled={busy||recording} onClick={cancelDraft}>إلغاء مسودة الرحلة</button>}
@@ -101,7 +101,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       {busy&&<p className="seago-assistant-thinking">عم بجهّز لك الرد…</p>}
       <div ref={scrollRef}/>
     </div>
-    {chips.length>0&&<div className="seago-assistant-samples" aria-label="اقتراحات سريعة">{chips.map((s,i)=><button key={i} type="button" disabled={busy||recording} onClick={()=>sendText(s)}>{s}</button>)}</div>}
+    {chips.length>0&&<div className="seago-assistant-samples" aria-label="اقتراحات سريعة">{chips.map((s,i)=><button key={i} type="button" dir="auto" disabled={busy||recording} onClick={()=>sendText(s)}>{s}</button>)}</div>}
     <footer className="seago-assistant-footer">
       {error&&<div className="seago-assistant-error" role="alert">{error}</div>}
       {audioError&&<div className="seago-assistant-error" role="alert">{audioError}</div>}
