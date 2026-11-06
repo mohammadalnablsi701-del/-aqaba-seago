@@ -5,7 +5,7 @@ import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview} from "../services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview,localProviderFactQuery} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -173,7 +173,8 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
     if(process.env.PROVIDER_AI_ENABLED!=="true")return res.status(503).json({error:"المساعد غير مُفعّل حالياً."});
     // Guided written steps run locally, even if Gemini is temporarily unavailable.
     // Check provider capability before returning any conversation state or draft.
-    const local=!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
+    const localFacts=!(req.body?.audioBase64)&&localProviderFactQuery(req.body?.text,req.body?.context);
+    const local=!localFacts&&!(req.body?.audioBase64)&&localGuidedTripTurn(req.body?.text,req.body?.context);
     if(local){
       // Language-only help is available to any authenticated provider, without granting trip/booking access.
       if(local.intent==="create_trip"||local.intent==="cancel"){
@@ -182,7 +183,7 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       }
       return res.json(local);
     }
-    const parsed=await understandAssistant(req.body||{});
+    const parsed=localFacts||await understandAssistant(req.body||{});
     // Voice must follow the exact same deterministic language control as typed messages.
     // Do not let a generic model reply discard the existing draft or chosen language.
     if(parsed.needsClarification){
