@@ -4,8 +4,8 @@ import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
-import {requireProviderCapability} from "../services/providerAccess.js";
-import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft} from "../services/providerAssistantConversation.js";
+import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
+import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus} from "../services/providerAssistantConversation.js";
 
 const router=express.Router();
 const categories=new Set(["group_boat","private_boat","yacht","glass_bottom","snorkeling","diving","fishing","sunset","private_event","water_sports","semi_submarine"]);
@@ -46,20 +46,21 @@ export async function understandAssistant(body,env=process.env){
   if(!message&&!audio)throw fail("اكتب سؤالاً أو سجّل رسالة صوتية.");
   if(audio&&(!formats.has(mime)||audio.length>1600000||audio.length<200||!/^[A-Za-z0-9+/]+={0,2}$/.test(audio)))throw fail("صيغة أو حجم التسجيل غير مدعوم. سجّل رسالة أقصر.");
   const context=assistantConversationContext(body.context);
-  const instruction="أنت مساعد بحرّي تفاعلي لمزودي Aqaba SeaGo، افهم الإنجليزية والعربية واللهجة الأردنية. لغة الرد المطلوبة: "+(context.lang==="en"?"English":"Arabic")+". التاريخ الحالي في الأردن "+today()+". "+ 
-    "السياق الحالي الآمن (بيانات رحلة غير منشورة فقط): "+JSON.stringify(context)+". "+
-    "أعد كائن JSON صحيح فقط بالحقول {intent,date,tripName,transcript,draft,reply}، بدون Markdown. "+
-    "intent يجب أن يكون واحداً فقط: seats إذا المستخدم يسأل عن المقاعد والحجوزات أو الشواغر؛ create_trip إذا طلب إضافة رحلة أو تعديل مسودتها أو سأل كيف يضيف رحلة؛ cancel إذا ألغى مسودة الرحلة صراحة؛ help للأسئلة الأخرى. "+
-    "إذا السياق mode=create_trip والمستخدم يعطي اسم أو مدة أو سعر أو يعدّل معلومة، استمر create_trip لا help، ما لم يطلب صراحة التحوّل للحجوزات أو الإلغاء. "+
-    "إذا السياق mode=seats وقال المستخدم بكرا أو الجمعة أو اسم رحلة، استمر seats. "+
-    "date تاريخ YYYY-MM-DD عند السؤال عن المقاعد، واستخرج اليوم/بكرا/تاريخ صريح وإلا فارغ. tripName اسم رحلة ذكرها المستخدم وإلا فارغ. "+
-    "draft كائن يحتوي فقط على حقول الرحلة المذكورة **في الرسالة الحالية**: titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,buffetEnabled (boolean true أو false),buffetDescription,buffetAdultPrice,buffetChildPrice,locationName,address,googleMapsUrl. "+
-    "لا تنسخ القيم الموجودة بالسياق إلى draft ولا تخترع أسعاراً أو تفاصيل جديدة. يمكن استخدام سعر الكبير الموجود في السياق فقط إذا قال المستخدم صراحة إن سعر الطفل نفس سعر الكبير. "+
-    "durationMinutes دقائق صحيحة، أسعار الأفراد أرقام بالدينار الأردني، والاسم العربي في titleAr. إذا قال المستخدم نعم بوفيه اجعل buffetEnabled=true، وإذا لا فـ false، ولا تخترع وصف البوفيه أو أسعاره. رابط الخرائط HTTPS من Google فقط. "+
-    "category أحد group_boat,private_boat,yacht,glass_bottom,snorkeling,diving,fishing,sunset,private_event,water_sports,semi_submarine فقط إذا عُرف النوع. "+
-    "transcript تفريغ الصوت بالعربية إذا كانت رسالة صوتية، وفارغ تماماً للنص. "+
-    "reply رد قصير ولطيف باللغة المطلوبة في حال help فقط، أجب عن خطوات استخدام واجهة المزود بالمعلومات المؤكدة التالية: الرحلة من صفحة Trips > Add trip؛ بعد الحفظ تُجدول المغادرة وتُحدد سعتها، والحجوزات من Bookings، والمقاعد من المغادرات. لا تؤكد وجود حجوزات أو مواعيد من عندك. "+
-    "في إنشاء رحلة لا تدّعِ أنها نُشرت ولا تخترع بيانات. عند طلب معلومات حساسة للعملاء، وجه المستخدم إلى قسم الحجوزات المصرّح له ولا تعرض بيانات شخصية. لا تنفذ أفعالاً.";
+  const instruction=[
+    "You are SeaGo Provider's intelligent assistant. Understand Jordanian Arabic, English, and speech in either language.",
+    "Respond in "+(context.lang==="en"?"English":"Arabic")+". Jordan local date: "+today()+".",
+    "Safe conversation context (unpublished trip draft and non-sensitive focus only): "+JSON.stringify(context)+".",
+    "Return ONLY valid JSON with: intent,date,tripName,topic,transcript,draft,reply.",
+    "Choose exactly one intent: seats (real confirmed/available seats or bookings counts); trip_info (saved trip prices, duration, buffet, departure location or list); trip_visibility (why a saved trip may not appear or be sellable); troubleshoot (QR/camera, mic, login, missing booking, payments, trip saving, seat mismatch); create_trip (draft creation or edits); cancel (explicit draft cancellation); help (general advice).",
+    "For troubleshoot choose topic from qr_checkin,microphone,login,booking_missing,payment,trip_save,seats_mismatch,general.",
+    "Do NOT invent live provider data, prices, seat totals, payment statuses, diagnoses, or customer records. The server checks permissions and fetches facts after classification.",
+    "tripName is ONLY an explicitly mentioned trip name; leave blank if none. date is YYYY-MM-DD for a clearly stated date, today, tomorrow or named weekday; otherwise blank.",
+    "If continuing a trip draft, return create_trip when the message supplies its next field. Switch intent when user asks about real saved trips, bookings or an error instead.",
+    "draft includes ONLY fields explicitly supplied in this user message: titleAr,titleEn,vesselName,category,durationMinutes,adultPrice,childPrice,buffetEnabled,buffetDescription,buffetAdultPrice,buffetChildPrice,locationName,address,googleMapsUrl.",
+    "Never guess draft prices, names, buffet options or maps links. Use boolean buffetEnabled, positive durations in minutes and JOD prices. For a spoken message, transcript is an accurate short transcription in the spoken language; for text, empty string.",
+    "For help, reply naturally with practical steps grounded in the app: Trips > Add trip to prepare, then schedule departures; Bookings for bookings; QR check-in for confirmed tickets. Ask for exact error and screen if uncertain. Nothing is saved without the provider opening and saving the form.",
+    "No personal customer names, phone numbers, payment secrets or commissions. Never execute changes or reveal other providers' data."
+  ].join(" ");
   const parts=[{text:instruction}];
   if(message)parts.push({text:message});
   if(audio)parts.push({inlineData:{mimeType:mime==="audio/mp4"?"audio/m4a":mime,data:audio}});
@@ -75,7 +76,15 @@ export async function understandAssistant(body,env=process.env){
   const raw=json?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
   let parsed;
   try{parsed=JSON.parse(raw.trim());}catch{throw fail("لم أفهم الطلب بشكل واضح. جرّب صياغته مرة ثانية.",422);}
-  return {intent:["seats","create_trip","cancel","help"].includes(parsed.intent)?parsed.intent:"help",date:safeAssistantDate(parsed.date),tripName:clean(parsed.tripName),transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context,reply:clean(parsed.reply,600)};
+  const intents=new Set(["seats","trip_info","trip_visibility","troubleshoot","create_trip","cancel","help"]);
+  const intent=intents.has(parsed.intent)?parsed.intent:"help";
+  const topics=new Set(["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"]);
+  const listRequest=/\\b(?:all\\s+trips|my\\s+trips)\\b|(?:كل\\s+الرحلات|رحلاتي)/i.test(message);
+  const tripName=clean(parsed.tripName,100)||(listRequest?"":context.focus.tripName);
+  const date=parsed.date?safeAssistantDate(parsed.date):(context.focus.date?safeAssistantDate(context.focus.date):safeAssistantDate(null));
+  return {intent,date,tripName,topic:topics.has(parsed.topic)?parsed.topic:"general",
+    transcript:audio?clean(parsed.transcript,600):"",draft:safeTripDraft(parsed.draft),
+    delta:parsed.draft&&typeof parsed.draft==="object"?parsed.draft:{},context,reply:clean(parsed.reply,700)};
 }
 export async function confirmedSeatsForProvider(providerId,parsed){
   const date=safeAssistantDate(parsed.date),start=new Date(date+"T00:00:00+03:00");
