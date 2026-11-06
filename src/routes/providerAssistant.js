@@ -44,7 +44,7 @@ export async function understandAssistant(body,env=process.env){
   const message=clean(body.text,1500),audio=String(body.audioBase64||"");
   const mime=clean(body.audioMimeType,80).split(";")[0];
   if(!message&&!audio)throw fail("اكتب سؤالاً أو سجّل رسالة صوتية.");
-  if(audio&&(!formats.has(mime)||audio.length>650000||audio.length<200||!/^[A-Za-z0-9+/]+={0,2}$/.test(audio)))throw fail("صيغة أو حجم التسجيل غير مدعوم. سجّل رسالة أقصر.");
+  if(audio&&(!formats.has(mime)||audio.length>1600000||audio.length<200||!/^[A-Za-z0-9+/]+={0,2}$/.test(audio)))throw fail("صيغة أو حجم التسجيل غير مدعوم. سجّل رسالة أقصر.");
   const context=assistantConversationContext(body.context);
   const instruction="أنت مساعد بحرّي تفاعلي لمزودي Aqaba SeaGo، افهم اللهجة الأردنية والعربية. التاريخ الحالي في الأردن "+today()+". "+ 
     "السياق الحالي الآمن (بيانات رحلة غير منشورة فقط): "+JSON.stringify(context)+". "+
@@ -64,7 +64,7 @@ export async function understandAssistant(body,env=process.env){
   if(message)parts.push({text:message});
   if(audio)parts.push({inlineData:{mimeType:mime==="audio/mp4"?"audio/m4a":mime,data:audio}});
   let response;
-  try{response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",temperature:0,maxOutputTokens:750}}),signal:AbortSignal.timeout(20000)});}
+  try{response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",temperature:0,maxOutputTokens:750}}),signal:AbortSignal.timeout(audio?40000:20000)});}
   catch{throw fail("تعذّر الاتصال بالمساعد. جرّب مرة ثانية.",503);}
   if(!response.ok){
     // Status only: never log provider text/audio, response bodies or API credentials.
