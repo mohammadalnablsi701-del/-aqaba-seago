@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting,assistantTripList,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview} from "../src/services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting,assistantTripList,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview,localProviderFactQuery} from "../src/services/providerAssistantConversation.js";
 
 test("Arabic guided creation asks for missing details one at a time and never autosaves",()=>{
   const first=tripConversationStep({});
@@ -288,4 +288,22 @@ test("plural visibility queries distinguish all trips from one saved trip",()=>{
   assert.match(overview,/رحلة خاصة: الرحلة غير مفعّلة/);
   assert.match(overview,/رحلة بحرية: لا توجد مغادرات مستقبلية/);
   assert.match(overview,/لا يؤكد ظهور الرحلات/);
+});
+
+test("Provider's simple pricing and visibility text queries work while Gemini is overloaded",()=>{
+  const context={lang:"ar",focus:{intent:"trip_info",tripName:"قديمة",date:"2026-11-01"}};
+  const prices=localProviderFactQuery("شو أسعار رحلاتي؟",context);
+  assert.equal(prices.intent,"trip_info");
+  assert.equal(prices.tripName,"");
+  assert.equal(prices.context.lang,"ar");
+  const visibility=localProviderFactQuery("ليش رحلاتنا مش مبينة للعملاء؟",context);
+  assert.equal(visibility.intent,"trip_visibility");
+  assert.equal(visibility.tripName,"");
+  assert.equal(visibility.context.focus.tripName,"قديمة"); // Untrusted focus is not used for this all-trips query.
+  assert.equal(localProviderFactQuery("اعمل رحلة بحرية جديدة",context),null);
+  assert.equal(localProviderFactQuery("شو لازم أعمل لحل مشكلة QR؟",context),null);
+  assert.equal(localProviderFactQuery("شو أسعار رحلاتي؟",{lang:"en"}).context.lang,"en");
+  const unsafe=localProviderFactQuery("شو أسعار رحلاتي؟",{secret:"should not propagate",providerId:"foreign"});
+  assert.equal("secret" in unsafe.context,false);
+  assert.equal("providerId" in unsafe.context,false);
 });
