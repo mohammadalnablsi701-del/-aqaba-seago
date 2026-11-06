@@ -73,11 +73,11 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
         setRecording(false);
         const blob=new Blob(chunks,{type:recorder.mimeType.split(";")[0]||"audio/mp4"});
         if(blob.size<100)return;
-        if(blob.size>450000){setAudioError("التسجيل طويل، جرّب أقل من 19 ثانية.");return;}
+        if(blob.size>1200000){setAudioError("حجم التسجيل كبير. جرّب رسالة أقصر أو استخدم الشات.");return;}
         try{const audioBase64=await toBase64(blob);if(aliveRef.current)send({audioBase64,audioMimeType:blob.type},"🎙️ رسالة صوتية");}
         catch(e){if(aliveRef.current)setAudioError(e.message);}
       };
-      recorder.start(250);setRecording(true);timerRef.current=setTimeout(stopRecording,19000);
+      recorder.start(250);setRecording(true);timerRef.current=setTimeout(stopRecording,60000);
     }catch{stream?.getTracks().forEach(t=>t.stop());if(aliveRef.current)setAudioError("الميكروفون غير متاح. اسمح بالوصول إليه من إعدادات Safari، أو استخدم الشات.");}
   }
   function close(){onClose();}
@@ -105,7 +105,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
     <footer className="seago-assistant-footer">
       {error&&<div className="seago-assistant-error" role="alert">{error}</div>}
       {audioError&&<div className="seago-assistant-error" role="alert">{audioError}</div>}
-      {recording&&<div className="seago-assistant-recording"><Headphones size={15}/> عم بسجّل صوتك… اضغط إيقاف للإرسال (19 ثانية كحد أقصى)</div>}
+      {recording&&<div className="seago-assistant-recording"><Headphones size={15}/> عم بسجّل صوتك… اضغط إيقاف للإرسال (دقيقة واحدة كحد أقصى)</div>}
       <p className="seago-assistant-privacy-notice">يُرسل محتوى رسائلك النصية أو الصوتية إلى Google لفهم طلبك. تجنّب مشاركة بيانات العملاء الشخصية.</p>
       <form onSubmit={e=>{e.preventDefault();sendText();}}>
         <button type="button" disabled={busy} onClick={recording?stopRecording:startRecording} aria-label={recording?"أوقف وأرسل التسجيل":"سجّل رسالة صوتية"} className={"seago-assistant-mic "+(recording?"recording":"")}>{recording?<Square size={20}/>:<Mic size={20}/>}</button>
