@@ -3,7 +3,7 @@ import {rateLimit} from "express-rate-limit";
 import Trip from "../models/Trip.js";
 import Departure from "../models/Departure.js";
 import Booking from "../models/Booking.js";
-import {normalizeAssistantBookingCounts,formatAssistantBookingDiagnosis} from "../services/providerAssistantDiagnostics.js";
+import {diagnoseProviderBookings} from "../services/providerAssistantDiagnostics.js";
 import {requireAuth,requireRole} from "../middleware/auth.js";
 import {requireProviderCapability,resolveProviderAccess} from "../services/providerAccess.js";
 import {assistantConversationContext,mergeTripConversationDraft,tripConversationStep,localGuidedTripTurn,sanitizeTripConversationDraft,assistantTroubleshooting,matchAssistantTrip,assistantTripList,assistantTripSummary,assistantVisibilityDiagnosis,safeAssistantFocus,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview,localProviderFactQuery} from "../services/providerAssistantConversation.js";
@@ -254,6 +254,12 @@ router.post("/me/assistant",requireAuth,requireRole("provider"),limiter,async(re
       const prior=parsed.context.focus;
       const followUp=prior?.intent==="troubleshoot";
       const topic=parsed.topic==="general"&&followUp?prior.topic:parsed.topic;
+      if(["booking_missing","seats_mismatch","qr_checkin"].includes(topic)){
+        const access=await requireProviderCapability(req.user,"view_bookings");
+        if(!access?.provider)return res.status(403).json({error:"لا تملك صلاحية فحص بيانات الحجوزات."});
+        const info=await diagnoseProviderBookings(access.provider._id,{...parsed,topic});
+        return res.json(info);
+      }
       return res.json({intent:"troubleshoot",mode:"",lang:parsed.context.lang,transcript:parsed.transcript,
         focus:safeAssistantFocus({intent:"troubleshoot",topic}),
         ...assistantTroubleshooting(topic,parsed.context.lang,followUp)});
