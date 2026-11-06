@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting,assistantTripList,redactAssistantText} from "../src/services/providerAssistantConversation.js";
+import {assistantConversationContext,mergeTripConversationDraft,sanitizeTripConversationDraft,tripConversationStep,assistantSuggestionList,localGuidedTripTurn,safeGoogleMapsUrl,safeAssistantFocus,matchAssistantTrip,assistantTripSummary,assistantVisibilityDiagnosis,assistantTroubleshooting,assistantTripList,redactAssistantText,assistantLanguageSwitch,assistantAllTripsVisibilityRequest,assistantVisibilityOverview} from "../src/services/providerAssistantConversation.js";
 
 test("Arabic guided creation asks for missing details one at a time and never autosaves",()=>{
   const first=tripConversationStep({});
@@ -255,4 +255,37 @@ test("safe troubleshooting focus supports followups without retaining raw chat o
   assert.equal(answer.source,"guide");
   assert.equal("message" in result.focus,false);
   assert.deepEqual(safeAssistantFocus({intent:"troubleshoot",topic:"unsafe"}),{intent:"troubleshoot",topic:"general",tripName:"",date:""});
+});
+
+test("iPhone spoken Arabic language commands persist without losing a trip draft",()=>{
+  for(const phrase of ["بدنا نحكي بالإنجليزية","خلينا نتكلم بالإنجليزي","Can we speak English?","switch to english"]){
+    assert.equal(assistantLanguageSwitch(phrase),"en",phrase);
+    const result=localGuidedTripTurn(phrase,{mode:"create_trip",draft:{titleAr:"رحلة بحرية"},lang:"ar"});
+    assert.equal(result.lang,"en",phrase);
+    assert.equal(result.draft.titleAr,"رحلة بحرية");
+    assert.equal(result.askFor,"durationMinutes");
+    assert.match(result.text,/how long/i);
+  }
+  for(const phrase of ["بدنا نحكي بالعربي","نحكي عربي","Can you speak Arabic?"]){
+    assert.equal(assistantLanguageSwitch(phrase),"ar",phrase);
+  }
+});
+
+test("plural visibility queries distinguish all trips from one saved trip",()=>{
+  for(const phrase of ["ليش رحلاتنا مش مبينة للعملاء؟","ليش رحلاتنا مش ظاهرة للعملاء؟",
+    "Why are my trips not showing to customers?"]){
+    assert.equal(assistantAllTripsVisibilityRequest(phrase),true,phrase);
+  }
+  assert.equal(assistantAllTripsVisibilityRequest("ليش رحلة الغروب مش ظاهرة؟"),false);
+  const future=new Date(Date.now()+86400000).toISOString();
+  const overview=assistantVisibilityOverview([
+    {_id:"a",titleAr:"رحلة الغروب",active:true,platformStatus:"allowed"},
+    {_id:"b",titleAr:"رحلة خاصة",active:false,platformStatus:"allowed"},
+    {_id:"c",titleAr:"رحلة بحرية",active:true,platformStatus:"allowed"}
+  ],[{tripId:"a",startsAt:future,status:"scheduled",capacity:20,reservedSeats:2,salesClosed:false}]);
+  assert.match(overview,/رحلة الغروب/);
+  assert.match(overview,/لا يظهر مانع بيع/);
+  assert.match(overview,/رحلة خاصة: الرحلة غير مفعّلة/);
+  assert.match(overview,/رحلة بحرية: لا توجد مغادرات مستقبلية/);
+  assert.match(overview,/لا يؤكد ظهور الرحلات/);
 });
