@@ -333,6 +333,12 @@ export function matchAssistantTrip(trips,needle){
   const peers=scored.filter(x=>x.score===top).map(x=>x.trip);
   return {match:peers.length===1?peers[0]:null,options:peers.slice(0,12).map(titleOf),ambiguous:peers.length>1};
 }
+export function assistantTripList(trips,lang="ar"){
+  const rows=Array.isArray(trips)?trips.slice(0,12):[];
+  if(rows.length===0)return lang==="en"?"No trips saved for this provider.":"ما في رحلات محفوظة لهذه الشركة.";
+  const list=rows.map((t,i)=>(i+1)+". "+titleOf(t)+" | "+formatNumber(t.pricing?.adultPrice??t.pricing?.pricePerPerson)+" / "+formatNumber(t.pricing?.childPrice)+" JOD");
+  return (lang==="en"?"Saved trips (adult / child):":"الرحلات المحفوظة (كبير / طفل):")+"\n"+list.join("\n")+(Array.isArray(trips)&&trips.length>12?"\n…":"");
+}
 export function assistantTripSummary(trip,lang="ar"){
   const p=trip?.pricing||{},loc=trip?.departureLocation||{};
   const adult=p.adultPrice??p.pricePerPerson,child=p.childPrice;
