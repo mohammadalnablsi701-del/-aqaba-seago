@@ -18,7 +18,8 @@ function bucket(at){
   const now=Number.isFinite(at)?at:Date.now(),slot=Math.floor(now/HOUR)*HOUR;
   let b=buckets.get(slot);
   if(!b){b=makeBucket(slot);buckets.set(slot,b);}
-  for(const k of buckets.keys())if(k<slot-(KEEP-1)*HOUR||k>slot) buckets.delete(k);
+  const newest=Math.max(slot,...buckets.keys());
+  for(const k of buckets.keys())if(k<newest-(KEEP-1)*HOUR) buckets.delete(k);
   return b;
 }
 export function recordAssistantRequest({mode="text",source="unknown",status=200,latencyMs=0,at=Date.now()}={}){
