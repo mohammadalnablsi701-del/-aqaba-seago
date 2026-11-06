@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {safeAssistantDate,safeTripDraft,understandAssistant} from "../src/routes/providerAssistant.js";
+import {safeAssistantDate,safeTripDraft,understandAssistant,requestAssistantModel} from "../src/routes/providerAssistant.js";
 import {createApp} from "../src/app.js";
 
 test("assistant accepts valid Aqaba dates and rejects impossible dates",()=>{
@@ -197,4 +197,52 @@ test("an explicitly uncertain audio transcript is not treated as a confirmed com
     assert.equal(result.needsClarification,true);
     assert.equal(result.transcript,"فان شو كابتن وليلة آر");
   }finally{globalThis.fetch=original;}
+});
+
+test("Gemini 503 overload is retried at most twice with exponential backoff",async()=>{
+  const statuses=[503,503,200],delays=[],bodies=[];
+  const response=await requestAssistantModel("https://gemini.invalid",{
+    method:"POST",body:JSON.stringify({hello:"test"})
+  },{
+    fetcher:async(_url,options)=>{
+      bodies.push(options.body);
+      const status=statuses.shift();
+      return {status,ok:status===200};
+    },sleep:async ms=>{delays.push(ms);}
+  });
+  assert.equal(response.status,200);
+  assert.deepEqual(delays,[450,900]);
+  assert.equal(bodies.length,3);
+  assert.equal(new Set(bodies).size,1,"No user content changes during retries");
+});
+
+test("Gemini 503 after three attempts returns a useful retryable error",async()=>{
+  let count=0;
+  await assert.rejects(requestAssistantModel("https://gemini.invalid",{method:"POST"},{
+    fetcher:async()=>{count++;return {status:503,ok:false};},
+    sleep:async()=>{}
+  }),err=>err.status===503&&/إعادة المحاولة/.test(err.message));
+  assert.equal(count,3);
+});
+
+test("Gemini quota and invalid settings errors fail fast without retrying",async()=>{
+  for(const [status,expected] of [[429,429],[401,503],[404,503]]){
+    let count=0,delays=0;
+    await assert.rejects(requestAssistantModel("https://gemini.invalid",{method:"POST"},{
+      fetcher:async()=>{count++;return {status,ok:false};},
+      sleep:async()=>{delays++;}
+    }),err=>err.status===expected);
+    assert.equal(count,1,"Unexpected retry on HTTP "+status);
+    assert.equal(delays,0);
+  }
+});
+
+test("Transient Gemini connection exception retries instead of losing the request",async()=>{
+  let attempts=0;
+  const response=await requestAssistantModel("https://gemini.invalid",{method:"POST"},{
+    fetcher:async()=>{attempts++;if(attempts===1)throw new TypeError("Temporary disconnect");return {status:200,ok:true};},
+    sleep:async()=>{}
+  });
+  assert.equal(response.status,200);
+  assert.equal(attempts,2);
 });
