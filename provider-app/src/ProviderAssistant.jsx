@@ -33,9 +33,9 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       if(!response.ok)throw new Error(result.error||"تعذّر إكمال الطلب.");
       if(!aliveRef.current)return;
       const mode=result.mode==="create_trip"?"create_trip":result.mode==="seats"?"seats":"";
-      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:"",lang:result.lang==="en"?"en":contextRef.current.lang};
+      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:"",lang:result.lang==="en"?"en":result.lang==="ar"?"ar":contextRef.current.lang};
       setMessages(v=>[...v,{
-        role:"assistant",intent:result.intent,text:result.text||"تمام، كيف بقدر أساعدك؟",lang:contextRef.current.lang,
+        role:"assistant",intent:result.intent,text:result.text||(contextRef.current.lang==="en"?"How can I help you?":"تمام، كيف بقدر أساعدك؟"),lang:contextRef.current.lang,
         transcript:payload.audioBase64?result.transcript||"":"",rows:Array.isArray(result.rows)?result.rows.slice(0,20):[],
         ready:result.ready===true,progress:Number(result.progress)||0,total:Number(result.total)||4,
         draft:mode==="create_trip"?contextRef.current.draft:null,
@@ -84,7 +84,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   function cancelDraft(){
     if(sendingRef.current||recording)return;
     contextRef.current={mode:"",draft:{},pendingField:"",lang:contextRef.current.lang};
-    setMessages(v=>[...v,{role:"assistant",text:"تمام، لغينا المسودة من المحادثة. ما انحفظت ولا رحلة.",suggestions:starter}]);
+    setMessages(v=>[...v,{role:"assistant",text:contextRef.current.lang==="en"?"Trip draft canceled. Nothing was saved.":"تمام، لغينا المسودة من المحادثة. ما انحفظت ولا رحلة.",suggestions:contextRef.current.lang==="en"?["Create a trip","Today\u0027s bookings"]:starter,lang:contextRef.current.lang}]);
   }
   const time=v=>new Date(v).toLocaleTimeString("ar-JO",{timeZone:"Asia/Amman",hour:"2-digit",minute:"2-digit"});
   return <div className="app"><div className="seago-assistant" dir="rtl">
@@ -95,8 +95,8 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
         {m.transcript&&<small>🎙️ سمعت: {m.transcript}</small>}
         {m.intent==="create_trip"&&<div className="seago-assistant-progress"><div><span>{m.lang==="en"?"Trip setup":"تجهيز الرحلة"}</span><strong>{m.progress} / {m.total}</strong></div><div className="seago-assistant-progress-track"><span style={{width:Math.round(100*m.progress/(m.total||4))+"%"}}/></div></div>}
         {m.rows?.length>0&&<div className="seago-assistant-departures">{m.rows.map((d,j)=><div key={j}><strong>{d.trip}</strong><small>{time(d.startsAt)} · {d.status==="scheduled"?"مجدولة":d.status}</small><span>مؤكد: {d.confirmedSeats} · متاح: {d.availableSeats} · السعة: {d.capacity}</span></div>)}</div>}
-        {m.ready&&m.draft&&<button type="button" className="seago-assistant-draft-button" disabled={busy||recording} onClick={()=>onUseDraft(m.draft)}><CheckCircle2 size={17}/> افتح نموذج الرحلة للمراجعة <ArrowRight size={16}/></button>}
-        {m.intent==="create_trip"&&!m.ready&&i===messages.length-1&&<button type="button" className="seago-assistant-cancel-draft" disabled={busy||recording} onClick={cancelDraft}>إلغاء مسودة الرحلة</button>}
+        {m.ready&&m.draft&&<button type="button" className="seago-assistant-draft-button" disabled={busy||recording} onClick={()=>onUseDraft(m.draft)}><CheckCircle2 size={17}/> {m.lang==="en"?"Review trip form":"افتح نموذج الرحلة للمراجعة"} <ArrowRight size={16}/></button>}
+        {m.intent==="create_trip"&&!m.ready&&i===messages.length-1&&<button type="button" className="seago-assistant-cancel-draft" disabled={busy||recording} onClick={cancelDraft}>{m.lang==="en"?"Cancel trip draft":"إلغاء مسودة الرحلة"}</button>}
       </div>)}
       {busy&&<p className="seago-assistant-thinking">عم بجهّز لك الرد…</p>}
       <div ref={scrollRef}/>
