@@ -375,4 +375,104 @@ test("SeaGo Provider Assistant V2: authenticated two-provider HTTP and mocked sp
     assert.equal(await Booking.countDocuments({checkedInAt:{$exists:true}}),before);
   });
 
+
+  await t.test("V3.1 pilot: 20 typed questions on two providers, no Gemini cost or cross-provider disclosure",async()=>{
+    const textCases=[
+      ["A","شو أسعار رحلاتي؟","trip_info"],
+      ["A","كم سعر رحلاتنا","trip_info"],
+      ["A","اسعار الرحلات","trip_info"],
+      ["A","هل اسعار الرحلات صح","trip_info"],
+      ["A","سعر الرحلات اليوم","trip_info"],
+      ["A","ليش رحلاتنا مش مبينة للعملاء","trip_visibility"],
+      ["A","ليش رحلاتي ما بتظهر","trip_visibility"],
+      ["A","الرحلات مش مبينة للعملاء","trip_visibility"],
+      ["A","شو السبب رحلاتنا غير ظاهرة","trip_visibility"],
+      ["A","لماذا الرحلات مش ظاهرة","trip_visibility"],
+      ["A","الحجز مش ظاهر","troubleshoot"],
+      ["A","الحجز مش مؤكد","troubleshoot"],
+      ["B","شو أسعار رحلاتي؟","trip_info"],
+      ["B","my trips cost","trip_info"],
+      ["B","our trips price","trip_info"],
+      ["B","all trips prices","trip_info"],
+      ["B","Why are our trips not showing","trip_visibility"],
+      ["B","all trips not visible","trip_visibility"],
+      ["B","رحلاتكم مش ظاهرة","trip_visibility"],
+      ["B","Why are my trips not visible","trip_visibility"]
+    ];
+    assert.equal(textCases.length,20);
+    const before=captured.length;
+    for(const [company,text,intent] of textCases){
+      // Separate authorized users avoid crossing the production-like 25/15min per-user limit.
+      const user=company==="A"?staffA:ownerB;
+      const answer=await ask(user,{intent:"help",reply:"Unexpected Gemini invocation"},
+        {text,context:context("ar")});
+      assert.equal(answer.status,200,company+" / "+text+" status "+answer.status);
+      assert.equal(answer.data.intent,intent,company+" / "+text+" intent");
+      assert.equal(answer.data.source,intent==="troubleshoot"?"guide":"provider_data",company+" / "+text+" source");
+      const raw=JSON.stringify(answer.data);
+      if(intent==="troubleshoot"){
+        assert.match(answer.data.text,/تاريخ المغادرة/,text);
+        assert.equal(answer.data.summary,undefined,text);
+      }else if(company==="A"){
+        assert.match(raw,/رحلة غروب الشرق/,text);
+        assert.doesNotMatch(raw,/رحلة خاصة برافو|Bravo Secret Cruise|99 JOD/,text);
+      }else{
+        assert.match(raw,/رحلة خاصة برافو/,text);
+        assert.doesNotMatch(raw,/رحلة غروب الشرق|رحلة غروب الغرب|Alpha Sunset/,text);
+      }
+      assert.doesNotMatch(raw,/customerId|customerSnapshot|customerPhone|idempotencyKey|commissionValue|audioBase64|apiKey/i,text);
+    }
+    assert.equal(captured.length,before,"The 20 typed local questions must not contact Gemini");
+  });
+
+  await t.test("V3.1 pilot: 10 mocked voice flows use authorized facts, correction prompts and no writes",async()=>{
+    const beforeCalls=captured.length;
+    const beforeBookings=await Booking.countDocuments();
+    const beforeTripA=await Trip.countDocuments({providerId:providerA._id});
+    const beforeTripB=await Trip.countDocuments({providerId:providerB._id});
+    const beforeCheckin=await Booking.countDocuments({checkedInAt:{$exists:true}});
+    const audio={audioBase64:"A".repeat(400),audioMimeType:"audio/mp4"};
+    const cases=[
+      {company:"A",transcript:"How many seats on "+day,fixture:{intent:"seats",tripName:"Alpha Sunset East",date:day},
+        lang:"en",intent:"seats",verify:r=>{assert.equal(r.data.source,"provider_data");assert.equal(r.data.rows.reduce((n,x)=>n+x.confirmedSeats,0),3);}},
+      {company:"A",transcript:"بدنا نحكي بالإنجليزية",fixture:{intent:"help",replyLanguage:"ar",reply:"Use the menu"},lang:"ar",
+        intent:"help",verify:r=>{assert.equal(r.data.lang,"en");assert.doesNotMatch(r.data.text,/Use the menu/);}},
+      {company:"A",transcript:"ليش رحلاتنا مش مبينة للعملاء",fixture:{intent:"help",reply:"Open Trips"},lang:"ar",
+        intent:"trip_visibility",verify:r=>{assert.equal(r.data.source,"provider_data");assert.match(r.data.text,/رحلة غروب الشرق/);}},
+      {company:"A",transcript:"Scanner QR rejected on "+day,fixture:{intent:"troubleshoot",topic:"qr_checkin",date:day},
+        lang:"en",intent:"troubleshoot",verify:r=>{assert.match(r.data.text,/does not validate an individual QR code/);}},
+      {company:"A",transcript:"فان شو كابتن وليلة آر",fixture:{intent:"help",reply:"Open Trips",needsClarification:true},
+        lang:"ar",intent:"help",verify:r=>{assert.match(r.data.text,/ما قدرت أفهم التسجيل/);assert.doesNotMatch(r.data.text,/Open Trips/);}},
+      {company:"A",transcript:"Price of Bravo Secret Cruise",fixture:{intent:"trip_info",tripName:"Bravo Secret Cruise"},
+        lang:"en",intent:"trip_info",verify:r=>{assert.doesNotMatch(r.data.text,/99 JOD|Bravo Secret Cruise.*Adult price/);}},
+      {company:"B",transcript:"What is the price of Bravo Secret Cruise",fixture:{intent:"trip_info",tripName:"Bravo Secret Cruise"},
+        lang:"en",intent:"trip_info",verify:r=>{assert.match(r.data.text,/99 JOD/);}},
+      {company:"B",transcript:"My booking is missing for "+day,fixture:{intent:"troubleshoot",topic:"booking_missing",date:day},
+        lang:"en",intent:"troubleshoot",verify:r=>{assert.equal(r.data.summary.confirmed,1);assert.equal(r.data.summary.pendingPayment,0);}},
+      {company:"B",transcript:"ليش رحلاتنا مش مبينة للعملاء",fixture:{intent:"help",reply:"Open Trips"},lang:"ar",
+        intent:"trip_visibility",verify:r=>{assert.match(r.data.text,/رحلة خاصة برافو/);assert.doesNotMatch(r.data.text,/رحلة غروب الشرق/);}},
+      {company:"B",transcript:"How many seats today on "+day,fixture:{intent:"seats",date:day,tripName:"Bravo Secret Cruise"},
+        lang:"en",intent:"seats",verify:r=>{assert.equal(r.data.rows.length,1);assert.equal(r.data.rows[0].confirmedSeats,2);}}
+    ];
+    assert.equal(cases.length,10);
+    for(const [index,entry] of cases.entries()){
+      const user=entry.company==="A"?staffA:ownerB;
+      const answer=await ask(user,{...entry.fixture,transcript:entry.transcript,needsClarification:entry.fixture.needsClarification===true},
+        {...audio,context:context(entry.lang)});
+      assert.equal(answer.status,200,"voice case "+(index+1)+" / "+entry.transcript+" status");
+      assert.equal(answer.data.intent,entry.intent,"voice case "+(index+1)+" intent");
+      assert.equal(answer.data.transcript,entry.transcript,"voice case "+(index+1)+" transcript");
+      entry.verify(answer);
+      const raw=JSON.stringify(answer.data);
+      assert.doesNotMatch(raw,/customerId|customerSnapshot|customerPhone|idempotencyKey|commissionValue|audioBase64|apiKey/i);
+      if(entry.company==="A")assert.doesNotMatch(raw,/99 JOD/,"A must not access B's prices");
+      else assert.doesNotMatch(raw,/رحلة غروب الشرق|رحلة غروب الغرب|Alpha Sunset/,"B must not access A's trips");
+    }
+    assert.equal(captured.length-beforeCalls,10,"Exactly ten mocked voice requests should reach the Gemini stub");
+    assert.equal(await Booking.countDocuments(),beforeBookings);
+    assert.equal(await Trip.countDocuments({providerId:providerA._id}),beforeTripA);
+    assert.equal(await Trip.countDocuments({providerId:providerB._id}),beforeTripB);
+    assert.equal(await Booking.countDocuments({checkedInAt:{$exists:true}}),beforeCheckin);
+  });
+
 });
