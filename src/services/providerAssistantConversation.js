@@ -62,11 +62,27 @@ export function mergeTripConversationDraft(current,delta){
   return {...sanitizeTripConversationDraft(current),...sanitizeTripConversationDraft(delta)};
 }
 export const tripFieldNames=["title","durationMinutes","adultPrice","childPrice","buffetEnabled","buffetDescription","buffetAdultPrice","buffetChildPrice","locationName","googleMapsUrl"];
+// Redact likely customer contact details from text before it reaches the AI provider.
+// Voice is sent directly for transcription, so users must avoid speaking PII.
+export function redactAssistantText(value){
+  return String(value||"").slice(0,1500)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[email]")
+    .replace(/(?:\+?962|00962|0)?7\d{8}\b/g,"[phone]")
+    .replace(/\b\d{10,}\b/g,"[number]");
+}
+export function safeAssistantFocus(raw){
+  const intent=["seats","trip_info","trip_visibility","troubleshoot"].includes(raw?.intent)?raw.intent:"";
+  const date=typeof raw?.date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(raw.date)?raw.date:"";
+  const topics=["qr_checkin","microphone","login","booking_missing","payment","trip_save","seats_mismatch","general"];
+  const topic=topics.includes(raw?.topic)?raw.topic:"general";
+  return {intent,tripName:clean(raw?.tripName,80),date,...(intent==="troubleshoot"?{topic}:{})};
+}
 export function assistantConversationContext(raw){
   return {mode:["create_trip","seats"].includes(raw?.mode)?raw.mode:"",
     draft:sanitizeTripConversationDraft(raw?.draft),
     pendingField:tripFieldNames.includes(raw?.pendingField)?raw.pendingField:"",
-    lang:raw?.lang==="en"?"en":"ar"};
+    lang:raw?.lang==="en"?"en":"ar",
+    focus:safeAssistantFocus(raw?.focus)};
 }
 const fields=[
   {key:"title",question:"تمام! بنجهّز الرحلة سوا 🌊 شو بدك تسمّيها؟",choices:["رحلة غروب","رحلة سنوركلينغ","رحلة بحرية"]},
@@ -304,4 +320,112 @@ export function localGuidedTripTurn(text,rawContext){
     next.text=lang==="en"?"Please send a valid Google Maps link (for example, maps.app.goo.gl), or select Skip link.":"الرابط لازم يكون رابط Google Maps صحيح (مثل maps.app.goo.gl). ابعثه أو اضغط «تخطي الرابط».";
   }
   return {intent:"create_trip",mode:"create_trip",...next,pendingField:"",lang};
+}
+
+
+// Responses below are deterministic and based only on provider-scoped data supplied
+// by the route after authorization. No customer records, financial commission or
+// provider database rows are sent to the language model.
+const formatNumber=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?String(Number(n)):"—";
+const titleOf=t=>clean(t?.titleAr||t?.titleEn,120)||"Trip";
+const tripTerm=s=>String(s||"").toLowerCase().replace(/[\u064b-\u065f\u0670]/g,"").replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه").replace(/\s+/g," ").trim();
+export function matchAssistantTrip(trips,needle){
+  const rows=Array.isArray(trips)?trips:[];
+  const query=tripTerm(needle);
+  if(!query)return {match:rows.length===1?rows[0]:null,options:rows.slice(0,12).map(titleOf),ambiguous:rows.length>1};
+  const scored=rows.map(trip=>{
+    const names=[trip.titleAr,trip.titleEn,trip.vesselName].map(tripTerm).filter(Boolean);
+    const exact=names.some(x=>x===query);
+    const partial=names.some(x=>x.includes(query)||query.includes(x));
+    return {trip,score:exact?2:partial?1:0};
+  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  const top=scored[0]?.score||0;
+  const peers=scored.filter(x=>x.score===top).map(x=>x.trip);
+  return {match:peers.length===1?peers[0]:null,options:peers.slice(0,12).map(titleOf),ambiguous:peers.length>1};
+}
+export function assistantTripList(trips,lang="ar"){
+  const rows=Array.isArray(trips)?trips.slice(0,12):[];
+  if(rows.length===0)return lang==="en"?"No trips saved for this provider.":"ما في رحلات محفوظة لهذه الشركة.";
+  const list=rows.map((t,i)=>(i+1)+". "+titleOf(t)+" | "+formatNumber(t.pricing?.adultPrice??t.pricing?.pricePerPerson)+" / "+formatNumber(t.pricing?.childPrice)+" JOD");
+  return (lang==="en"?"Saved trips (adult / child):":"الرحلات المحفوظة (كبير / طفل):")+"\n"+list.join("\n")+(Array.isArray(trips)&&trips.length>12?"\n…":"");
+}
+export function assistantTripSummary(trip,lang="ar"){
+  const p=trip?.pricing||{},loc=trip?.departureLocation||{};
+  const adult=p.adultPrice??p.pricePerPerson,child=p.childPrice;
+  const buffet=Boolean(p.buffetEnabled);
+  const title=titleOf(trip);
+  if(lang==="en")return "Trip: "+title+
+    "\nDuration: "+formatNumber(trip?.durationMinutes)+" minutes"+
+    "\nAdult price: "+formatNumber(adult)+" JOD"+
+    "\nChild price: "+formatNumber(child)+" JOD"+
+    "\nBuffet: "+(buffet?"Available":"Not included")+
+    (buffet?"\nBuffet includes: "+(clean(p.buffetDescription,250)||"Not specified")+
+      "\nAdult with buffet: "+formatNumber(p.buffetAdultPrice)+" JOD"+
+      "\nChild with buffet: "+formatNumber(p.buffetChildPrice)+" JOD":"")+
+    "\nDeparture location: "+(clean(loc.name,120)||"Not configured")+
+    (safeGoogleMapsUrl(loc.googleMapsUrl)?"\nGoogle Maps: "+safeGoogleMapsUrl(loc.googleMapsUrl):"")+
+    "\nThese details come from your company's saved trip; review them in Trips to make changes.";
+  return "الرحلة: "+title+
+    "\nالمدة: "+formatNumber(trip?.durationMinutes)+" دقيقة"+
+    "\nسعر الكبير: "+formatNumber(adult)+" د.أ"+
+    "\nسعر الطفل: "+formatNumber(child)+" د.أ"+
+    "\nالبوفيه: "+(buffet?"متوفر":"غير مشمول")+
+    (buffet?"\nيشمل: "+(clean(p.buffetDescription,250)||"غير محدد")+
+      "\nسعر الكبير مع البوفيه: "+formatNumber(p.buffetAdultPrice)+" د.أ"+
+      "\nسعر الطفل مع البوفيه: "+formatNumber(p.buffetChildPrice)+" د.أ":"")+
+    "\nمكان الانطلاق: "+(clean(loc.name,120)||"غير محدد")+
+    (safeGoogleMapsUrl(loc.googleMapsUrl)?"\nGoogle Maps: "+safeGoogleMapsUrl(loc.googleMapsUrl):"")+
+    "\nهاي التفاصيل من الرحلة المحفوظة لدى شركتك. للتعديل افتح قسم الرحلات.";
+}
+export function assistantVisibilityDiagnosis(trip,departures,lang="ar"){
+  const list=Array.isArray(departures)?departures:[];
+  const reasons=[];
+  if(trip?.active!==true)reasons.push(lang==="en"?"The trip is inactive.":"الرحلة غير مفعّلة.");
+  if(trip?.platformStatus==="paused")reasons.push(lang==="en"?"Platform sales for this trip are paused.":"الرحلة موقوفة من إدارة المنصة.");
+  const upcoming=list.filter(d=>d?.status==="scheduled"&&new Date(d.startsAt).getTime()>Date.now());
+  if(!upcoming.length)reasons.push(lang==="en"?"No future scheduled departure was found.":"ما في موعد مغادرة مستقبلي مجدول.");
+  else if(upcoming.every(d=>d.salesClosed===true))reasons.push(lang==="en"?"Sales are closed for all upcoming departures.":"البيع مغلق لكل المغادرات القادمة.");
+  else if(upcoming.every(d=>Number(d.capacity||0)-Number(d.reservedSeats||0)<=0))
+    reasons.push(lang==="en"?"Upcoming departures have no free seats; they may appear sold out.":"المغادرات القادمة ممتلئة، وقد تظهر كنفدت المقاعد.");
+  if(!reasons.length)reasons.push(lang==="en"?"No obvious availability blocker was found in this trip's saved status. Check the customer date filter and refresh.":"ما ظهر مانع واضح في حالة الرحلة المسجلة. تأكد من تاريخ البحث عند العميل وحدّث الصفحة.");
+  return (lang==="en"?"Availability check for ":"فحص ظهور رحلة «")+titleOf(trip)+(lang==="en"?":":"»:")+"\n"+reasons.map((x,i)=>(i+1)+". "+x).join("\n")+
+    (lang==="en"?"\nThis checks saved data only; it does not guarantee search visibility.":"\nهذا فحص لبيانات النظام، وليس تأكيداً لظهور الرحلة عند كل عميل.");
+}
+export function assistantTroubleshooting(topic,lang="ar",followUp=false){
+  const followups={
+    qr_checkin:["هل المشكلة إن الكاميرا ما تفتح، ولا تقرأ الرمز ثم تظهر رسالة رفض؟ ابعث نص الرسالة وموعد المغادرة، بدون صورة تذكرة عميل.","Does the camera fail to open, or does it read the code and show a rejection? Send the exact message and departure timing, not a customer's ticket."],
+    microphone:["هل يبدأ التسجيل ثم يفشل بالإرسال، أو زر الميكروفون نفسه لا يعمل؟ شو نص الخطأ ونوع المتصفح؟","Does recording fail to start, or does it fail when uploading? Send the error text and browser name."],
+    login:["هل الخطأ كلمة مرور غير صحيحة، انتهاء الجلسة، أو حساب غير مفعل؟ اكتب نص الرسالة فقط بدون كلمة المرور.","Is the message about invalid credentials, expired session, or an inactive account? Send only the error, not your password."],
+    trip_save:["أي حقل عليه تنبيه عند الحفظ؟ وكم مدة الرحلة وهل أضفت مكان الانطلاق؟ ابعث نص خطأ النموذج.","Which field shows an error on Save? What is the duration, and is a departure location set? Send the validation message."],
+    booking_missing:["اكتب تاريخ المغادرة واسم الرحلة وحالة الدفع الظاهرة بدون اسم العميل أو رقم هاتفه.","Give the departure date, trip name, and displayed payment status—no customer name or phone."],
+    payment:["شو حالة الدفع الظاهرة في النظام: قيد المعالجة، فشل، أو بحاجة مراجعة؟ بدون أرقام بطاقات أو بيانات شخصية.","Which payment status is displayed: pending, failed, or needs review? Do not share card details or personal data."],
+    seats_mismatch:["أي رحلة وتاريخ؟ وهل تقارن المقاعد المؤكدة بالمقاعد المتاحة أم المحجوزة مؤقتاً؟","Which trip and date? Are you comparing confirmed, available, or temporarily held seats?"],
+    general:["شو رسالة الخطأ بالتحديد؟ شو الصفحة وأي خطوة عملتها قبل المشكلة؟","What is the exact error, screen, and last action before the problem?"]
+  };
+  if(followUp){
+    const words=followups[topic]||followups.general;
+    return {text:lang==="en"?words[1]:words[0],suggestions:[],source:"guide"};
+  }
+  const ar={
+    qr_checkin:"إذا مسح QR ما زبط: 1) اسمح للكاميرا من إعدادات المتصفح. 2) استخدم كاميرا الجهاز الخلفية وتأكد من وضوح الرمز. 3) افحص إن الحجز مؤكد والرحلة صحيحة وإن التذكرة ما انمسحت قبل. 4) افحص وقت المغادرة وصلاحية موظف التشييك. إذا ظهر خطأ، اكتب النص كما هو؛ ما رح أؤكد صلاحية تذكرة من غير فحص.",
+    microphone:"إذا الصوت ما بيسجّل: 1) اسمح للميكروفون من إعدادات Safari أو التطبيق. 2) أغلق البرامج اللي تستخدم المايك. 3) جرّب مقطع قصير ثم دقيقة كحد أقصى. 4) إذا ظهرت رسالة حجم التسجيل أو صيغة غير مدعومة ابعث نصها. ما بقدر أغيّر صلاحيات جهازك عن بُعد.",
+    login:"إذا الدخول ما زبط: تحقق من الاتصال والبيانات، وجرب استعادة كلمة المرور من صفحة الدخول. إذا ظهرت رسالة انتهاء الجلسة سجّل دخول مرة ثانية. لا تبعث كلمة مرور أو رمز تحقق في الشات.",
+    booking_missing:"إذا الحجز مش ظاهر، افحص فلتر التاريخ في Bookings وحالة الدفع؛ الحجز يصير مؤكداً فقط بعد تحقق الدفع، وقد يكون قيد الدفع أو ملغياً. لا أستطيع الجزم بحالة حجز فردي بدون الرجوع للنظام المصرح.",
+    payment:"الدفع غير المؤكد لا يحول الحجز إلى مؤكد. افحص حالة الدفع والحجز من الواجهة وتأكد من عدم انتهاء مهلة الحجز. لا تعيد تحصيل مبلغ أو تؤكد حجز يدوياً بدون التحقق من السجلات المخوّلة.",
+    trip_save:"إذا إنشاء الرحلة أو حفظها ما زبط، تأكد من الاسم والمدة وأسعار الكبير والطفل وصور الرحلة ومكان الانطلاق. راجع رسالة التحقق عند حفظ النموذج، وانسخ نص الخطأ هنا دون بيانات عملاء.",
+    seats_mismatch:"إذا عدد المقاعد مختلف، قارن الحجوزات المؤكدة مع السعة والمقاعد المحجوزة مؤقتاً للدفع. متاح الحجز = السعة ناقص المقاعد المحجوزة، بينما «مؤكد» يحسب الحجوزات المؤكدة فقط. احكيلي اسم الرحلة والتاريخ.",
+    general:"احكيلي أي شاشة فيها المشكلة (الرحلات أو الحجوزات أو الماسح أو الدخول)، وشو رسالة الخطأ بالضبط، ومتى صارت. رح أساعدك نفحص السبب خطوة بخطوة، بدون تعديل بيانات مباشرة."
+  };
+  const en={
+    qr_checkin:"If QR scanning fails: 1) Allow camera permissions. 2) Use the rear camera and a clearly visible code. 3) Check that the booking is confirmed and the ticket has not been checked in already. 4) Verify departure timing and staff permissions. Send the exact error text so I can narrow it down.",
+    microphone:"If voice input fails: 1) Allow microphone permissions in Safari or the app. 2) Close apps using the microphone. 3) Try a short clip (maximum 60 seconds). 4) Send the exact upload/codec error. I cannot change your device permissions remotely.",
+    login:"For sign-in issues, check your connection and credentials, use password recovery, and sign in again if the session expired. Never share passwords or verification codes here.",
+    booking_missing:"Check the Bookings date filter and payment status. A booking is confirmed only after payment verification; it may still be pending payment, canceled, or expired. Do not assume a specific booking status without authorized records.",
+    payment:"Unverified payments do not confirm bookings. Review the payment and booking statuses and check for expired holds. Do not collect a payment again or confirm it manually without authorized verification.",
+    trip_save:"To troubleshoot saving a trip, check its title, duration, adult and child prices, required photos, and departure location. Copy the exact validation message here without any customer data.",
+    seats_mismatch:"Available seats are capacity minus reserved seats (including temporary payment holds); confirmed seats count verified bookings only. Tell me the trip name and date so we can compare.",
+    general:"Which screen is having the problem—Trips, Bookings, QR scanner, or sign-in? Send the exact error and when it happened. I can guide troubleshooting but will not change records without your review."
+  };
+  const key=Object.prototype.hasOwnProperty.call(ar,topic)?topic:"general";
+  return {text:(lang==="en"?en:ar)[key],suggestions:lang==="en"?["My trips","Available seats today","QR scanning problem"]:["رحلاتي","المقاعد المتاحة اليوم","مشكلة مسح QR"],source:"guide"};
 }

@@ -40,3 +40,45 @@ test("assistant rejects recordings above the 1.6M base64 limit without contactin
     /صيغة أو حجم التسجيل غير مدعوم/
   );
 });
+
+test("assistant classifies general trip facts without exposing typed phone or email to Gemini",async()=>{
+  const original=globalThis.fetch;
+  let request;
+  globalThis.fetch=async(_url,options)=>{
+    request=JSON.parse(options.body);
+    return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify({
+      intent:"trip_info",tripName:"Sunset Cruise",date:"",topic:"",transcript:"",draft:{},reply:""
+    })}]}}]})};
+  };
+  try{
+    const result=await understandAssistant({
+      text:"What's the price of Sunset Cruise? 0791234567 foo@example.com",
+      context:{lang:"en",mode:"",focus:{intent:"trip_info",tripName:"Sunset Cruise",date:"2026-11-06"}}
+    },{GEMINI_API_KEY:"test-key"});
+    assert.equal(result.intent,"trip_info");
+    assert.equal(result.tripName,"Sunset Cruise");
+    assert.equal(result.date,"2026-11-06");
+    const payload=JSON.stringify(request);
+    assert.doesNotMatch(payload,/0791234567|foo@example.com/);
+    assert.match(payload,/\[phone\]/);
+    assert.match(payload,/\[email\]/);
+    assert.equal(result.context.lang,"en");
+  }finally{globalThis.fetch=original;}
+});
+
+test("spoken language command and list-all trip intent override previous focus",async()=>{
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({candidates:[{content:{parts:[{
+    text:JSON.stringify({intent:"trip_info",date:"",tripName:"",listAllTrips:true,replyLanguage:"en",transcript:"Show all my trips in English",draft:{}})
+  }]}}]})});
+  try{
+    const result=await understandAssistant({
+      audioBase64:"A".repeat(400),audioMimeType:"audio/mp4",
+      context:{lang:"ar",focus:{intent:"trip_info",tripName:"Old Trip",date:"2026-11-06"}}
+    },{GEMINI_API_KEY:"test-key"});
+    assert.equal(result.intent,"trip_info");
+    assert.equal(result.context.lang,"en");
+    assert.equal(result.tripName,"");
+    assert.equal(result.transcript,"Show all my trips in English");
+  }finally{globalThis.fetch=original;}
+});

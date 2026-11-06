@@ -4,7 +4,7 @@ import "./provider-assistant.css";
 
 const API=String(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");
 const intro={role:"assistant",text:"أهلاً! أنا مساعد SeaGo 🌊\nاحكي معي بطبيعتك، بالشات أو بالصوت. بنقدر نجهّز رحلة جديدة خطوة بخطوة، أو نفحص المقاعد والحجوزات من بيانات شركتك."};
-const starter=["بدي أضيف رحلة","كم مقعد محجوز اليوم؟","شو المقاعد المتاحة بكرا؟"];
+const starter=["بدي أضيف رحلة","كم مقعد محجوز اليوم؟","شو أسعار رحلاتي؟","عندي مشكلة في QR"];
 function toBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=()=>reject(new Error("تعذّر قراءة التسجيل."));r.onload=()=>resolve(String(r.result||"").split(",")[1]||"");r.readAsDataURL(blob);});}
 export default function ProviderAssistant({token,onClose,onUseDraft}){
   const [messages,setMessages]=useState([intro]);
@@ -13,7 +13,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   const [recording,setRecording]=useState(false);
   const [error,setError]=useState("");
   const [audioError,setAudioError]=useState("");
-  const contextRef=useRef({mode:"",draft:{},pendingField:"",lang:"ar"});
+  const contextRef=useRef({mode:"",draft:{},pendingField:"",lang:"ar",focus:{intent:"",tripName:"",date:""}});
   const sendingRef=useRef(false),recRef=useRef(null),micRef=useRef(null),timerRef=useRef(null),aliveRef=useRef(true),scrollRef=useRef(null);
   useEffect(()=>{scrollRef.current?.scrollIntoView({block:"end",behavior:"smooth"});},[messages,busy,error]);
   useEffect(()=>()=>{aliveRef.current=false;clearTimeout(timerRef.current);try{recRef.current?.stop();}catch{}micRef.current?.getTracks().forEach(t=>t.stop());},[]);
@@ -33,9 +33,9 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       if(!response.ok)throw new Error(result.error||"تعذّر إكمال الطلب.");
       if(!aliveRef.current)return;
       const mode=result.mode==="create_trip"?"create_trip":result.mode==="seats"?"seats":"";
-      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:"",lang:result.lang==="en"?"en":result.lang==="ar"?"ar":contextRef.current.lang};
+      contextRef.current={mode,draft:mode==="create_trip"&&result.draft&&typeof result.draft==="object"?result.draft:{},pendingField:mode==="create_trip"&&typeof result.pendingField==="string"?result.pendingField:"",lang:result.lang==="en"?"en":result.lang==="ar"?"ar":contextRef.current.lang,focus:result.focus&&typeof result.focus==="object"?result.focus:contextRef.current.focus};
       setMessages(v=>[...v,{
-        role:"assistant",intent:result.intent,text:result.text||(contextRef.current.lang==="en"?"How can I help you?":"تمام، كيف بقدر أساعدك؟"),lang:contextRef.current.lang,
+        role:"assistant",intent:result.intent,text:result.text||(contextRef.current.lang==="en"?"How can I help you?":"تمام، كيف بقدر أساعدك؟"),lang:contextRef.current.lang,source:result.source||"",
         transcript:payload.audioBase64?result.transcript||"":"",rows:Array.isArray(result.rows)?result.rows.slice(0,20):[],
         ready:result.ready===true,progress:Number(result.progress)||0,total:Number(result.total)||4,
         draft:mode==="create_trip"?contextRef.current.draft:null,
@@ -83,7 +83,7 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
   function close(){onClose();}
   function cancelDraft(){
     if(sendingRef.current||recording)return;
-    contextRef.current={mode:"",draft:{},pendingField:"",lang:contextRef.current.lang};
+    contextRef.current={mode:"",draft:{},pendingField:"",lang:contextRef.current.lang,focus:contextRef.current.focus};
     setMessages(v=>[...v,{role:"assistant",text:contextRef.current.lang==="en"?"Trip draft canceled. Nothing was saved.":"تمام، لغينا المسودة من المحادثة. ما انحفظت ولا رحلة.",suggestions:contextRef.current.lang==="en"?["Create a trip","Today\u0027s bookings"]:starter,lang:contextRef.current.lang}]);
   }
   const time=v=>new Date(v).toLocaleTimeString("ar-JO",{timeZone:"Asia/Amman",hour:"2-digit",minute:"2-digit"});
@@ -93,6 +93,8 @@ export default function ProviderAssistant({token,onClose,onUseDraft}){
       {messages.map((m,i)=><div key={i} className={"seago-assistant-message "+m.role}>
         <p dir="auto">{m.text}</p>
         {m.transcript&&<small>🎙️ سمعت: {m.transcript}</small>}
+        {m.source==="provider_data"&&<small>{m.lang==="en"?"✓ Verified from your company data":"✓ من البيانات المسجلة لشركتك"}</small>}
+        {m.source==="guide"&&<small>{m.lang==="en"?"Troubleshooting guidance — not a verified diagnosis":"إرشادات للمشكلة — ليست تشخيصاً مؤكداً"}</small>}
         {m.intent==="create_trip"&&<div className="seago-assistant-progress"><div><span>{m.lang==="en"?"Trip setup":"تجهيز الرحلة"}</span><strong>{m.progress} / {m.total}</strong></div><div className="seago-assistant-progress-track"><span style={{width:Math.round(100*m.progress/(m.total||4))+"%"}}/></div></div>}
         {m.rows?.length>0&&<div className="seago-assistant-departures">{m.rows.map((d,j)=><div key={j}><strong>{d.trip}</strong><small>{time(d.startsAt)} · {d.status==="scheduled"?"مجدولة":d.status}</small><span>مؤكد: {d.confirmedSeats} · متاح: {d.availableSeats} · السعة: {d.capacity}</span></div>)}</div>}
         {m.ready&&m.draft&&<button type="button" className="seago-assistant-draft-button" disabled={busy||recording} onClick={()=>onUseDraft(m.draft)}><CheckCircle2 size={17}/> {m.lang==="en"?"Review trip form":"افتح نموذج الرحلة للمراجعة"} <ArrowRight size={16}/></button>}
