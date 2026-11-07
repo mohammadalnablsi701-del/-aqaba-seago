@@ -1,4 +1,4 @@
-name: Build SeaGo Provider and Admin Android APKs
+name: Build SeaGo Provider and Admin Android Online QA APKs
 
 on:
   push:
@@ -76,7 +76,11 @@ jobs:
             "appName": os.environ["SEAGO_APP_NAME"],
             "webDir": "dist",
             "backgroundColor": "#071F33",
-            "server": {"androidScheme": "https"}
+            "server": {
+            "androidScheme": "https",
+            "url": "https://mohammadalnablsi701-del.github.io/-aqaba-seago/${{ matrix.app }}/",
+            "allowNavigation": ["mohammadalnablsi701-del.github.io"]
+          }
           }
           Path("capacitor.config.json").write_text(json.dumps(config))
           PY
@@ -104,7 +108,7 @@ jobs:
         working-directory: ${{ matrix.app }}-app
         env:
           SEAGO_ICON: ${{ matrix.icon }}
-          SEAGO_LABEL: ${{ matrix.app_name }}
+          SEAGO_LABEL: ${{ matrix.app_name }} Online QA
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq imagemagick
@@ -158,7 +162,7 @@ jobs:
       - name: Upload installable Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: SeaGo-${{ matrix.app }}-Android-APK
+          name: SeaGo-${{ matrix.app }}-Android-OnlineQA-APK
           path: ${{ matrix.app }}-app/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
